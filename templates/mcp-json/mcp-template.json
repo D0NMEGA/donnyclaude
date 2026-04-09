@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-playwright@latest"]
+    },
+    "21st-magic": {
+      "command": "npx",
+      "args": ["-y", "21st-magic-mcp@latest"],
+      "env": {
+        "TWENTY_FIRST_API_KEY": "{{TWENTY_FIRST_API_KEY}}"
+      }
+    },
+    "exa-web-search": {
+      "command": "npx",
+      "args": ["-y", "exa-mcp-server@latest"],
+      "env": {
+        "EXA_API_KEY": "{{EXA_API_KEY}}"
+      }
+    },
+    "semanticscholar": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-semanticscholar@latest"]
+    },
+    "computer-use": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-computer-use@latest"]
+    },
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    }
+  }
+}

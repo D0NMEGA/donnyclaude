@@ -1,0 +1,25 @@
+{
+  "workflow": {
+    "skip_discuss": false,
+    "discuss_mode": "discuss",
+    "auto_advance": false,
+    "use_worktrees": false,
+    "ui_phase": true,
+    "ui_review": true,
+    "ui_safety_gate": true,
+    "security_enforcement": true,
+    "security_asvs_level": 1,
+    "security_block_on": "high",
+    "nyquist_validation": false,
+    "parallelization": true
+  },
+  "models": {
+    "executor": "sonnet",
+    "verifier": "sonnet",
+    "planner": "opus",
+    "researcher": "sonnet",
+    "checker": "sonnet"
+  },
+  "context_window": 200000,
+  "commit_docs": false
+}

@@ -1,0 +1,38 @@
+{
+  "name": "donnyclaude",
+  "version": "1.0.0",
+  "description": "Opinionated, all-in-one Claude Code power-user setup. Zero to production-grade AI-assisted development in one command.",
+  "main": "bin/donnyclaude.js",
+  "bin": {
+    "donnyclaude": "bin/donnyclaude.js"
+  },
+  "scripts": {
+    "test": "node --test tests/",
+    "lint": "node --check bin/donnyclaude.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "developer-tools",
+    "productivity",
+    "workflow",
+    "agents"
+  ],
+  "author": "Donovan Santine <donovan@moltgrid.net>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/d0nmega/donnyclaude.git"
+  },
+  "homepage": "https://github.com/d0nmega/donnyclaude#readme",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "bin/",
+    "packages/",
+    "templates/",
+    "docs/"
+  ]
+}
