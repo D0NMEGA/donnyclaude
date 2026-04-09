@@ -4,6 +4,32 @@ TEMPLATE_DIR: {{TEMPLATE_DIR}}
 
 Walk the user through these steps interactively. Use AskUserQuestion for each step.
 
+## Step 0: Check for Existing Configuration
+
+BEFORE doing anything else, check if this project already has a CLAUDE.md, .planning/ directory, or .mcp.json.
+
+If ANY of these exist, warn the user FIRST:
+
+"This project already has existing configuration:
+- CLAUDE.md: [exists/missing]
+- .planning/: [exists/missing]
+- .mcp.json: [exists/missing]
+
+Options:
+1. Skip existing files -- only create what's missing
+2. Overwrite everything -- replace all config with fresh DonnyClaude templates
+3. Exit -- this project is already set up, nothing to do"
+
+If the user picks "Exit" or if ALL three exist, display:
+"This project is already configured! Your DonnyClaude global tools are installed. You're good to go.
+
+  /gsd:help           -- See all available commands
+  /gsd:new-project    -- Initialize a new project"
+
+Then stop. Do NOT proceed to stack detection.
+
+If the user picks "Skip existing", only create the files that are missing in the steps below.
+
 ## Step 1: Detect or Ask Stack
 
 Check the current directory for:
@@ -24,6 +50,8 @@ Options:
 
 ## Step 2: Generate CLAUDE.md
 
+ONLY if CLAUDE.md does not exist (or user chose "Overwrite everything").
+
 Based on the stack, read the appropriate template from $DONNYCLAUDE_TEMPLATES/claude-md/ and write CLAUDE.md to the project root. The templates are:
 - python-fastapi.md
 - nextjs-typescript.md
@@ -35,6 +63,8 @@ Fill in any project-specific details (project name from package.json/pyproject.t
 
 ## Step 3: Scaffold .planning/
 
+ONLY if .planning/ does not exist (or user chose "Overwrite everything").
+
 Create these files:
 - .planning/PROJECT.md (empty template)
 - .planning/REQUIREMENTS.md (empty template)
@@ -45,6 +75,8 @@ Create these files:
 Read templates from $DONNYCLAUDE_TEMPLATES/planning/
 
 ## Step 4: Create .mcp.json
+
+ONLY if .mcp.json does not exist (or user chose "Overwrite everything").
 
 Create .mcp.json with 7 MCP servers. For each server that needs an API key, ask the user:
 
@@ -59,7 +91,7 @@ Servers:
 6. Computer Use -- no key needed
 7. Vercel Plugin -- OAuth on first use, no key now
 
-Read the template from $DONNYCLAUDE_TEMPLATES/mcp-json/mcp-template.json and fill in API keys.
+Read the template from $DONNYCLAUDE_TEMPLATES/mcp-json/mcp-template.json and fill in API keys. If the user skips a key, set the env value to an empty string (not a placeholder).
 
 ## Step 5: Completion
 
@@ -73,9 +105,7 @@ DonnyClaude Setup Complete
   Skipped: [list of skipped servers]
 
   Files created:
-    CLAUDE.md
-    .planning/ (PROJECT.md, ROADMAP.md, STATE.md, config.json)
-    .mcp.json
+    [list only files that were actually created/modified]
 
   Get started:
     /gsd:new-project    -- Initialize your first project
