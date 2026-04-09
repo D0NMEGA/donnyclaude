@@ -19,7 +19,7 @@ DonnyClaude is an opinionated, all-in-one power-user setup for [Claude Code](htt
 
 ```bash
 # Install directly from GitHub
-npx github:d0nmega/donnyclaude
+npx donnyclaude
 ```
 
 That's it. DonnyClaude checks your prerequisites, installs the full toolkit to `~/.claude/`, then launches Claude Code as an interactive setup wizard to configure your project.
@@ -34,7 +34,7 @@ cd donnyclaude
 node bin/donnyclaude.js
 
 # Or install globally
-npm install -g github:d0nmega/donnyclaude
+npm install -g donnyclaude
 donnyclaude
 ```
 
@@ -67,7 +67,7 @@ donnyclaude
 
 ```bash
 brew install node    # if needed
-npx github:d0nmega/donnyclaude
+npx donnyclaude
 ```
 
 ### Windows
@@ -75,7 +75,7 @@ npx github:d0nmega/donnyclaude
 ```powershell
 # Install Node.js from https://nodejs.org/ (LTS recommended)
 # Then open PowerShell or Command Prompt:
-npx github:d0nmega/donnyclaude
+npx donnyclaude
 ```
 
 <details>
@@ -84,7 +84,7 @@ npx github:d0nmega/donnyclaude
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
-npx github:d0nmega/donnyclaude
+npx donnyclaude
 ```
 
 </details>
@@ -103,7 +103,7 @@ sudo dnf install nodejs
 sudo pacman -S nodejs npm
 
 # Then:
-npx github:d0nmega/donnyclaude
+npx donnyclaude
 ```
 
 ---
@@ -197,11 +197,11 @@ Every project gets its own `.mcp.json` with 7 servers pre-configured:
 ## Commands
 
 ```bash
-npx github:d0nmega/donnyclaude            # Install + setup wizard
-npx github:d0nmega/donnyclaude doctor     # Health check
-npx github:d0nmega/donnyclaude update     # Update to latest
-npx github:d0nmega/donnyclaude version    # Show version
-npx github:d0nmega/donnyclaude help       # Show help
+npx donnyclaude            # Install + setup wizard
+npx donnyclaude doctor     # Health check
+npx donnyclaude update     # Update to latest
+npx donnyclaude version    # Show version
+npx donnyclaude help       # Show help
 ```
 
 ---
