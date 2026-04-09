@@ -1,44 +1,73 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/skills-107-ff3333?style=for-the-badge" alt="107 Skills">
+  <img src="https://img.shields.io/badge/agents-49-ff3333?style=for-the-badge" alt="49 Agents">
+  <img src="https://img.shields.io/badge/languages-12-ff3333?style=for-the-badge" alt="12 Languages">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="MIT License">
+</p>
+
 # DonnyClaude
 
-**Opinionated, all-in-one Claude Code power-user setup.** Zero to production-grade AI-assisted development in one command.
+**Your Claude Code just got superpowers.**
 
-107 skills. 49 agents. 12 language rulesets. GSD workflow engine. MCP server configs. All pre-wired and ready to go.
+DonnyClaude is an opinionated, all-in-one power-user setup for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). One command installs 107 skills, 49 specialized agents, coding rules for 12 languages, a full project workflow engine, and 7 pre-configured MCP servers. Then Claude itself walks you through setting up your project.
+
+> *"I went from a fresh Claude Code install to autonomous multi-phase project execution in under 2 minutes."*
+
+---
 
 ## Quick Start
 
 ```bash
-npx donnyclaude
+# Install directly from GitHub
+npx github:d0nmega/donnyclaude
 ```
 
-That's it. DonnyClaude checks your prerequisites, installs the full toolkit, then launches Claude Code as an interactive setup wizard to configure your project.
+That's it. DonnyClaude checks your prerequisites, installs the full toolkit to `~/.claude/`, then launches Claude Code as an interactive setup wizard to configure your project.
 
-## What You Get
+<details>
+<summary><b>Alternative install methods</b></summary>
 
-| Component | Count | What It Does |
-|-----------|-------|--------------|
-| Skills | 107 | GSD workflow, Superpowers, ECC quality tools, language patterns |
-| Agents | 49 | Executor, verifier, planner, reviewer, debugger, and more |
-| Rules | 65 files | Coding standards for 12 languages (TypeScript, Python, Rust, Go, C++, Kotlin, Java, Swift, PHP, Perl, C#) |
-| GSD Engine | 1 | Full workflow: plan -> execute -> verify -> next |
-| Hooks | 8 | Auto-formatting, guard rails, context monitoring |
-| Commands | 60 | Slash commands for every workflow step |
-| MCP Servers | 7 | Context7, Playwright, 21st.dev, Exa, Semantic Scholar, Computer Use, Vercel |
+```bash
+# Clone and run locally
+git clone https://github.com/d0nmega/donnyclaude.git
+cd donnyclaude
+node bin/donnyclaude.js
+
+# Or install globally
+npm install -g github:d0nmega/donnyclaude
+donnyclaude
+```
+
+</details>
+
+---
+
+## What's Inside
+
+| | Component | Count | What It Does |
+|---|-----------|-------|-------------|
+| **Skills** | GSD workflow, Superpowers, ECC quality, language patterns | 107 | Slash commands for every dev workflow |
+| **Agents** | Executor, verifier, planner, reviewer, debugger... | 49 | Specialized AI agents for each task type |
+| **Rules** | TypeScript, Python, Rust, Go, C++, Kotlin, Java, Swift, PHP, Perl, C# | 65 files | Coding standards enforced automatically |
+| **GSD Engine** | Get Shit Done workflow | 1 | Plan -> Execute -> Verify -> Ship |
+| **Hooks** | Format, guard, context monitor | 8 | Automatic quality gates on every edit |
+| **Commands** | Slash commands | 60 | `/gsd:plan-phase`, `/code-review`, `/tdd`... |
+| **MCP Servers** | Context7, Playwright, 21st.dev, Exa, Semantic Scholar, Computer Use, Vercel | 7 | Live docs, browser automation, UI generation |
+
+---
 
 ## Installation
 
 ### Prerequisites
 
-- **Node.js 20+** -- [Download](https://nodejs.org/)
-- **Anthropic API key** -- [Get one](https://console.anthropic.com/)
+- **Node.js 20+** -- [nodejs.org](https://nodejs.org/)
+- **Anthropic API key** -- [console.anthropic.com](https://console.anthropic.com/)
 
 ### macOS
 
 ```bash
-# Install Node.js (if needed)
-brew install node
-
-# Run DonnyClaude
-npx donnyclaude
+brew install node    # if needed
+npx github:d0nmega/donnyclaude
 ```
 
 ### Windows
@@ -46,18 +75,19 @@ npx donnyclaude
 ```powershell
 # Install Node.js from https://nodejs.org/ (LTS recommended)
 # Then open PowerShell or Command Prompt:
-npx donnyclaude
+npx github:d0nmega/donnyclaude
 ```
 
-**Alternative: WSL2** (if you prefer a Linux environment)
+<details>
+<summary>Alternative: WSL2</summary>
 
 ```bash
-# Inside WSL2 terminal
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
-
-npx donnyclaude
+npx github:d0nmega/donnyclaude
 ```
+
+</details>
 
 ### Linux
 
@@ -66,125 +96,200 @@ npx donnyclaude
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-# Fedora/RHEL
+# Fedora
 sudo dnf install nodejs
 
 # Arch
 sudo pacman -S nodejs npm
 
 # Then:
-npx donnyclaude
+npx github:d0nmega/donnyclaude
 ```
 
-## What Happens When You Run It
+---
 
-### Phase 1: Prerequisites
-DonnyClaude checks for Node.js, npm, and Claude Code CLI. Installs Claude Code if missing.
+## How It Works
 
-### Phase 2: Install Global Tools
-Copies 107 skills, 49 agents, rules, hooks, GSD engine, and commands to `~/.claude/`. Merges with your existing settings without overwriting.
+### Phase 1: Preflight
 
-### Phase 3: Interactive Setup (inside Claude Code)
-Claude Code launches and walks you through:
+DonnyClaude checks for Node.js, npm, and Claude Code CLI. Installs Claude Code automatically if missing.
 
-1. **Stack detection** -- reads your package.json/pyproject.toml/Cargo.toml
+```
+Checking prerequisites...
+  ✓ Node.js v24.1.0
+  ✓ npm 11.0.0
+  ✓ Claude Code 2.1.97
+```
+
+### Phase 2: Install Toolkit
+
+Copies all 107 skills, 49 agents, rules, hooks, GSD engine, and commands to `~/.claude/`. If you already have Claude Code customizations, they're preserved -- DonnyClaude merges, never clobbers.
+
+```
+Installing DonnyClaude toolkit...
+  ✓ 107 skills installed
+  ✓ 49 agents installed
+  ✓ Rules installed (common + language-specific)
+  ✓ GSD workflow engine installed
+  ✓ Hooks installed
+  ✓ Commands installed
+  ✓ Settings merged (existing config preserved)
+```
+
+### Phase 3: Interactive Setup (Claude is the wizard)
+
+Claude Code launches and walks you through project configuration:
+
+1. **Stack detection** -- reads package.json / pyproject.toml / Cargo.toml
 2. **CLAUDE.md generation** -- project instructions tailored to your stack
-3. **Planning scaffold** -- `.planning/` directory with PROJECT.md, ROADMAP.md, etc.
-4. **MCP server config** -- `.mcp.json` with 7 servers, prompts for API keys
+3. **Planning scaffold** -- `.planning/` directory with PROJECT.md, ROADMAP.md, STATE.md
+4. **MCP server config** -- `.mcp.json` with 7 servers, prompts for API keys (skip any you don't have)
 
-## Commands After Setup
-
-```bash
-npx donnyclaude update    # Update to latest version
-npx donnyclaude doctor    # Check installation health
-npx donnyclaude help      # Show help
-```
+---
 
 ## The GSD Workflow
 
-DonnyClaude is built around the **Get Shit Done (GSD)** workflow:
+DonnyClaude is built around **Get Shit Done (GSD)** -- an autonomous project execution engine:
 
 ```
-/gsd:new-project       Initialize project structure
-/gsd:plan-phase N      Plan a phase before execution
-/gsd:execute-phase N   Execute with fresh subagent contexts
-/gsd:verify-work       Verify after phase completion
-/gsd:progress          Check project status
-/gsd:autonomous        Run all phases back-to-back
+/gsd:new-project       Start a new project with deep context gathering
+/gsd:plan-phase N      Plan a phase before any code is written
+/gsd:execute-phase N   Execute with parallel subagents
+/gsd:verify-work       Verify every phase before moving on
+/gsd:progress          See where you are
+/gsd:autonomous        Run ALL phases back-to-back, hands-free
 ```
+
+**The loop:** Brainstorm -> Plan -> Test -> Build -> Review -> Verify -> Ship
+
+Every phase gets planned before execution. Tests are written before code. Code is reviewed before merge. Nothing ships without verification.
+
+---
 
 ## Supported Stacks
 
-| Stack | Template | Language Rules | Extra Tools |
-|-------|----------|---------------|-------------|
-| Python + FastAPI | `python-fastapi.md` | Python rules | python-review, python-testing |
-| Next.js + TypeScript | `nextjs-typescript.md` | TypeScript rules | 21st.dev Magic, Playwright |
-| Rust | `rust.md` | Rust rules | rust-review, rust-build |
-| Go | `go.md` | Go rules | go-review, go-build |
-| Other | `generic.md` | Common rules | All base tools |
+| Stack | Template | Extra Tools |
+|-------|----------|-------------|
+| **Python** (FastAPI, Django, Flask) | `python-fastapi.md` | python-review, python-testing, pytest patterns |
+| **TypeScript** (Next.js, Node, React) | `nextjs-typescript.md` | 21st.dev Magic, Playwright, shadcn/ui |
+| **Rust** | `rust.md` | rust-review, rust-build, cargo-llvm-cov |
+| **Go** | `go.md` | go-review, go-build, table-driven tests |
+| **Other** | `generic.md` | All base tools, universal rules |
+
+---
 
 ## MCP Servers
 
-| Server | Needs API Key | Purpose |
-|--------|--------------|---------|
-| [Context7](https://context7.com) | No | Live library documentation |
-| [Playwright](https://playwright.dev) | No | Browser automation + visual QA |
-| [21st.dev Magic](https://21st.dev) | Yes | UI component generation |
-| [Exa](https://exa.ai) | Yes | Web search + code context |
-| [Semantic Scholar](https://semanticscholar.org) | No | Academic paper search |
-| Computer Use | No | Desktop control |
-| [Vercel](https://vercel.com) | OAuth | Deployment + env vars |
+Every project gets its own `.mcp.json` with 7 servers pre-configured:
 
-## File Structure
+| Server | API Key? | What It Does |
+|--------|----------|-------------|
+| [Context7](https://context7.com) | No | Live library documentation -- never use stale APIs again |
+| [Playwright](https://playwright.dev) | No | Browser automation, visual QA, E2E testing |
+| [21st.dev Magic](https://21st.dev) | Yes | Generate, refine, and browse UI components |
+| [Exa](https://exa.ai) | Yes | Web search with code-aware results |
+| [Semantic Scholar](https://semanticscholar.org) | No | Academic paper search and citation graphs |
+| Computer Use | No | Control your desktop -- screenshots, clicks, typing |
+| [Vercel](https://vercel.com) | OAuth | Deploy, manage env vars, check status |
 
-After setup, your project has:
+---
+
+## Commands
+
+```bash
+npx github:d0nmega/donnyclaude            # Install + setup wizard
+npx github:d0nmega/donnyclaude doctor     # Health check
+npx github:d0nmega/donnyclaude update     # Update to latest
+npx github:d0nmega/donnyclaude version    # Show version
+npx github:d0nmega/donnyclaude help       # Show help
+```
+
+---
+
+## What Gets Created
+
+**In your project:**
 
 ```
 your-project/
-  CLAUDE.md                 # Project instructions (stack-specific)
-  .mcp.json                 # MCP server connections
+  CLAUDE.md              # AI instructions tailored to your stack
+  .mcp.json              # 7 MCP servers, ready to go
   .planning/
-    PROJECT.md              # Vision, principles, constraints
-    REQUIREMENTS.md         # Requirement tracking
-    ROADMAP.md              # Phase-based roadmap
-    STATE.md                # Current progress
-    config.json             # Workflow configuration
+    PROJECT.md           # Vision and constraints
+    REQUIREMENTS.md      # Tracked requirements
+    ROADMAP.md           # Phase-based execution plan
+    STATE.md             # Current progress tracker
+    config.json          # Workflow config (models, toggles)
 ```
 
-And globally in `~/.claude/`:
+**Globally (`~/.claude/`):**
 
 ```
 ~/.claude/
-  skills/                   # 107 skills
-  agents/                   # 49 agents
-  rules/                    # Coding standards (common + 12 languages)
-  get-shit-done/            # GSD workflow engine
-  hooks/                    # Auto-formatting, guards
-  commands/                 # Slash commands
-  settings.json             # Permissions + hooks
+  skills/        107 skills (GSD, Superpowers, ECC, language-specific)
+  agents/        49 specialized agents
+  rules/         Coding standards for 12 languages
+  get-shit-done/ GSD workflow engine
+  hooks/         Auto-formatting and guard rails
+  commands/      60 slash commands
+  settings.json  Permissions and hook config
 ```
+
+---
 
 ## Customizing
 
-### Add your own skills
-Drop `.md` files into `~/.claude/skills/your-skill/SKILL.md`
+**Add skills:** Drop a `SKILL.md` into `~/.claude/skills/your-skill/`
 
-### Add language rules
-Copy a language directory and customize: `cp -r ~/.claude/rules/typescript ~/.claude/rules/your-lang`
+**Add rules:** Copy and customize: `cp -r ~/.claude/rules/typescript ~/.claude/rules/your-lang`
 
-### Change GSD config
-Edit `.planning/config.json` in your project to adjust models, parallelization, and workflow toggles.
+**Tune GSD:** Edit `.planning/config.json` to change models, parallelization, and workflow toggles
+
+**Power users:** Set `"defaultMode": "bypassPermissions"` in `~/.claude/settings.json` for fully autonomous operation (DonnyClaude defaults to `acceptEdits` for safety)
+
+---
+
+## Existing Claude Code Users
+
+Already have a `~/.claude/` directory? DonnyClaude is safe to run:
+
+- **Settings:** Merged, never overwritten. Your permissions, existing hooks, and custom config are preserved. A backup is created at `settings.json.bak` before any merge.
+- **Skills/agents/rules:** Added alongside your existing ones. If you've customized a file with the same name, it will be overwritten -- back up any custom modifications first.
+- **Doctor:** Run `donnyclaude doctor` to verify everything is healthy after install.
+
+---
+
+## Uninstall
+
+To remove DonnyClaude's tools from your system:
+
+```bash
+# Remove global tools
+rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/rules
+rm -rf ~/.claude/get-shit-done ~/.claude/hooks ~/.claude/commands
+
+# Restore settings backup (if you had pre-existing settings)
+cp ~/.claude/settings.json.bak ~/.claude/settings.json
+
+# Remove project-local files (per project)
+rm CLAUDE.md .mcp.json
+rm -rf .planning/
+```
+
+---
 
 ## Credits
 
-Built by [Donovan Santine](https://github.com/d0nmega) (D0NMEGA).
+Built by [Donovan Santine](https://github.com/d0nmega) (D0NMEGA) -- BME Honors at UT Austin, building [MoltGrid](https://moltgrid.net).
 
 Powered by:
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) by Anthropic
-- [GSD (Get Shit Done)](https://github.com/d0nmega/donnyclaude) workflow engine
-- [Everything Claude Code](https://github.com/anthropics/claude-code) skills
+- [GSD](https://discord.gg/gsd) workflow engine
+- [Everything Claude Code](https://github.com/anthropics/claude-code) skill ecosystem
 - [Context7](https://context7.com) live documentation
+
+---
 
 ## License
 
-MIT
+MIT -- use it, fork it, ship it.
