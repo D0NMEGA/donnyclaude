@@ -43,21 +43,19 @@ npx donnyclaude
 
 ### Windows
 
-**Recommended: WSL2** (Windows Subsystem for Linux)
+```powershell
+# Install Node.js from https://nodejs.org/ (LTS recommended)
+# Then open PowerShell or Command Prompt:
+npx donnyclaude
+```
+
+**Alternative: WSL2** (if you prefer a Linux environment)
 
 ```bash
 # Inside WSL2 terminal
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-npx donnyclaude
-```
-
-**Native PowerShell** (limited -- Claude Code works best in WSL2):
-
-```powershell
-# Install Node.js from https://nodejs.org/
-# Then in PowerShell:
 npx donnyclaude
 ```
 

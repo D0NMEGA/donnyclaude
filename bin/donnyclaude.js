@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -46,16 +46,11 @@ function getVersion(cmd, flag = '--version') {
   }
 }
 
-function copyDirSafe(src, dest) {
-  if (!existsSync(src)) return 0;
-  mkdirSync(dest, { recursive: true });
-  cpSync(src, dest, { recursive: true, force: true });
-  // Count items
+function countItems(dir) {
   try {
-    const { readdirSync } = await import('node:fs');
-    return readdirSync(src).length;
+    return readdirSync(dir).filter(f => !f.startsWith('.')).length;
   } catch {
-    return -1;
+    return '?';
   }
 }
 
@@ -193,21 +188,6 @@ function installGlobalTools() {
   mergeSettings();
 }
 
-function countItems(dir) {
-  try {
-    const { readdirSync } = require('node:fs');
-    return readdirSync(dir).length;
-  } catch {
-    // Fallback: use sync readdir
-    try {
-      const items = execSync(`ls "${dir}" | wc -l`, { encoding: 'utf-8' }).trim();
-      return parseInt(items, 10);
-    } catch {
-      return '?';
-    }
-  }
-}
-
 function mergeSettings() {
   const settingsPath = join(CLAUDE_HOME, 'settings.json');
   const templatePath = join(ROOT, 'packages', 'core', 'settings-template.json');
@@ -264,9 +244,11 @@ function launchWizard() {
 
   // Pass the template directory path so Claude can find templates
   const templateDir = join(ROOT, 'templates');
+  const filledPrompt = setupPrompt.replace(/\{\{TEMPLATE_DIR\}\}/g, templateDir);
 
   const child = spawn('claude', [
-    '--prompt', setupPrompt.replace('{{TEMPLATE_DIR}}', templateDir),
+    '--append-system-prompt', filledPrompt,
+    'Run the DonnyClaude setup wizard. Follow your system prompt instructions to configure this project.',
   ], {
     stdio: 'inherit',
     cwd: process.cwd(),
