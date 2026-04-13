@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/skills-107-ff3333?style=for-the-badge" alt="107 Skills">
+  <img src="https://img.shields.io/badge/skills-105-ff3333?style=for-the-badge" alt="105 Skills">
   <img src="https://img.shields.io/badge/agents-49-ff3333?style=for-the-badge" alt="49 Agents">
-  <img src="https://img.shields.io/badge/languages-12-ff3333?style=for-the-badge" alt="12 Languages">
+  <img src="https://img.shields.io/badge/languages-13-ff3333?style=for-the-badge" alt="13 Languages">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="MIT License">
 </p>
 
@@ -9,7 +9,7 @@
 
 **Your Claude Code just got superpowers.**
 
-DonnyClaude is an opinionated, all-in-one power-user setup for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). One command installs 107 skills, 49 specialized agents, coding rules for 12 languages, a full project workflow engine, and 7 pre-configured MCP servers. Then Claude itself walks you through setting up your project.
+DonnyClaude is an opinionated, all-in-one power-user setup for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). One command installs 105 skills, 49 specialized agents, coding rules for 13 languages, a full project workflow engine, and 7 pre-configured MCP servers. Then Claude itself walks you through setting up your project.
 
 > *"I went from a fresh Claude Code install to autonomous multi-phase project execution in under 2 minutes."*
 
@@ -46,9 +46,9 @@ donnyclaude
 
 | | Component | Count | What It Does |
 |---|-----------|-------|-------------|
-| **Skills** | GSD workflow, Superpowers, ECC quality, language patterns | 107 | Slash commands for every dev workflow |
+| **Skills** | GSD workflow, Superpowers, ECC quality, language patterns | 105 | Slash commands for every dev workflow |
 | **Agents** | Executor, verifier, planner, reviewer, debugger... | 49 | Specialized AI agents for each task type |
-| **Rules** | TypeScript, Python, Rust, Go, C++, Kotlin, Java, Swift, PHP, Perl, C# | 65 files | Coding standards enforced automatically |
+| **Rules** | TypeScript, Python, Rust, Go, C++, Kotlin, Java, Swift, PHP, Perl, C#, COBOL | 70 files | Coding standards enforced automatically |
 | **GSD Engine** | Get Shit Done workflow | 1 | Plan -> Execute -> Verify -> Ship |
 | **Hooks** | Format, guard, context monitor | 8 | Automatic quality gates on every edit |
 | **Commands** | Slash commands | 60 | `/gsd:plan-phase`, `/code-review`, `/tdd`... |
@@ -123,11 +123,11 @@ Checking prerequisites...
 
 ### Phase 2: Install Toolkit
 
-Copies all 107 skills, 49 agents, rules, hooks, GSD engine, and commands to `~/.claude/`. If you already have Claude Code customizations, they're preserved -- DonnyClaude merges, never clobbers.
+Copies all 105 skills, 49 agents, rules, hooks, GSD engine, and commands to `~/.claude/`. If you already have Claude Code customizations, they're preserved -- DonnyClaude merges, never clobbers.
 
 ```
 Installing DonnyClaude toolkit...
-  ✓ 107 skills installed
+  ✓ 105 skills installed
   ✓ 49 agents installed
   ✓ Rules installed (common + language-specific)
   ✓ GSD workflow engine installed
@@ -226,9 +226,9 @@ your-project/
 
 ```
 ~/.claude/
-  skills/        107 skills (GSD, Superpowers, ECC, language-specific)
+  skills/        105 skills (GSD, Superpowers, ECC, language-specific — cruft removed in v1.2, see docs/PRUNE-LOG.md)
   agents/        49 specialized agents
-  rules/         Coding standards for 12 languages
+  rules/         Coding standards for 13 languages
   get-shit-done/ GSD workflow engine
   hooks/         Auto-formatting and guard rails
   commands/      60 slash commands
