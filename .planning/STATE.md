@@ -4,9 +4,10 @@
 
 Phase: Phase 1 — Skill Audit + Prune (RC GATE)
 Plan: —
-Status: Ready to plan Phase 1
+Status: Context gathered; ready to plan Phase 1
 Progress: [▱▱▱▱▱] 0/5 phases complete
-Last activity: 2026-04-12 — ROADMAP.md written; 9/9 v1.2 requirements mapped to 5 phases
+Last activity: 2026-04-12 — 01-CONTEXT.md + 01-DISCUSSION-LOG.md written after 4-area discussion (protected list, rubric, RC gate, removal trail)
+Resume file: .planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md
 
 ## Project Reference
 
@@ -14,7 +15,7 @@ See: `.planning/PROJECT.md` (updated 2026-04-12)
 See: `.planning/ROADMAP.md` (created 2026-04-12)
 
 **Core value:** Zero to autonomous AI-assisted development in one command
-**Current focus:** Phase 1 — prune 107 skills to ~60, ship as v1.2.0-rc1, gate rest of v1.2 on feedback window
+**Current focus:** Phase 1 — prune 107 skills toward the 75-85 target band (corrected from stale "~60" — see 01-CONTEXT.md D-01), ship as v1.2.0-rc1, gate rest of v1.2 on the feedback+cooling-off window
 
 ## Performance Metrics
 
@@ -46,7 +47,8 @@ See: `.planning/ROADMAP.md` (created 2026-04-12)
 
 ## Todos
 
-- Plan Phase 1 via `/gsd-plan-phase 1` — identify skills to prune, confirm methodology, stage v1.2.0-rc1 release.
+- **Scoping-correction commit (BEFORE planning):** Update PROJECT.md + REQUIREMENTS.md + ROADMAP.md + research/SUMMARY.md + tests/install.test.js:60 to reflect the 75-85 target band and reframe gate purpose as "feedback + cooling-off." One atomic commit with subject `docs(planning): correct v1.2 prune target from ~60 to 75-85`.
+- Plan Phase 1 via `/gsd-plan-phase 1` — AFTER scoping correction lands. Plan should spec audit subagent prompt (including clause-c snapshot requirement D-13), PRUNE-VERDICT.json schema, 5-skill calibration pre-flight, cooling-off obligations, RC publishing workflow.
 
 ## Blockers
 
@@ -54,7 +56,9 @@ None.
 
 ## Session Continuity
 
-**Next action:** Run `/gsd-plan-phase 1` to decompose Phase 1 (Skill Audit + Prune) into an executable plan.
+**Next action:** Run `/gsd-plan-phase 1` to decompose Phase 1 (Skill Audit + Prune) into an executable plan. CONTEXT.md captures all 4 discussed gray areas with locked decisions (64 protected, 75-85 target band, two-pass audit with 5-skill calibration, RC dist-tag + cooling-off gate, git mv to packages/_archived-skills/ + docs/PRUNE-LOG.md).
+
+**Important — Phase 1 starts with a scoping-correction commit BEFORE planning:** Per CONTEXT.md D-01/D-02, land `docs(planning): correct v1.2 prune target from ~60 to 75-85` as the first action. Updates PROJECT.md + REQUIREMENTS.md + ROADMAP.md + research/SUMMARY.md + tests/install.test.js:60 in one atomic commit. Plan-phase reads the post-correction state.
 
 ---
-*Last updated: 2026-04-12 after ROADMAP.md creation*
+*Last updated: 2026-04-12 after Phase 1 context-gathering session*
