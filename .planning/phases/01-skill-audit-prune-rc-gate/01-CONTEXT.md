@@ -10,7 +10,7 @@ Prune `packages/skills/` from 107 skills to a 75-85 target band of high-value sk
 
 Scope anchor: SKILLS-01 only. SKILLS-02/03/04 (install manifest, skill index, enable/disable) are Phase 2. AGENTS-01 is Phase 3. HOOKS-01/02/03/04 are Phases 4-5.
 
-**Target math (corrected from original ~60):** 64 protected + X survivors of 43 rubric candidates = 75-85 final. The "~60" figure in the original REQUIREMENTS.md/ROADMAP.md was scoped before the gsd-* coupling was understood; one of Phase 1's first tasks is a doc-correction commit to fix this upstream of planning.
+**Target math (corrected 2026-04-13 — see Corrections note at bottom of file):** 107 = 64 protected + 2 cruft removals (D-08, D-09) + **41 rubric candidates**. For post-prune count ∈ [75, 85]: rubric_prunes ∈ [20, 30] (49-73% rate from 41 candidates). **If rubric PRUNE verdicts come in below 20, the target band cannot be hit from rubric alone and a scope-change decision is needed before Wave 3 proceeds.** The original "~60" figure in REQUIREMENTS.md/ROADMAP.md was scoped before the gsd-* coupling was understood; one of Phase 1's first tasks is a doc-correction commit to fix this upstream of planning.
 
 </domain>
 
@@ -34,7 +34,7 @@ Scope anchor: SKILLS-01 only. SKILLS-02/03/04 (install manifest, skill index, en
   - **`strategic-compact`** — Test B + executable substance. Has `suggest-compact.js` PreToolUse hook that tracks tool calls and nudges manual `/compact` at configurable thresholds (default 50 calls). Origin: ECC, but the executable code is non-duplicatable from training.
   - **`frontend-slides`** — Test B. Opinionated aesthetic taste claim ("distinctive design: avoid generic purple-gradient, Inter-on-white, template-looking decks"). Zero-deps, viewport-fit, visual-exploration-over-abstract-questionnaires philosophy credited to @zarazhangrui.
 - **D-06:** The 60 gsd-* skills are protected on structural grounds (tight coupling to the GSD workflow engine that ships as part of donnyclaude). Cutting any of them breaks the workflow commands users actually run. No further evaluation needed per-skill.
-- **D-07:** Skills downgraded from the initial protection candidate list to rubric scope after verification: `eval-harness` (origin:ECC, generic EDD methodology, no donnyclaude-specific glue visible in the SKILL.md), `plankton-code-quality` (third-party tool integration reference, not donnyclaude meta-tooling or taste claim), `mcp-server-patterns` (generic MCP SDK reference, no donnyclaude-specific glue confirmed in spot-check), `iterative-retrieval` (generic technique). These will go through the two-pass audit like the other 39 candidates.
+- **D-07:** Skills downgraded from the initial protection candidate list to rubric scope after verification: `eval-harness` (origin:ECC, generic EDD methodology, no donnyclaude-specific glue visible in the SKILL.md), `plankton-code-quality` (third-party tool integration reference, not donnyclaude meta-tooling or taste claim), `mcp-server-patterns` (generic MCP SDK reference, no donnyclaude-specific glue confirmed in spot-check), `iterative-retrieval` (generic technique). These will go through the two-pass audit like the other 37 candidates.
 
 ### Cruft removals (separate from rubric)
 
@@ -55,13 +55,13 @@ Scope anchor: SKILLS-01 only. SKILLS-02/03/04 (install manifest, skill index, en
 ### Rubric application — hybrid human-subagent with calibration
 
 - **D-15:** The audit is executed by a subagent that reads each candidate SKILL.md, evaluates the two passes, and emits structured `PRUNE-VERDICT.json`. The human (Donovan) reviews every PRUNE and every UNCERTAIN verdict; KEEP verdicts are skimmed but not individually audited. Rationale: false-positive prunes are the asymmetric-risk direction (user-facing, harder to reverse even with `git mv`); false-negative keeps are recoverable in v1.3 with no user impact.
-- **D-16:** **5-skill calibration pre-flight (mandatory before full 43-candidate pass):** The audit subagent first processes a pinned held-out set of 5 pre-judged skills. Human compares verdicts to expectations. **5/5 agreement = proceed to full pass. 4/5 or worse = tighten the rubric prompt, then re-run calibration before the full pass.** The calibration skills are:
+- **D-16:** **5-skill calibration pre-flight (mandatory before full 41-candidate pass):** The audit subagent first processes a pinned held-out set of 5 pre-judged skills. Human compares verdicts to expectations. **5/5 agreement = proceed to full pass. 4/5 or worse = tighten the rubric prompt, then re-run calibration before the full pass.** The calibration skills are:
   - **Obvious prune #1:** `python-patterns` — pure Python idioms (PEP 8, type hints, comprehensions). Fails (a), (b), (c) — no internal references found via grep. Expected verdict: PRUNE.
   - **Obvious prune #2:** `golang-patterns` — generic Go idioms. Same pattern as python-patterns. Expected verdict: PRUNE.
   - **Confirmed-glue keep #1:** `tdd-workflow` — fails (a) (generic TDD) and (b) (no donnyclaude-native references in SKILL.md body), but passes (c) due to 7 internal references from tdd-guide agent, tdd/go-test/cpp-test/kotlin-test commands, php/testing rule, and commands/tdd.md. Expected verdict: KEEP (on clause-c grounds, with lines_cited pointing at the referrers in the provenance field).
   - **Confirmed-glue keep #2:** `e2e-testing` — fails (a) (generic Playwright) and (b) (no donnyclaude-native references in SKILL.md body), but passes (c) due to 2 internal references from e2e-runner agent and frontend-slides skill. Expected verdict: KEEP (on clause-c grounds).
   - **Borderline #1:** `eval-harness` — origin:ECC, generic EDD methodology (capability evals, regression evals, pass@k), no donnyclaude-specific glue visible in first 50 lines, no confirmed internal references from spot-check. Expected verdict: PRUNE. If the subagent KEEPs it, that's calibration drift worth investigating before the full pass.
-- **D-17:** **Why this specific mix:** Each of the 5 skills stresses a different rubric pathway. python-patterns and golang-patterns test the language-pattern failure mode. tdd-workflow tests whether the subagent correctly applies clause (c) to protect glue-wired generic skills. e2e-testing tests the same with fewer referrers (2 vs 7). eval-harness tests the borderline case where the prior is PRUNE but the subagent could plausibly go either way. If any of these 5 gets the wrong verdict, the subagent is not ready for the 38 unseen candidates.
+- **D-17:** **Why this specific mix:** Each of the 5 skills stresses a different rubric pathway. python-patterns and golang-patterns test the language-pattern failure mode. tdd-workflow tests whether the subagent correctly applies clause (c) to protect glue-wired generic skills. e2e-testing tests the same with fewer referrers (2 vs 7). eval-harness tests the borderline case where the prior is PRUNE but the subagent could plausibly go either way. If any of these 5 gets the wrong verdict, the subagent is not ready for the 36 unseen candidates.
 - **D-18:** **PRUNE-VERDICT.json schema (locked shape):**
   ```json
   {
@@ -241,5 +241,12 @@ None. The only item in `.planning/STATE.md#Todos` is "Plan Phase 1 via `/gsd-pla
 
 ---
 
+## Corrections
+
+- **2026-04-13 — candidate count 43→41.** The original context (and downstream plans 01-01 and 01-02) described "43 rubric candidates." The correct number is **41**. Derivation: `ls packages/skills` returns 107 directories; `grep -v '^gsd-' | grep -vE '^(skill-stocktake|humanizer|strategic-compact|frontend-slides|configure-ecc)$'` returns 42 (excludes 60 gsd-* + 4 non-gsd protected + configure-ecc); then D-09 continuous-learning resolution drops the loser → **41 rubric candidates**. The original "Resulting count: 43" in 01-01-PLAN.md omitted the continuous-learning subtraction. **Cascade:** derived counts updated in D-07 ("other 37 candidates", was 39), D-16 ("full 41-candidate pass", was 43), D-17 ("36 unseen candidates", was 38), 01-01-PLAN.md acceptance criteria (candidate count now 41), and 01-02-PLAN.md line 42 narrative. **Achievable rubric prune rate to hit the [75, 85] target band: 20-30 PRUNE verdicts (49-73% rate from 41 candidates). If rubric PRUNE verdicts come in below 20, the target band cannot be hit from rubric alone — scope-change decision required before Wave 3 proceeds.**
+
+---
+
 *Phase: 01-skill-audit-prune-rc-gate*
 *Context gathered: 2026-04-12*
+*Corrections landed: 2026-04-13*
