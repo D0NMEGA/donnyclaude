@@ -36,7 +36,7 @@ Zero to autonomous, multi-phase AI-assisted development in one command — witho
 
 **Milestone v1.2 — Harness Optimization** (six core fixes, ordered by dependency):
 
-- [ ] **SKILLS-01**: donnyclaude ships ~60 high-value skills (down from 107) after audit removes duplicates of training-data knowledge — *gated as v1.2.0-rc1; week of feedback before proceeding*
+- [ ] **SKILLS-01**: donnyclaude ships 75-85 high-value skills (pruned from 107) after audit removes duplicates of training-data knowledge. *Gated as v1.2.0-rc1; one-week feedback-plus-cooling-off window before proceeding.*
 - [ ] **SKILLS-02**: `npx donnyclaude` install writes `~/.claude/.donnyclaude-manifest.json` with file list, checksums, and version
 - [ ] **SKILLS-03**: install builds a description-indexed skill registry enabling progressive disclosure (avoid the ~100-tool degradation cliff)
 - [ ] **SKILLS-04**: user can enable/disable individual skills via `settings.json` (`skills.enabled[]` / `skills.disabled[]`)
@@ -97,7 +97,7 @@ Key context for v1.2 planning:
 | Settings merge instead of clobber | Existing Claude Code users can install donnyclaude without losing custom hooks/permissions | ✓ Good |
 | Bootstrap GSD tracking AFTER v1.1 release rather than from inception | The optimization milestone needs structured tracking; prior releases shipped without it | — Pending (v1.2 will validate) |
 | Trim v1.2 to six core incremental fixes; defer stretch items #7-10 to v1.3+ | Each stretch item has a non-obvious failure mode that needs its own scoping. Bundling them blows the milestone past 95h and creates exactly the silent-drift problems the closing-loops thesis warns against. | — Pending (validates after v1.2 ship) |
-| Gate SKILLS-01 (prune 107 → ~60) as v1.2.0-rc1 with one week of user feedback before shipping the rest of v1.2 | Pruning looks reversible but isn't — users will complain about removed skills. Treating the prune as a release candidate gives a feedback window before the rest of v1.2 builds on it. | — Pending |
+| Gate SKILLS-01 (prune 107 toward the 75-85 band) as v1.2.0-rc1 with a one-week window between rc1 publish and stable promotion, providing both external feedback collection and internal cooling-off for self-review | Pruning looks reversible but isn't; users will complain about removed skills. Treating the prune as a release candidate gives a window where feedback can arrive AND the author can dogfood rc1 before promotion. The cooling-off framing keeps the gate defensible at zero external feedback. | Pending |
 | Order v1.2 phases by hard dependency: SKILLS-01 → SKILLS-02/03/04 → AGENTS-01 → HOOKS-01 (independent) → HOOKS-02 → HOOKS-03 → HOOKS-04 | Coherent shipping sequence avoids parallel workstreams competing for attention. SKILLS-03 must follow SKILLS-01 (you index what's left). HOOKS-03 must follow HOOKS-02 (you restore what you backed up). | — Pending |
 
 ## Evolution

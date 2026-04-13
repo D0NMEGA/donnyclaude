@@ -11,7 +11,7 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
 
 ## Phases
 
-- [ ] **Phase 1: Skill Audit + Prune (RC GATE)** — Prune 107 skills to ~60 high-value skills, ship as v1.2.0-rc1, and gate the rest of v1.2 on a one-week user feedback window.
+- [ ] **Phase 1: Skill Audit + Prune (RC GATE)**. Prune 107 skills toward the 75-85 high-value band, ship as v1.2.0-rc1, and gate the rest of v1.2 on a one-week feedback-plus-cooling-off window.
 - [ ] **Phase 2: Install Manifest + Progressive Disclosure** — Install writes a manifest, builds a description-indexed skill registry, and supports enable/disable via `settings.json`.
 - [ ] **Phase 3: Subagent Return Contracts** — ~29 open-ended domain subagents receive explicit "return only X" contracts matching the established GSD pattern.
 - [ ] **Phase 4: Hook Backup/Restore Subsystem** — SessionStart becomes a real testable script, PreCompact actively backs up state, and SessionStart restores the most-recent backup.
@@ -20,11 +20,11 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
 ## Phase Details
 
 ### Phase 1: Skill Audit + Prune (RC GATE)
-**Goal**: User installs donnyclaude v1.2.0-rc1 and receives ~60 high-value skills instead of 107, with one week of real-world usage validating the prune before the rest of v1.2 lands.
+**Goal**: User installs donnyclaude v1.2.0-rc1 and receives 75-85 high-value skills instead of 107, with a one-week feedback-plus-cooling-off window validating the prune before the rest of v1.2 lands.
 **Depends on**: Nothing (first phase)
 **Requirements**: SKILLS-01
 **Success Criteria** (what must be TRUE):
-  1. User running `npx donnyclaude@1.2.0-rc1` sees ~60 skills installed to `~/.claude/skills/` and README badges reflect the new count.
+  1. User running `npx donnyclaude@1.2.0-rc1` sees 75-85 skills installed to `~/.claude/skills/` and README badges reflect the new count.
   2. User inspecting `packages/skills/` on the repo sees the pruned directory list with a documented rationale per removed skill (duplicate of training knowledge, low-signal, or superseded).
   3. User running existing tests sees all test assertions pass with the new skill count; no test relies on the previous 107 figure.
   4. v1.2.0-rc1 is published to npm with release notes explaining the prune and calling for feedback, and one full week elapses with no blocking issue filed before Phase 2 begins.

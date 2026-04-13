@@ -9,10 +9,10 @@ Six core incremental fixes from `.planning/research/SUMMARY.md`, ordered by hard
 
 ### Skills
 
-- [ ] **SKILLS-01**: User receives ~60 high-value skills (down from 107) after pruning duplicates of training-data knowledge. Pruned set ships as v1.2.0-rc1 with one week of feedback before SKILLS-02 onward proceed.
-  - *Touches:* `packages/skills/` (delete N directories), `README.md` (update count badges + table), `tests/` (count assertions if any).
+- [ ] **SKILLS-01**: User receives 75-85 high-value skills (pruned from 107) after pruning duplicates of training-data knowledge. Pruned set ships as v1.2.0-rc1 with a one-week feedback-plus-cooling-off window before SKILLS-02 onward proceed.
+  - *Touches:* `packages/skills/` (git mv ~22-32 directories to `packages/_archived-skills/`), `README.md` (update count badges + table), `tests/install.test.js:60` (count floor moves from 100 to 70 in the scoping-correction commit).
   - *Evidence:* HumanLayer (14-22% reasoning token savings); Berkeley FCL v3; RAG-MCP arXiv:2505.03275.
-  - *Verification:* skill count = ~60; release candidate published; no user-blocking complaints during feedback window.
+  - *Verification:* skill count lands within the 75-85 band; release candidate published via `npm publish --tag rc`; one-week window elapses with zero `prune-regression`-labeled issues AND three cooling-off obligations completed (day 4-5 PRUNE-LOG.md re-read, fresh-machine install, real-workflow use of a borderline survivor).
 
 - [ ] **SKILLS-02**: User's `~/.claude/.donnyclaude-manifest.json` is written by `npx donnyclaude` install with file list, SHA-256 checksums, and donnyclaude version. Enables uninstall, conflict detection, and offline audit.
   - *Touches:* `bin/donnyclaude.js:154-176` (install logic), new manifest writer module.

@@ -55,9 +55,9 @@ describe('Package structure', () => {
     assert.ok(existsSync(join(ROOT, 'templates', 'planning', 'config.json')));
   });
 
-  it('has 100+ skills', () => {
+  it('has 70+ skills', () => {
     const count = countDirItems(join(ROOT, 'packages', 'skills'));
-    assert.ok(count >= 100, `Expected 100+ skills, got ${count}`);
+    assert.ok(count >= 70, `Expected 70+ skills, got ${count}`);
   });
 
   it('has 40+ agents', () => {
