@@ -28,7 +28,15 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
   2. User inspecting `packages/skills/` on the repo sees the pruned directory list with a documented rationale per removed skill (duplicate of training knowledge, low-signal, or superseded).
   3. User running existing tests sees all test assertions pass with the new skill count; no test relies on the previous 107 figure.
   4. v1.2.0-rc1 is published to npm with release notes explaining the prune and calling for feedback, and one full week elapses with no blocking issue filed before Phase 2 begins.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 01-01-PLAN.md — Audit subagent prompt + frozen reference snapshot + 5-skill calibration + full 43-candidate pass producing PRUNE-VERDICT.json
+- [ ] 01-02-PLAN.md — Human review of PRUNE/UNCERTAIN verdicts producing PRUNE-FINAL-LIST.json with in-band math check
+- [ ] 01-03-PLAN.md — Atomic prune-execution commit (git mv + docs/PRUNE-LOG.md + docs/CHANGELOG.md + packages/_archived-skills/README.md + README.md count updates)
+- [ ] 01-04-PLAN.md — Version bump to 1.2.0-rc.1 + npm publish --tag rc + GitHub pre-release tag v1.2.0-rc.1 + release notes
+- [ ] 01-05-PLAN.md — 7×24h cooling-off gate with three D-21 obligations (a/b/c) + final issue check + gate decision
+
+> Note: The pre-phase scoping-correction work (D-01/D-02/D-03) landed before Phase 1 execution began, as commit `8d7ef909312fcb8544eebb469f515da965c9b1c3` (`docs(planning): correct v1.2 prune target from ~60 to 75-85`). This commit is the reference snapshot anchor for the audit subagent in Plan 01.
+
 **Gate criterion**: v1.2.0-rc1 published; one week of user feedback elapsed; no blocking issues filed before Phase 2 begins. This is a user-confirmed decision in PROJECT.md Key Decisions.
 
 ### Phase 2: Install Manifest + Progressive Disclosure
@@ -78,7 +86,7 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skill Audit + Prune (RC GATE) | 0/0 | Ready to plan | — |
+| 1. Skill Audit + Prune (RC GATE) | 0/5 | Plans created, ready to execute | — |
 | 2. Install Manifest + Progressive Disclosure | 0/0 | Not started | — |
 | 3. Subagent Return Contracts | 0/0 | Not started | — |
 | 4. Hook Backup/Restore Subsystem | 0/0 | Not started | — |
