@@ -99,25 +99,23 @@ Explicitly excluded from v1.2. See PROJECT.md Out of Scope section for the full 
 
 ## Traceability
 
-Empty initially — populated during roadmap creation by `gsd-roadmapper`.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SKILLS-01 | (pending roadmap) | Pending |
-| SKILLS-02 | (pending roadmap) | Pending |
-| SKILLS-03 | (pending roadmap) | Pending |
-| SKILLS-04 | (pending roadmap) | Pending |
-| AGENTS-01 | (pending roadmap) | Pending |
-| HOOKS-01 | (pending roadmap) | Pending |
-| HOOKS-02 | (pending roadmap) | Pending |
-| HOOKS-03 | (pending roadmap) | Pending |
-| HOOKS-04 | (pending roadmap) | Pending |
+| SKILLS-01 | Phase 1 — Skill Audit + Prune (RC GATE) | Pending |
+| SKILLS-02 | Phase 2 — Install Manifest + Progressive Disclosure | Pending |
+| SKILLS-03 | Phase 2 — Install Manifest + Progressive Disclosure | Pending |
+| SKILLS-04 | Phase 2 — Install Manifest + Progressive Disclosure | Pending |
+| AGENTS-01 | Phase 3 — Subagent Return Contracts | Pending |
+| HOOKS-01 | Phase 4 — Hook Backup/Restore Subsystem | Pending |
+| HOOKS-02 | Phase 4 — Hook Backup/Restore Subsystem | Pending |
+| HOOKS-03 | Phase 4 — Hook Backup/Restore Subsystem | Pending |
+| HOOKS-04 | Phase 5 — Stop Verification Subagent | Pending |
 
 **Coverage:**
 - v1.2 requirements: 9 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 9 ⚠️ (will be 0 after roadmap)
+- Mapped to phases: 9 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-12 after milestone v1.2 scope confirmation*
+*Last updated: 2026-04-12 after ROADMAP.md creation — traceability populated*
