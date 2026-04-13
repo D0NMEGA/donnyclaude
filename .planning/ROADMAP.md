@@ -11,7 +11,7 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
 
 ## Phases
 
-- [ ] **Phase 1: Skill Audit + Prune (RC GATE)**. Prune 107 skills toward the 75-85 high-value band, ship as v1.2.0-rc1, and gate the rest of v1.2 on a one-week feedback-plus-cooling-off window.
+- [ ] **Phase 1: Skill Audit + Prune (RC GATE)**. Ship v1.2.0-rc1 as a **cruft-only prune** (107→105, removing configure-ecc and the continuous-learning loser); gate the rest of v1.2 on a one-week feedback-plus-cooling-off window. The broader training-duplicate prune was attempted and deferred to v1.3 after the calibration pre-flight surfaced a rubric limitation — see `.planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md#Corrections` (2026-04-13).
 - [ ] **Phase 2: Install Manifest + Progressive Disclosure** — Install writes a manifest, builds a description-indexed skill registry, and supports enable/disable via `settings.json`.
 - [ ] **Phase 3: Subagent Return Contracts** — ~29 open-ended domain subagents receive explicit "return only X" contracts matching the established GSD pattern.
 - [ ] **Phase 4: Hook Backup/Restore Subsystem** — SessionStart becomes a real testable script, PreCompact actively backs up state, and SessionStart restores the most-recent backup.
@@ -20,22 +20,22 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
 ## Phase Details
 
 ### Phase 1: Skill Audit + Prune (RC GATE)
-**Goal**: User installs donnyclaude v1.2.0-rc1 and receives 75-85 high-value skills instead of 107, with a one-week feedback-plus-cooling-off window validating the prune before the rest of v1.2 lands.
+**Goal**: User installs donnyclaude v1.2.0-rc1 and receives 105 skills (107 − 2 cruft removals), with a one-week feedback-plus-cooling-off window validating the cruft prune before the rest of v1.2 lands. The broader training-duplicate prune is deferred to v1.3.
 **Depends on**: Nothing (first phase)
-**Requirements**: SKILLS-01
+**Requirements**: SKILLS-01 (partial — cruft scope only)
 **Success Criteria** (what must be TRUE):
-  1. User running `npx donnyclaude@1.2.0-rc1` sees 75-85 skills installed to `~/.claude/skills/` and README badges reflect the new count.
-  2. User inspecting `packages/skills/` on the repo sees the pruned directory list with a documented rationale per removed skill (duplicate of training knowledge, low-signal, or superseded).
-  3. User running existing tests sees all test assertions pass with the new skill count; no test relies on the previous 107 figure.
-  4. v1.2.0-rc1 is published to npm with release notes explaining the prune and calling for feedback, and one full week elapses with no blocking issue filed before Phase 2 begins.
-**Plans**: 5 plans
-- [ ] 01-01-PLAN.md — Audit subagent prompt + frozen reference snapshot + 5-skill calibration + full 43-candidate pass producing PRUNE-VERDICT.json
-- [ ] 01-02-PLAN.md — Human review of PRUNE/UNCERTAIN verdicts producing PRUNE-FINAL-LIST.json with in-band math check
-- [ ] 01-03-PLAN.md — Atomic prune-execution commit (git mv + docs/PRUNE-LOG.md + docs/CHANGELOG.md + packages/_archived-skills/README.md + README.md count updates)
-- [ ] 01-04-PLAN.md — Version bump to 1.2.0-rc.1 + npm publish --tag rc + GitHub pre-release tag v1.2.0-rc.1 + release notes
-- [ ] 01-05-PLAN.md — 7×24h cooling-off gate with three D-21 obligations (a/b/c) + final issue check + gate decision
+  1. User running `npx donnyclaude@1.2.0-rc1` sees exactly 105 skills installed to `~/.claude/skills/` and README badges reflect the new count.
+  2. User inspecting `packages/skills/` on the repo sees `configure-ecc` and the `continuous-learning` loser archived to `packages/_archived-skills/` with literal `git mv` restore commands in `docs/PRUNE-LOG.md`.
+  3. User running existing tests sees all test assertions pass at 105 skills; the `count >= 70` floor trivially passes.
+  4. v1.2.0-rc1 is published to npm with release notes explaining the cruft removals, explicitly noting the training-duplicate prune deferred to v1.3, and one full week elapses with no blocking issue filed before Phase 2 begins.
+**Plans**: 3 plans
+- [ ] 01-01-PLAN.md — Cruft-only atomic commit (git mv configure-ecc + continuous-learning loser + docs/PRUNE-LOG.md + docs/CHANGELOG.md + packages/_archived-skills/README.md + README.md 107→105 updates)
+- [ ] 01-02-PLAN.md — Version bump to 1.2.0-rc.1 + npm publish --tag rc + GitHub pre-release tag v1.2.0-rc.1 + release notes with v1.3 deferral acknowledgment
+- [ ] 01-03-PLAN.md — 7×24h cooling-off gate with three D-21 obligations (a/b/c) + final issue check + gate decision
 
-> Note: The pre-phase scoping-correction work (D-01/D-02/D-03) landed before Phase 1 execution began, as commit `8d7ef909312fcb8544eebb469f515da965c9b1c3` (`docs(planning): correct v1.2 prune target from ~60 to 75-85`). This commit is the reference snapshot anchor for the audit subagent in Plan 01.
+> **Note on scope:** This phase originally scoped 5 plans (audit subagent + human review + atomic commit + publish + cooling-off). During execution, the audit subagent's calibration pre-flight detected that the rubric's clause (c) cannot distinguish training-duplicate skills from catalog cross-links in the current codebase — see `.planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md#Corrections` (2026-04-13) for the full analysis. The training-duplicate rubric was deferred to v1.3, and Phase 1 was restructured to 3 plans: cruft-only execution, publish, cooling-off. Partial audit artifacts are preserved at `.planning/research/v1.3-seeds/`.
+
+> The pre-phase scoping-correction work (D-01/D-02/D-03) landed before Phase 1 execution began, as commit `8d7ef909312fcb8544eebb469f515da965c9b1c3` (`docs(planning): correct v1.2 prune target from ~60 to 75-85`). The 75-85 target band itself was subsequently revised to exactly 105 (107 − 2 cruft) after the rubric deferral.
 
 **Gate criterion**: v1.2.0-rc1 published; one week of user feedback elapsed; no blocking issues filed before Phase 2 begins. This is a user-confirmed decision in PROJECT.md Key Decisions.
 
@@ -86,7 +86,7 @@ Measurably reduce donnyclaude's always-loaded context overhead, harden the hook 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skill Audit + Prune (RC GATE) | 0/5 | Plans created, ready to execute | — |
+| 1. Skill Audit + Prune (RC GATE) | 0/3 | Restructured 5→3 plans after rubric deferral (2026-04-13); ready to execute | — |
 | 2. Install Manifest + Progressive Disclosure | 0/0 | Not started | — |
 | 3. Subagent Return Contracts | 0/0 | Not started | — |
 | 4. Hook Backup/Restore Subsystem | 0/0 | Not started | — |

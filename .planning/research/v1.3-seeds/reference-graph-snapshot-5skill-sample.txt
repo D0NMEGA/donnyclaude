@@ -1,0 +1,42 @@
+=== python-patterns ===
+packages/agents//python-reviewer.md:94:For detailed Python patterns, security examples, and code samples, see skill: `python-patterns`.
+packages/commands//python-review.md:206:- Skills: `skills/python-patterns/`, `skills/python-testing/`
+packages/rules//python/coding-style.md:42:See skill: `python-patterns` for comprehensive Python idioms and patterns.
+packages/rules//python/patterns.md:39:See skill: `python-patterns` for comprehensive patterns including decorators, concurrency, and package organization.
+packages/rules//README.md:69:- **Skills** (`skills/` directory) provide deep, actionable reference material for specific tasks (e.g., `python-patterns`, `golang-testing`).
+packages/skills/configure-ecc/SKILL.md:123:| `python-patterns` | Pythonic idioms, PEP 8, type hints, best practices |
+packages/skills/configure-ecc/SKILL.md:268:- `python-testing` may reference `python-patterns`
+packages/skills/configure-ecc/SKILL.md:281:3. **Issue**: What's wrong (e.g., "references ~/.claude/skills/python-patterns but python-patterns was not installed")
+packages/skills/configure-ecc/SKILL.md:282:4. **Suggested fix**: What to do (e.g., "install python-patterns skill" or "update path to .claude/skills/")
+packages/skills/skill-stocktake/SKILL.md:157:   - What to change and why (e.g., "trim 430→200 lines because sections X/Y duplicate python-patterns")
+
+=== golang-patterns ===
+packages/agents//go-build-resolver.md:94:For detailed Go error patterns and code examples, see `skill: golang-patterns`.
+packages/agents//go-reviewer.md:76:For detailed Go code examples and anti-patterns, see `skill: golang-patterns`.
+packages/commands//go-review.md:148:- Skills: `skills/golang-patterns/`, `skills/golang-testing/`
+packages/commands//go-build.md:183:- Skill: `skills/golang-patterns/`
+packages/rules//golang/coding-style.md:32:See skill: `golang-patterns` for comprehensive Go idioms and patterns.
+packages/rules//golang/patterns.md:45:See skill: `golang-patterns` for comprehensive Go patterns including concurrency, error handling, and package organization.
+packages/skills/configure-ecc/SKILL.md:120:| `golang-patterns` | Idiomatic Go patterns, conventions for robust Go applications |
+packages/skills/configure-ecc/SKILL.md:269:- `golang-testing` may reference `golang-patterns`
+
+=== tdd-workflow ===
+packages/agents//tdd-guide.md:80:For detailed mocking patterns and framework-specific examples, see `skill: tdd-workflow`.
+packages/commands//kotlin-test.md:312:- Skill: `skills/tdd-workflow/`
+packages/commands//cpp-test.md:251:- Skill: `skills/tdd-workflow/`
+packages/commands//tdd.md:324:The related `tdd-workflow` skill is also bundled with ECC.
+packages/commands//tdd.md:328:- `skills/tdd-workflow/SKILL.md`
+packages/commands//go-test.md:268:- Skill: `skills/tdd-workflow/`
+packages/rules//php/testing.md:38:See skill: `tdd-workflow` for the repo-wide RED -> GREEN -> REFACTOR loop.
+packages/skills/configure-ecc/SKILL.md:148:| `tdd-workflow` | Enforces TDD with 80%+ coverage: unit, integration, E2E |
+packages/skills/kotlin-testing/SKILL.md:37:- **TDD walkthrough** — Full RED/GREEN/REFACTOR cycle with EmailValidator in [TDD Workflow for Kotlin](#tdd-workflow-for-kotlin)
+packages/skills/project-guidelines-example/SKILL.md:349:- `tdd-workflow/` - Test-driven development methodology
+packages/skills/strategic-compact/SKILL.md:106:| "test", "tdd", "coverage" | tdd-workflow | User mentions testing |
+
+=== e2e-testing ===
+packages/agents//e2e-runner.md:103:For detailed Playwright patterns, Page Object Model examples, configuration templates, CI/CD workflows, and artifact management strategies, see skill: `e2e-testing`.
+packages/skills/frontend-slides/SKILL.md:175:- `e2e-testing` if you need automated browser verification for the final deck
+
+=== eval-harness ===
+packages/skills/configure-ecc/SKILL.md:144:| `eval-harness` | Formal evaluation framework for eval-driven development (EDD) |
+

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-13T06:30:24.158Z"
-last_activity: 2026-04-13 -- Phase 01 planning complete
+last_updated: "2026-04-13T08:00:00.000Z"
+last_activity: 2026-04-13 -- Phase 01 restructured 5→3 plans (rubric deferred to v1.3)
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 5
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -17,12 +17,12 @@ progress:
 
 ## Current Position
 
-Phase: Phase 1 — Skill Audit + Prune (RC GATE)
-Plan: —
-Status: Ready to execute
+Phase: 01 (skill-audit-prune-rc-gate) — EXECUTING (restructured to cruft-only)
+Plan: 1 of 3 (cruft-only execution)
+Status: Executing Phase 01 (rubric deferred to v1.3)
 Progress: [▱▱▱▱▱] 0/5 phases complete
-Last activity: 2026-04-13 -- Phase 01 planning complete
-Resume file: .planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md
+Last activity: 2026-04-13 -- Phase 01 restructured 5→3 plans after calibration gate surfaced rubric limitation
+Resume file: .planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md (see #Corrections section dated 2026-04-13)
 
 ## Project Reference
 
@@ -30,7 +30,7 @@ See: `.planning/PROJECT.md` (updated 2026-04-12)
 See: `.planning/ROADMAP.md` (created 2026-04-12)
 
 **Core value:** Zero to autonomous AI-assisted development in one command
-**Current focus:** Phase 1 — prune 107 skills toward the 75-85 target band (corrected from stale "~60" — see 01-CONTEXT.md D-01), ship as v1.2.0-rc1, gate rest of v1.2 on the feedback+cooling-off window
+**Current focus:** Phase 01 — ship cruft-only prune (107→105) as v1.2.0-rc.1; training-duplicate prune deferred to v1.3 pending rubric redesign (see `.planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md#Corrections` 2026-04-13)
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ See: `.planning/ROADMAP.md` (created 2026-04-12)
 - 2026-04-12: SKILLS-02/03/04 grouped into a single phase (Phase 2) because all three touch `bin/donnyclaude.js:154-176` and `packages/core/settings-template.json` and form a coherent install-time subsystem.
 - 2026-04-12: HOOKS-01/02/03 grouped into a single phase (Phase 4) because they form a coherent backup/restore subsystem; HOOKS-01 provides the scriptable hook, HOOKS-02 provides the backup, HOOKS-03 provides the restore.
 - 2026-04-12: HOOKS-04 isolated to Phase 5 so the verification subagent ships with an explicit return contract following the AGENTS-01 (Phase 3) pattern.
+- **2026-04-13: Phase 1 training-duplicate rubric DEFERRED to v1.3.** The 5-skill calibration pre-flight correctly detected that the rubric's clause (c) cannot distinguish training-duplicate skills from catalog cross-links in the current codebase — all 5 calibration skills (including the "expected KEEP" anchors) have structurally identical bare-pointer referrer patterns. Phase 1 restructured from 5 plans to 3: cruft-only execution + publish + cooling-off. Partial audit artifacts preserved at `.planning/research/v1.3-seeds/`. v1.2 ships 107→105 (2 cruft removals); the broader prune becomes a v1.3 research + execution milestone. The calibration gate worked as designed and protected v1.2 from shipping 41 incorrectly-verdicted skills. Full analysis in `.planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md#Corrections`.
 
 ## Todos
 
@@ -71,9 +72,14 @@ None.
 
 ## Session Continuity
 
-**Next action:** Run `/gsd-plan-phase 1` to decompose Phase 1 (Skill Audit + Prune) into an executable plan. CONTEXT.md captures all 4 discussed gray areas with locked decisions (64 protected, 75-85 target band, two-pass audit with 5-skill calibration, RC dist-tag + cooling-off gate, git mv to packages/_archived-skills/ + docs/PRUNE-LOG.md).
+**Next action:** Execute new Plan 01-01 (cruft-only atomic commit). The plan authors `docs/PRUNE-LOG.md` with 2 cruft rows, `git mv`s configure-ecc + the continuous-learning loser to `packages/_archived-skills/`, writes `packages/_archived-skills/README.md` stub and `docs/CHANGELOG.md` v1.2.0 entry, updates `README.md` badges 107→105, runs `tests/install.test.js`, and lands as a single atomic commit with human verification at the checkpoint.
 
-**Important — Phase 1 starts with a scoping-correction commit BEFORE planning:** Per CONTEXT.md D-01/D-02, land `docs(planning): correct v1.2 prune target from ~60 to 75-85` as the first action. Updates PROJECT.md + REQUIREMENTS.md + ROADMAP.md + research/SUMMARY.md + tests/install.test.js:60 in one atomic commit. Plan-phase reads the post-correction state.
+**State of Phase 1 execution:**
+- Pre-execution scoping correction (43→41 candidate count fix) landed as commit `7ff02a0` before the rubric deferral.
+- Rubric calibration pre-flight attempted and deferred; partial audit artifacts moved to `.planning/research/v1.3-seeds/` (README + subagent prompt + partial verdict JSON + reference graph snapshot).
+- CONTEXT.md amended with Corrections section documenting the deferral and the calibration-gate lesson.
+- Plans restructured 5→3. Old 01-01 (audit) and old 01-02 (review) deleted. Old 01-03 (atomic prune commit) replaced with new 01-01 (cruft-only). Old 01-04 renamed to new 01-02 (publish). Old 01-05 renamed to new 01-03 (cooling-off).
+- Next immediate step: execute the new Plan 01-01.
 
 ---
-*Last updated: 2026-04-12 after Phase 1 context-gathering session*
+*Last updated: 2026-04-13 after Phase 1 rubric-deferral pivot*

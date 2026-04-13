@@ -1,0 +1,188 @@
+{
+  "version": "1.0",
+  "rubric_version": "v1.2-phase1",
+  "generated_at": "2026-04-13T07:45:00Z",
+  "reference_snapshot_sha": "8d7ef909312fcb8544eebb469f515da965c9b1c3",
+  "phase_stage": "calibration-only",
+  "notes": "Task 2 calibration pre-flight. verdicts[] contains ONLY the 5 calibration skills with full per-clause evidence so the human reviewer can compare structural reference patterns across KEEPs and expected-PRUNEs. Task 3 (full 41-candidate pass) has NOT run — do not treat this as a complete audit.",
+  "calibration_results": {
+    "pinned_skills": ["python-patterns", "golang-patterns", "tdd-workflow", "e2e-testing", "eval-harness"],
+    "expected_verdicts": {
+      "python-patterns": "PRUNE",
+      "golang-patterns": "PRUNE",
+      "tdd-workflow": "KEEP",
+      "e2e-testing": "KEEP",
+      "eval-harness": "PRUNE"
+    },
+    "actual_verdicts": {
+      "python-patterns": "KEEP",
+      "golang-patterns": "KEEP",
+      "tdd-workflow": "KEEP",
+      "e2e-testing": "KEEP",
+      "eval-harness": "UNCERTAIN"
+    },
+    "agreement_count": 2,
+    "proceed": false,
+    "disagreement_analysis": "python-patterns and golang-patterns were expected PRUNE but the rubric as literally written keeps them (clause c passes via non-cruft referrers in reviewer agents, rule files, and commands — structurally identical to tdd-workflow's 11-referrer protection). eval-harness has 1 referrer in the frozen snapshot but it is configure-ecc (cruft). Strict D-13 reading of clause (c) = KEEP; post-cruft reading = PRUNE. Marked UNCERTAIN because the rubric is genuinely ambiguous on whether cruft-only referrers count. Human decision needed on Diagnosis B (tighten clause c to exclude bare 'see skill: X' pointers) vs Diagnosis A (rescope target band)."
+  },
+  "verdicts": [
+    {
+      "skill": "python-patterns",
+      "category": "candidate",
+      "verdict": "KEEP",
+      "clauses": {
+        "a": {
+          "verdict": "FAIL",
+          "evidence": "750-line SKILL.md enumerates textbook Python idioms: PEP 8 (lines 18-72), type hints (76-138), exception handling (140-195), context managers (197-256), comprehensions/generators (258-307), dataclasses/namedtuples (309-368), decorators (370-438), concurrency patterns (440-499), package organization (502-561), __slots__/generators/string-concat (563-616), tooling config pyproject.toml (618-683), quick-reference idiom table (685-698), anti-patterns (700-748). All standard Python covered extensively in training data.",
+          "lines_cited": [18, 72, 76, 138, 140, 195, 197, 256, 309, 368, 440, 499, 618, 683, 700, 748]
+        },
+        "b": {
+          "verdict": "FAIL",
+          "evidence": "No references to donnyclaude-native agents, hooks, commands, rule files, MCP server conventions, or the GSD engine in the SKILL.md body. origin: ECC frontmatter but no donnyclaude-specific glue. Pure Python language reference.",
+          "lines_cited": []
+        },
+        "c": {
+          "verdict": "PASS",
+          "evidence": "10 referrers found in frozen snapshot (SHA 8d7ef90). Non-cruft referrers (5): packages/agents/python-reviewer.md:94 ('For detailed Python patterns... see skill: python-patterns'), packages/commands/python-review.md:206 (skill catalog list), packages/rules/python/coding-style.md:42 ('See skill: python-patterns'), packages/rules/python/patterns.md:39 ('See skill: python-patterns'), packages/rules/README.md:69 (catalog entry). Cruft/skill-example referrers (5): packages/skills/configure-ecc/SKILL.md (4 occurrences: lines 123, 268, 281, 282) and packages/skills/skill-stocktake/SKILL.md:157 (uses name as an example in audit instruction text). 5 non-cruft referrers match the structural pattern used to protect tdd-workflow in D-14.",
+          "checked_paths": ["packages/agents/", "packages/hooks/", "packages/commands/", "packages/skills/*/SKILL.md", "packages/rules/"],
+          "referrer_lines": [
+            {"file": "packages/agents/python-reviewer.md", "line": 94, "context": "see skill: python-patterns", "type": "bare-pointer"},
+            {"file": "packages/commands/python-review.md", "line": 206, "context": "- Skills: skills/python-patterns/, skills/python-testing/", "type": "catalog-entry"},
+            {"file": "packages/rules/python/coding-style.md", "line": 42, "context": "See skill: python-patterns for comprehensive Python idioms and patterns.", "type": "bare-pointer"},
+            {"file": "packages/rules/python/patterns.md", "line": 39, "context": "See skill: python-patterns for comprehensive patterns including decorators, concurrency, and package organization.", "type": "bare-pointer"},
+            {"file": "packages/rules/README.md", "line": 69, "context": "Skills provide deep, actionable reference material for specific tasks (e.g., python-patterns, golang-testing).", "type": "example-mention"},
+            {"file": "packages/skills/configure-ecc/SKILL.md", "line": 123, "context": "catalog table entry (cruft)", "type": "cruft-catalog"},
+            {"file": "packages/skills/skill-stocktake/SKILL.md", "line": 157, "context": "'trim 430→200 lines because sections X/Y duplicate python-patterns' — used as an example string in audit instructions", "type": "example-mention"}
+          ]
+        }
+      },
+      "recommendation": "KEEP",
+      "rationale": "Clauses a and b FAIL (generic Python idioms, no donnyclaude-specific glue) but clause c PASSES with 5+ non-cruft referrers matching the structural pattern used to protect tdd-workflow in D-14. All 5 non-cruft referrers are 'see skill: X' pointers rather than semantic invocations — Diagnosis B territory: the rubric as written does not distinguish bare pointers from dependencies, and this skill is keeping on pointer evidence alone."
+    },
+    {
+      "skill": "golang-patterns",
+      "category": "candidate",
+      "verdict": "KEEP",
+      "clauses": {
+        "a": {
+          "verdict": "FAIL",
+          "evidence": "674-line SKILL.md enumerates textbook Go idioms: simplicity/clarity (18-44), zero value design (46-71), accept-interfaces-return-structs (73-91), error wrapping with context (95-112), custom error types (114-133), errors.Is/As (135-156), worker pool (176-195), context cancellation (197-217), graceful shutdown (219-238), errgroup (240-266), goroutine leak prevention (268-296), interface design (300-362), package organization (364-420), functional options (422-464), embedding (466-492), sync.Pool (518-537), tooling (572-623), idiom reference table (625-638). All standard Go covered extensively in training data.",
+          "lines_cited": [18, 44, 46, 71, 73, 91, 95, 172, 176, 296, 300, 362, 422, 464, 518, 537, 572, 623]
+        },
+        "b": {
+          "verdict": "FAIL",
+          "evidence": "No references to donnyclaude-native agents, hooks, commands, rules, MCP, or GSD engine. origin: ECC frontmatter but no donnyclaude-specific glue. Pure Go language reference.",
+          "lines_cited": []
+        },
+        "c": {
+          "verdict": "PASS",
+          "evidence": "8 referrers in frozen snapshot. Non-cruft referrers (6): packages/agents/go-build-resolver.md:94 ('For detailed Go error patterns and code examples, see skill: golang-patterns'), packages/agents/go-reviewer.md:76 ('For detailed Go code examples and anti-patterns, see skill: golang-patterns'), packages/commands/go-review.md:148 (skill catalog list), packages/commands/go-build.md:183 (skill reference), packages/rules/golang/coding-style.md:32 ('See skill: golang-patterns'), packages/rules/golang/patterns.md:45 ('See skill: golang-patterns'). Cruft referrers (2): packages/skills/configure-ecc/SKILL.md:120, 269. Same structural pattern as python-patterns: all non-cruft referrers are 'see skill: X' bare pointers, not semantic invocations.",
+          "checked_paths": ["packages/agents/", "packages/hooks/", "packages/commands/", "packages/skills/*/SKILL.md", "packages/rules/"],
+          "referrer_lines": [
+            {"file": "packages/agents/go-build-resolver.md", "line": 94, "context": "see skill: golang-patterns", "type": "bare-pointer"},
+            {"file": "packages/agents/go-reviewer.md", "line": 76, "context": "see skill: golang-patterns", "type": "bare-pointer"},
+            {"file": "packages/commands/go-review.md", "line": 148, "context": "- Skills: skills/golang-patterns/, skills/golang-testing/", "type": "catalog-entry"},
+            {"file": "packages/commands/go-build.md", "line": 183, "context": "- Skill: skills/golang-patterns/", "type": "catalog-entry"},
+            {"file": "packages/rules/golang/coding-style.md", "line": 32, "context": "See skill: golang-patterns for comprehensive Go idioms and patterns.", "type": "bare-pointer"},
+            {"file": "packages/rules/golang/patterns.md", "line": 45, "context": "See skill: golang-patterns for comprehensive Go patterns including concurrency, error handling, and package organization.", "type": "bare-pointer"},
+            {"file": "packages/skills/configure-ecc/SKILL.md", "line": 120, "context": "catalog table entry (cruft)", "type": "cruft-catalog"},
+            {"file": "packages/skills/configure-ecc/SKILL.md", "line": 269, "context": "catalog entry (cruft)", "type": "cruft-catalog"}
+          ]
+        }
+      },
+      "recommendation": "KEEP",
+      "rationale": "Same structural finding as python-patterns. Clauses a and b FAIL; clause c PASSES on 6 non-cruft referrers that are all bare 'see skill: X' pointers in reviewer agents, rule files, and review commands — not semantic invocations."
+    },
+    {
+      "skill": "tdd-workflow",
+      "category": "candidate",
+      "verdict": "KEEP",
+      "clauses": {
+        "a": {
+          "verdict": "FAIL",
+          "evidence": "410-line SKILL.md describes generic TDD methodology: tests-before-code principle (20-28), RED/GREEN/REFACTOR loop (52-117), unit/integration/E2E test type taxonomy (30-49), Jest/Vitest unit test pattern (121-146), Next.js API integration test pattern (148-177), Playwright E2E pattern (179-230), test file organization (232-253), mocking Supabase/Redis/OpenAI (255-290), coverage thresholds (292-313), common mistakes and fixes (315-361), continuous testing (363-384), best practices list (386-397). Generic TDD concepts covered extensively in training data.",
+          "lines_cited": [20, 117, 121, 230, 255, 290, 386, 397]
+        },
+        "b": {
+          "verdict": "FAIL",
+          "evidence": "No references to donnyclaude-native agents, hooks, commands, rules, MCP, or GSD engine in SKILL.md body. Examples cite Jest, Playwright, Supabase, Redis, OpenAI, Next.js — standard web framework stack, nothing donnyclaude-specific. origin: ECC frontmatter.",
+          "lines_cited": []
+        },
+        "c": {
+          "verdict": "PASS",
+          "evidence": "11 referrers in frozen snapshot. Non-cruft referrers (10): packages/agents/tdd-guide.md:80 ('For detailed mocking patterns and framework-specific examples, see skill: tdd-workflow'), packages/commands/kotlin-test.md:312, packages/commands/cpp-test.md:251, packages/commands/tdd.md:324, packages/commands/tdd.md:328, packages/commands/go-test.md:268, packages/rules/php/testing.md:38 ('See skill: tdd-workflow for the repo-wide RED -> GREEN -> REFACTOR loop'), packages/skills/kotlin-testing/SKILL.md:37 (links to TDD walkthrough section), packages/skills/project-guidelines-example/SKILL.md:349 (documentation example), packages/skills/strategic-compact/SKILL.md:106 (trigger keyword mapping). Cruft referrers (1): configure-ecc. Note: actual count is 11, not the 7 cited in D-14 — additional referrers discovered. Structural pattern is mostly 'see skill: X' bare pointers (tdd-guide agent, test commands, php/testing rule) plus one genuine dependency in strategic-compact (which routes 'tdd'/'test' keywords to the tdd-workflow skill via explicit mapping).",
+          "checked_paths": ["packages/agents/", "packages/hooks/", "packages/commands/", "packages/skills/*/SKILL.md", "packages/rules/"],
+          "referrer_lines": [
+            {"file": "packages/agents/tdd-guide.md", "line": 80, "context": "For detailed mocking patterns and framework-specific examples, see skill: tdd-workflow.", "type": "bare-pointer"},
+            {"file": "packages/commands/kotlin-test.md", "line": 312, "context": "- Skill: skills/tdd-workflow/", "type": "catalog-entry"},
+            {"file": "packages/commands/cpp-test.md", "line": 251, "context": "- Skill: skills/tdd-workflow/", "type": "catalog-entry"},
+            {"file": "packages/commands/tdd.md", "line": 324, "context": "The related tdd-workflow skill is also bundled with ECC.", "type": "bare-pointer"},
+            {"file": "packages/commands/tdd.md", "line": 328, "context": "- skills/tdd-workflow/SKILL.md", "type": "catalog-entry"},
+            {"file": "packages/commands/go-test.md", "line": 268, "context": "- Skill: skills/tdd-workflow/", "type": "catalog-entry"},
+            {"file": "packages/rules/php/testing.md", "line": 38, "context": "See skill: tdd-workflow for the repo-wide RED -> GREEN -> REFACTOR loop.", "type": "bare-pointer"},
+            {"file": "packages/skills/kotlin-testing/SKILL.md", "line": 37, "context": "TDD walkthrough — Full RED/GREEN/REFACTOR cycle with EmailValidator in [TDD Workflow for Kotlin](#tdd-workflow-for-kotlin)", "type": "self-section-link"},
+            {"file": "packages/skills/project-guidelines-example/SKILL.md", "line": 349, "context": "tdd-workflow/ - Test-driven development methodology", "type": "catalog-entry"},
+            {"file": "packages/skills/strategic-compact/SKILL.md", "line": 106, "context": "| 'test', 'tdd', 'coverage' | tdd-workflow | User mentions testing |", "type": "semantic-dependency"}
+          ]
+        }
+      },
+      "recommendation": "KEEP",
+      "rationale": "Clauses a and b FAIL; clause c PASSES on 10 non-cruft referrers. Critical comparison to python-patterns: 9 of the 10 referrers are bare pointers or catalog entries structurally identical to python-patterns' referrer set. The ONLY semantic-dependency referrer (strategic-compact:106) is a keyword-routing table mapping 'test'/'tdd' to the tdd-workflow skill. Under a 'pointers vs dependencies' distinction, tdd-workflow would have 1 real dependency and python-patterns would have 0 — which is a meaningful signal, but not a 10-1 gap."
+    },
+    {
+      "skill": "e2e-testing",
+      "category": "candidate",
+      "verdict": "KEEP",
+      "clauses": {
+        "a": {
+          "verdict": "FAIL",
+          "evidence": "326-line SKILL.md describes generic Playwright patterns: test organization (13-30), Page Object Model (32-65), test structure with describe/beforeEach (69-97), playwright.config.ts (100-137), flaky test patterns with test.fixme/test.skip (139-191), artifact management screenshots/traces/video (193-223), GitHub Actions CI/CD (225-251), test report template (253-278), wallet/Web3 testing (280-299), financial flow testing (302-326). All standard Playwright content covered in Playwright docs and training data.",
+          "lines_cited": [13, 65, 69, 137, 139, 191, 193, 251, 302, 326]
+        },
+        "b": {
+          "verdict": "FAIL",
+          "evidence": "No references to donnyclaude-native agents, hooks, commands, rules, MCP, or GSD engine. origin: ECC frontmatter. Pure Playwright reference.",
+          "lines_cited": []
+        },
+        "c": {
+          "verdict": "PASS",
+          "evidence": "2 referrers in frozen snapshot, matching D-14 count exactly. Both non-cruft: packages/agents/e2e-runner.md:103 ('For detailed Playwright patterns, Page Object Model examples, configuration templates, CI/CD workflows, and artifact management strategies, see skill: e2e-testing'), packages/skills/frontend-slides/SKILL.md:175 ('e2e-testing if you need automated browser verification for the final deck'). Both are bare 'see skill: X' pointers rather than semantic invocations. Same structural pattern as python-patterns.",
+          "checked_paths": ["packages/agents/", "packages/hooks/", "packages/commands/", "packages/skills/*/SKILL.md", "packages/rules/"],
+          "referrer_lines": [
+            {"file": "packages/agents/e2e-runner.md", "line": 103, "context": "For detailed Playwright patterns, Page Object Model examples, configuration templates, CI/CD workflows, and artifact management strategies, see skill: e2e-testing.", "type": "bare-pointer"},
+            {"file": "packages/skills/frontend-slides/SKILL.md", "line": 175, "context": "- e2e-testing if you need automated browser verification for the final deck", "type": "bare-pointer"}
+          ]
+        }
+      },
+      "recommendation": "KEEP",
+      "rationale": "Clauses a and b FAIL; clause c PASSES on exactly 2 non-cruft referrers matching D-14. Both are bare pointers — structurally identical to python-patterns/golang-patterns referrers, not to strategic-compact's semantic dependency on tdd-workflow. If Diagnosis B (tighten clause c to exclude bare pointers) were applied, e2e-testing would also PRUNE — which is important evidence: a 'tighten c' amendment would not just affect python/golang-patterns."
+    },
+    {
+      "skill": "eval-harness",
+      "category": "candidate",
+      "verdict": "UNCERTAIN",
+      "clauses": {
+        "a": {
+          "verdict": "FAIL",
+          "evidence": "270-line SKILL.md describes generic eval-driven development (EDD): philosophy (20-26), capability vs regression eval types (28-52), grader types code/model/human (54-89), pass@k / pass^k metrics (92-105), define-implement-evaluate-report workflow (106-163), integration patterns (164-183), .claude/evals storage structure (186-194), best practices list (197-205), example (207-236), product evals v1.8 with grader types and pass@k guidance (237-271). Generic EDD methodology covered in AI/ML evaluation literature and training data.",
+          "lines_cited": [20, 105, 106, 163, 197, 271]
+        },
+        "b": {
+          "verdict": "FAIL",
+          "evidence": "origin: ECC frontmatter. SKILL.md targets 'Claude Code sessions' and references .claude/evals/ storage convention, but contains no references to donnyclaude-native agents, hooks, commands, rule files, MCP server conventions, or the GSD engine. Frontend integration points are /eval define/check/report slash commands, but these commands do not exist in packages/commands/ — they are ECC-convention commands, not donnyclaude commands.",
+          "lines_cited": []
+        },
+        "c": {
+          "verdict": "UNCERTAIN",
+          "evidence": "1 referrer in frozen snapshot: packages/skills/configure-ecc/SKILL.md:144 (catalog table entry). configure-ecc is pre-determined cruft (D-08) — it will not survive to v1.2. Strict D-13 interpretation (count all referrers in frozen snapshot regardless of whether they survive): 1 > 0 → PASS → KEEP. Post-cruft interpretation (count only non-cruft referrers): 0 → FAIL → PRUNE. Rubric is genuinely ambiguous here and the plan does not resolve the question.",
+          "checked_paths": ["packages/agents/", "packages/hooks/", "packages/commands/", "packages/skills/*/SKILL.md", "packages/rules/"],
+          "referrer_lines": [
+            {"file": "packages/skills/configure-ecc/SKILL.md", "line": 144, "context": "| eval-harness | Formal evaluation framework for eval-driven development (EDD) |", "type": "cruft-catalog"}
+          ]
+        }
+      },
+      "recommendation": "UNCERTAIN",
+      "rationale": "Clauses a and b FAIL. Clause c is UNCERTAIN: the only referrer in the frozen snapshot is a configure-ecc catalog entry, which IS in the snapshot per D-13 but will be removed in the prune. Under strict rubric reading: KEEP. Under post-cruft reading: PRUNE. Human decision needed: should clause (c) count referrers from files that are themselves cruft removals? If not, the rubric needs an explicit carve-out."
+    }
+  ]
+}
