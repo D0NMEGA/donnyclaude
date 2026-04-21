@@ -1,6 +1,6 @@
 {
   "name": "donnyclaude",
-  "version": "1.0.0",
+  "version": "1.2.0-rc.1",
   "type": "module",
   "description": "Opinionated, all-in-one Claude Code power-user setup. Zero to production-grade AI-assisted development in one command.",
   "main": "bin/donnyclaude.js",
