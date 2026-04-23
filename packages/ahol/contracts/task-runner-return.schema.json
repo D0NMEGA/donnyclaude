@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://donnyclaude.dev/ahol/contracts/task-runner-return.schema.json",
+  "title": "AHOL Tier 3 Task Runner Return",
+  "description": "Schema for the JSON object returned by an AHOL Tier 3 task-runner to its Tier 2 variant-runner parent. Each task-runner executes exactly one benchmark task inside an isolated container, writes a row to the benchmarks SQLite database, and returns this compact result. Prose returns are a bug; the runner must validate this dict before exit.",
+  "type": "object",
+  "required": [
+    "task_id",
+    "passed",
+    "tokens_used",
+    "wall_clock_sec",
+    "patch_sha",
+    "error_summary"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Stable identifier of the benchmark task that was executed (for example swe-bench-lite-astropy-12345 or ahol-internal-fizzbuzz-01). Must be unique within a benchmark suite.",
+      "minLength": 1
+    },
+    "passed": {
+      "type": "boolean",
+      "description": "True if the task's built-in verifier returned success. False for test failures, timeouts, or crashes. Infrastructure failures that prevent producing a verdict should set passed=false AND populate error_summary."
+    },
+    "tokens_used": {
+      "type": "integer",
+      "description": "Total tokens consumed by the inner model call or agent loop for this single task. Hard-capped at 2,000,000 to catch runaway loops before they skew the variant total.",
+      "minimum": 0,
+      "maximum": 2000000
+    },
+    "wall_clock_sec": {
+      "type": "number",
+      "description": "Wall-clock seconds from task-runner entry to return. Includes container spin-up only if measured inside the runner.",
+      "minimum": 0
+    },
+    "patch_sha": {
+      "type": ["string", "null"],
+      "description": "Either the 40-character lowercase hex SHA-1 of the patch the variant produced, OR the literal sentinel string 'no_patch' when the variant chose not to emit a patch, OR null when the runner crashed before it could hash a patch. Verified by the variant-runner against the container artifact store.",
+      "pattern": "^([a-f0-9]{40}|no_patch)$"
+    },
+    "error_summary": {
+      "type": ["string", "null"],
+      "description": "Short human-readable summary of any error encountered (verifier exception, container OOM, model API error). Null on a clean pass or a clean test failure. Used by the variant-runner to distinguish task-level failures from infrastructure problems.",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

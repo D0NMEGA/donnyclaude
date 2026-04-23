@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://donnyclaude.dev/ahol/contracts/orchestrator-output.schema.json",
+  "title": "AHOL Tier 1 Orchestrator Output",
+  "description": "Schema for the CHAMPION.md-adjacent JSON record written by the AHOL Tier 1 orchestrator at the end of a round. The orchestrator WRITES this payload to disk alongside CHAMPION.md and the round summary; it does NOT return this object to any parent (Tier 1 is the top of the tree). This schema is used to validate the serialized record before the orchestrator exits.",
+  "type": "object",
+  "required": [
+    "round_id",
+    "champion_variant_id",
+    "champion_score",
+    "prior_champion_score",
+    "sigma_gate_passed",
+    "cost_gate_passed",
+    "comparison_sql",
+    "timestamp",
+    "variants_evaluated",
+    "total_tokens",
+    "total_wall_clock_sec"
+  ],
+  "properties": {
+    "round_id": {
+      "type": "string",
+      "description": "Identifier for this benchmark round. Expected to be an ISO-8601-like timestamp string (for example 2026-04-23T10:15:00Z) so rounds sort lexicographically by time.",
+      "minLength": 1
+    },
+    "champion_variant_id": {
+      "type": ["string", "null"],
+      "description": "Variant ID of the new champion selected this round, or null if no variant dethroned the prior champion (sigma or cost gate failed, or no variant improved on prior champion_score).",
+      "minLength": 1
+    },
+    "champion_score": {
+      "type": "number",
+      "description": "Score of the champion for this round on the 0.0 to 1.0 pass-rate scale. If champion_variant_id is null this should equal prior_champion_score.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "prior_champion_score": {
+      "type": "number",
+      "description": "Score of the incumbent champion entering this round on the 0.0 to 1.0 pass-rate scale. Used with champion_score to compute the uplift the new champion must clear.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "sigma_gate_passed": {
+      "type": "boolean",
+      "description": "True if the candidate champion beat the prior champion by at least the configured sigma threshold (statistical significance gate)."
+    },
+    "cost_gate_passed": {
+      "type": "boolean",
+      "description": "True if the candidate champion stayed within the configured per-task token and wall-clock budget (cost gate)."
+    },
+    "comparison_sql": {
+      "type": "string",
+      "description": "The exact SQL query executed against the benchmarks SQLite database to compute champion_score and rank variants. Preserved verbatim for reproducibility and audit.",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO-8601 UTC timestamp marking when the orchestrator wrote this record, for example 2026-04-23T10:42:07Z.",
+      "minLength": 1
+    },
+    "variants_evaluated": {
+      "type": "array",
+      "description": "List of variant IDs that were actually executed and scored in this round. Each entry should match the variant_id pattern used by variant-runner-return.schema.json.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "total_tokens": {
+      "type": "integer",
+      "description": "Total tokens consumed across every variant-runner and task-runner spawned in this round, summed from SQLite rows.",
+      "minimum": 0
+    },
+    "total_wall_clock_sec": {
+      "type": "number",
+      "description": "Total wall-clock seconds elapsed from orchestrator start to orchestrator exit for this round.",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://donnyclaude.dev/ahol/contracts/variant-runner-return.schema.json",
+  "title": "AHOL Tier 2 Variant Runner Return",
+  "description": "Schema for the JSON object returned by an AHOL Tier 2 variant-runner to the Tier 1 orchestrator. A variant-runner spawns N task-runners (one per benchmark task), waits for them to finish, aggregates their results via SQLite, and returns this summary. Prose returns are a bug; callers must receive a dict that validates against this schema.",
+  "type": "object",
+  "required": [
+    "variant_id",
+    "tasks_completed",
+    "tasks_passed",
+    "total_tokens",
+    "wall_clock_sec",
+    "error_log",
+    "sqlite_row_ids"
+  ],
+  "properties": {
+    "variant_id": {
+      "type": "string",
+      "description": "Identifier of the prompt variant this runner evaluated. Must match either the canonical AHOL short form (V followed by digits, for example V7) or the long form (variant-<slug>, for example variant-baseline-01). Variant IDs are globally unique across rounds.",
+      "pattern": "^(V[0-9]+|variant-[0-9a-z-]+)$"
+    },
+    "tasks_completed": {
+      "type": "integer",
+      "description": "Total number of benchmark tasks the variant-runner attempted and received a terminal result for (passed or failed). Does not include tasks that crashed the runner before returning.",
+      "minimum": 0
+    },
+    "tasks_passed": {
+      "type": "integer",
+      "description": "Number of benchmark tasks whose task-runner returned passed=true. Invariant: tasks_passed <= tasks_completed. The orchestrator computes pass_rate as tasks_passed / tasks_completed when tasks_completed > 0.",
+      "minimum": 0
+    },
+    "total_tokens": {
+      "type": "integer",
+      "description": "Sum of tokens_used across every task-runner spawned by this variant-runner, including runs that failed. Used by the cost gate.",
+      "minimum": 0
+    },
+    "wall_clock_sec": {
+      "type": "number",
+      "description": "Wall-clock seconds from variant-runner start to return. Measures end-to-end variant latency including task-runner fan-out and aggregation.",
+      "minimum": 0
+    },
+    "error_log": {
+      "type": ["string", "null"],
+      "description": "Free-form error summary if the variant-runner encountered infrastructure problems (task-runners that never returned, SQLite write failures, container crashes). Null on a clean run. Task-level failures are NOT errors; they are captured in tasks_passed.",
+      "minLength": 1
+    },
+    "sqlite_row_ids": {
+      "type": "array",
+      "description": "List of SQLite rowids the variant-runner wrote to the benchmarks database. Allows the orchestrator to reload the exact rows aggregated by this runner without relying on variant_id filtering.",
+      "items": {
+        "type": "integer"
+      }
+    }
+  },
+  "additionalProperties": false
+}

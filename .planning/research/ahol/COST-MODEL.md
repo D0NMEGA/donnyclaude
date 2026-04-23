@@ -51,6 +51,31 @@ These tiers assume the nominal dev-round cost (~52.5M). If the V0 vs V4 spike sh
 
 The ~6x budget inflation vs. the pre-revision table is driven by AHOL-Proxy-30's 30-task-vs-10-task expansion and the shift from ~30K-per-task (SWE-bench Lite estimate) to ~100K-to-500K-per-task (mixed-difficulty composite). If V0 under Q1b template measures at the optimistic end (~100K per task), these thresholds drop accordingly. Re-derive after the spike.
 
+## Outcome-conditional budget matrix (new, post-reality-check)
+
+The V0 vs V4 spike produces three possible per-task cost outcomes. Each outcome yields a different monthly token budget for each cadence tier. Use this table after the spike to pick a cadence tier given the user's available monthly Claude Max allocation.
+
+Assumptions: 5 variants per dev round (hand-code + gskill hybrid); champion validation ~30M; spawn-overhead accounting folded into per-variant (~1 to 3% of per-variant eval).
+
+| Spike outcome (per-task tokens) | Per-variant eval | Dev-round total | Tier 1 per-month (3 rounds/wk + weekly champion val) | Tier 2 per-month (1 round/wk + weekly champion val) | Tier 3 per-month (1 round/wk + monthly champion val) |
+|---|---:|---:|---:|---:|---:|
+| V0-like (< 100K) | ~3M | ~17.5M | ~330M | ~190M | ~100M |
+| Nominal mixed (~333K avg) | ~10M | ~52.5M | ~750M | ~330M | ~240M |
+| V4-like (~500K+) | ~15M | ~77.5M | ~1050M | ~430M | ~340M |
+
+How to read: if the spike measures V0-like cost AND the user's monthly AHOL budget is 250M, Tier 2 is affordable (190M < 250M) but Tier 1 is not (330M > 250M). If the spike measures V4-like cost AND the user's budget is 250M, only Tier 3 Light or Tier 4 manual-trigger is viable.
+
+Break-even thresholds (monthly budget required to afford the tier at each outcome):
+
+| Tier \ Outcome | V0-like | Nominal | V4-like |
+|---|---:|---:|---:|
+| Tier 1 affordable when budget >= | 330M | 750M | 1050M |
+| Tier 2 affordable when budget >= | 190M | 330M | 430M |
+| Tier 3 affordable when budget >= | 100M | 240M | 340M |
+| Tier 4 (manual) affordable | any | any | any |
+
+Implication for spike prioritization: the spike's economic impact is as large as its scientific impact. A V0-like measurement unlocks Tier 1 cadence at Claude Max Pro-tier monthly budgets; a V4-like measurement pushes even Tier 2 out of reach for most Max allocations. The V0 vs V4 comparison is thus not only the scientific pivot between cut-mode, grow-mode, and decompose-mode AHOL, but also the economic pivot between continuous cadence and quarterly manual invocation.
+
 ## Build cost (one-time, revised post-REALITY-CHECK)
 
 Starting point: Step 3 estimate 98 to 163 hours, midpoint 130.
