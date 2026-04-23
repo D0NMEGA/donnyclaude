@@ -115,5 +115,77 @@ test('end-to-end: REST prompt surfaces api-design in top-K', () => {
   assert.ok(names.includes('api-design'), `expected api-design in top-K, got ${names.join(',')}`);
 });
 
+// Path 2 branching tests (WS-1 refinement-overlap follow-up).
+
+test('pickTopK SessionStart returns autoInvoke only, drops prompt matches', () => {
+  const scored = [
+    { name: 'a', description: 'x', overlap: 5, autoInvoke: false },
+    { name: 'b', description: 'y', overlap: 0, autoInvoke: true },
+    { name: 'c', description: 'z', overlap: 2, autoInvoke: false },
+  ];
+  const top = pickTopK(scored, 10, 'SessionStart');
+  assert.strictEqual(top.length, 1);
+  assert.strictEqual(top[0].name, 'b');
+});
+
+test('pickTopK UserPromptSubmit returns prompt-matched only, drops autoInvoke padding', () => {
+  const scored = [
+    { name: 'a', description: 'x', overlap: 5, autoInvoke: false },
+    { name: 'b', description: 'y', overlap: 0, autoInvoke: true },
+    { name: 'c', description: 'z', overlap: 2, autoInvoke: false },
+  ];
+  const top = pickTopK(scored, 10, 'UserPromptSubmit');
+  assert.strictEqual(top.length, 2);
+  assert.strictEqual(top[0].name, 'a');
+  assert.strictEqual(top[1].name, 'c');
+});
+
+test('pickTopK UserPromptSubmit excludes autoInvoke even if overlap is high', () => {
+  const scored = [
+    { name: 'autoHit', description: 'api', overlap: 10, autoInvoke: true },
+    { name: 'promptHit', description: 'api', overlap: 1, autoInvoke: false },
+  ];
+  const top = pickTopK(scored, 10, 'UserPromptSubmit');
+  assert.strictEqual(top.length, 1);
+  assert.strictEqual(top[0].name, 'promptHit');
+});
+
+test('pickTopK UserPromptSubmit returns empty when no overlap on any skill', () => {
+  const scored = [
+    { name: 'a', description: 'x', overlap: 0, autoInvoke: false },
+    { name: 'b', description: 'y', overlap: 0, autoInvoke: true },
+  ];
+  const top = pickTopK(scored, 10, 'UserPromptSubmit');
+  assert.strictEqual(top.length, 0);
+});
+
+test('pickTopK undefined eventName preserves legacy merged behavior', () => {
+  const scored = [
+    { name: 'a', description: 'x', overlap: 1, autoInvoke: false },
+    { name: 'b', description: 'y', overlap: 3, autoInvoke: false },
+    { name: 'c', description: 'z', overlap: 0, autoInvoke: true },
+  ];
+  const top = pickTopK(scored, 2);
+  assert.strictEqual(top[0].name, 'c');
+  assert.strictEqual(top[1].name, 'b');
+});
+
+test('buildManifest UserPromptSubmit with no selection emits empty string', () => {
+  assert.strictEqual(buildManifest([], 107, 'UserPromptSubmit'), '');
+});
+
+test('buildManifest SessionStart with no selection emits fallback message', () => {
+  const msg = buildManifest([], 107, 'SessionStart');
+  assert.ok(msg.includes('107 skills available'));
+});
+
+test('buildManifest header scope differs by eventName', () => {
+  const selected = [{ name: 'a', description: 'x', overlap: 1, autoInvoke: false }];
+  const sessionMsg = buildManifest(selected, 107, 'SessionStart');
+  const promptMsg = buildManifest(selected, 107, 'UserPromptSubmit');
+  assert.ok(sessionMsg.includes('for this session'), `SessionStart: ${sessionMsg}`);
+  assert.ok(promptMsg.includes('for this prompt'), `UserPromptSubmit: ${promptMsg}`);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

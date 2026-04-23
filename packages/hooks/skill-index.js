@@ -95,7 +95,21 @@ function scoreSkills(skills, promptTokens, overrides) {
   return scored;
 }
 
-function pickTopK(scored, k) {
+function pickTopK(scored, k, eventName) {
+  // Path 2 branching (see .planning/research/ahol/ws1-refinement-smoke.md):
+  // SessionStart returns autoInvoke only (orientation). UserPromptSubmit
+  // returns prompt-matched only (refinement), since autoInvoke skills are
+  // already in context from the prior SessionStart manifest. Undefined
+  // eventName preserves the legacy merged behavior for back-compat.
+  if (eventName === 'UserPromptSubmit') {
+    return scored
+      .filter(s => !s.autoInvoke && s.overlap > 0)
+      .sort((a, b) => b.overlap - a.overlap || a.name.localeCompare(b.name))
+      .slice(0, k);
+  }
+  if (eventName === 'SessionStart') {
+    return scored.filter(s => s.autoInvoke).slice(0, k);
+  }
   const autoInvoked = scored.filter(s => s.autoInvoke);
   const matched = scored
     .filter(s => !s.autoInvoke && s.overlap > 0)
@@ -108,13 +122,16 @@ function pickTopK(scored, k) {
   return merged.slice(0, k);
 }
 
-function buildManifest(selected, totalSkills) {
+function buildManifest(selected, totalSkills, eventName) {
   if (selected.length === 0) {
+    // On UserPromptSubmit with no matches, emit empty to silence per-turn noise.
+    if (eventName === 'UserPromptSubmit') return '';
     return `Skill index ready: ${totalSkills} skills available via progressive disclosure. ` +
       'Reference a skill by name to load its full content on demand.';
   }
   const lines = selected.map(s => `- ${s.name}: ${s.description}`);
-  return `Relevant skills for this session (${selected.length} of ${totalSkills} available, ` +
+  const scope = eventName === 'UserPromptSubmit' ? 'this prompt' : 'this session';
+  return `Relevant skills for ${scope} (${selected.length} of ${totalSkills} available, ` +
     'loaded on demand when referenced by name):\n' + lines.join('\n');
 }
 
@@ -140,8 +157,8 @@ function run() {
     const overrides = loadUserOverrides(settingsPath);
     const promptTokens = tokenize(extractPrompt(payload));
     const scored = scoreSkills(skills, promptTokens, overrides);
-    const selected = pickTopK(scored, TOP_K);
-    emit(buildManifest(selected, Object.keys(skills).length), eventName);
+    const selected = pickTopK(scored, TOP_K, eventName);
+    emit(buildManifest(selected, Object.keys(skills).length, eventName), eventName);
   });
 }
 
