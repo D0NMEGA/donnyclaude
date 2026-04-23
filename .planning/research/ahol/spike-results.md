@@ -29,6 +29,57 @@ Benchmark: **AHOL-Proxy-30** (30 tasks):
 
 One run per variant in this phase. No triple-run sigma measurement; direction first, variance in later phase.
 
+## Variant matrix (post-spike sweep)
+
+Referenced from `packages/ahol/CONTAMINATION-ANALYSIS.md`. The 8-variant sweep runs AFTER the V0 vs V4 spike completes and direction is locked.
+
+| Variant | Contents | Role |
+|---------|----------|------|
+| V0 | Baseline only | Negative control |
+| V1 | Baseline + WS-4 session-start hook | Single-hook isolation |
+| V2 | Baseline + WS-1/2/3/4 hook stack | Full hook stack, no skills or rules |
+| V3 | Baseline + WS-2 PostToolUse verify-edit hook only | Lint-gate middleware isolation (runs project lint and typecheck after every Edit or Write, injects failures back into context) |
+| V4 | Baseline + full donnyclaude | Positive control |
+| V5 | Baseline + 70 rules, no skills, no hooks | Rule-only contribution |
+| V6 | Baseline + WS-3 PreCompact active-backup hook only | State-recovery middleware isolation (serializes session state to .claude/backups/ before compaction) |
+| V7 | Baseline + hook stack + Context7 MCP | Hook plus MCP interaction probe |
+
+### Rationale for middleware-weighted V3 and V6
+
+Hooks fire on every matched tool use within a session (deterministic, every turn). Skills fire only when the model or prompt invokes them (probabilistic, occasional). For the AHOL spike's variant-sweep design, per-turn leverage is higher than per-prompt leverage. Middleware-weighted variants (V3 and V6 in their current form) isolate hook contributions more cleanly than skill variants would.
+
+The V0 (bare baseline) vs V4 (full donnyclaude) comparison remains the Group C spike pair. The 8-variant sweep including V3 and V6 is deferred to post-spike Group D work.
+
+## Deferred variants
+
+### V9: compressed-reasoning mode
+
+- **Contents**: baseline + `--effort low` plus a terser system prompt.
+- **Terser prompt definition**: exact prompt TBD; potentially an ablated Q1b that drops the "Failure modes to avoid" and "If the issue is ambiguous" sections.
+- **Purpose**: empirically test whether reasoning-effort low plus a terse system prompt helps or hurts SWE-bench-style tasks.
+- **Status**: deferred; runs in a later sweep, not the V0 vs V4 spike.
+
+## Token compression techniques evaluated
+
+### TOON (Token-Oriented Object Notation)
+
+Evaluated as a JSON-replacement for AHOL's contract payloads. Rejected because:
+
+- The savings of approximately 40 percent on structured data apply only to Pool 2 (subagent returns and SQLite payloads), which are less than 1 percent of per-round token cost. The Tier 3 `claude --print` invocations dominate token cost, and those are LLM prompts, not contract payloads.
+- TOON introduces parser and schema risk with every dependency update.
+- `jsonschema` validates JSON, not TOON; adoption would require a custom validator or a toolchain change, with no commensurate payoff.
+
+### Caveman-speech output compression
+
+Evaluated as a system-prompt length reduction technique. Rejected because:
+
+- The Q1b patch-only template already achieves output compression via "Respond with a single final message that says exactly 'Patch applied.' and nothing else". Additional output compression on top of a one-line response is not available.
+- Caveman-speech INPUT compression risks degrading Claude's understanding of the actual issue body, which is the task input and must remain high-fidelity. The task input is the dependent variable of the benchmark; mutating it invalidates the measurement.
+
+### Conclusion
+
+Real AHOL wins are architectural: Python orchestrator vs Claude Code subagents, patch-only template, WS-1 progressive skill disclosure, Anthropic prompt caching. Token-compression techniques are not adopted in AHOL infrastructure. V9 tests the technique as a VARIANT (measurable outcome) rather than adopting it as infrastructure (assumed-good).
+
 ## Budget and cost bracket
 
 From COST-MODEL.md outcome-conditional matrix:

@@ -70,13 +70,19 @@ Two implications for AHOL. First, harness-level artifacts have a measurable per-
 | V0 | Baseline only | Negative control |
 | V1 | Baseline + WS-4 session-start hook | Single-hook isolation |
 | V2 | Baseline + WS-1/2/3/4 hook stack | Full hook stack, no skills or rules |
-| V3 | Baseline + top-10 GSD skills | Skill stack alone |
+| V3 | Baseline + WS-2 PostToolUse verify-edit hook only | Lint-gate middleware isolation (runs project lint and typecheck after every Edit or Write, injects failures back into context) |
 | V4 | Baseline + full donnyclaude | Positive control |
 | V5 | Baseline + 70 rules, no skills, no hooks | Rule-only contribution |
-| V6 | Baseline + Context7 MCP only | MCP contribution in isolation |
+| V6 | Baseline + WS-3 PreCompact active-backup hook only | State-recovery middleware isolation (serializes session state to .claude/backups/ before compaction) |
 | V7 | Baseline + hook stack + Context7 MCP | Hook plus MCP interaction probe |
 
 The V0 and V4 endpoints anchor the range. V1, V2, V3, V5, V6, V7 decompose the middle to identify per-component contribution and interaction effects.
+
+### Rationale for middleware-weighted V3 and V6
+
+Hooks fire on every matched tool use within a session (deterministic, every turn). Skills fire only when the model or prompt invokes them (probabilistic, occasional). For the AHOL spike's variant-sweep design, per-turn leverage is higher than per-prompt leverage. Middleware-weighted variants (V3 and V6 in their current form) isolate hook contributions more cleanly than skill variants would.
+
+The V0 (bare baseline) vs V4 (full donnyclaude) comparison remains the Group C spike pair. The 8-variant sweep including the revised V3 and V6 is deferred to post-spike Group D work.
 
 ## Why V0 vs V4 First
 

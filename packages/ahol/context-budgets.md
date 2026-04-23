@@ -1,32 +1,38 @@
 # AHOL Context Budgets
 
-Per-tier context budgets and subagent-spawn overhead accounting for AHOL's three-tier subagent hierarchy.
+> **Architectural correction**: Tier 1 (orchestrator) and Tier 2 (variant-runner) are Python processes, not Claude Code subagents. They do NOT consume LLM context. The original three-tier context budget schema was based on an earlier assumption that all tiers were Claude Code subagents. The 40K and 30K numbers in the original table no longer apply. Only Tier 3 (per-task `claude --print` invocation) has an LLM context budget, which remains 15K tokens.
 
-## Per-Tier Budgets
+Per-tier scope and the Tier 3 LLM context budget for AHOL's tiered runner hierarchy.
 
-| Tier | Role | Max context (tokens) |
-|------|------|----------------------|
-| Tier 1 Orchestrator | Reads config, spawns variant-runners, runs champion-promotion logic, writes CHAMPION.md, never reads raw task output or patch diffs | < 40K accumulated across full run |
-| Tier 2 Variant-runner | One per variant; spawns task-runners; aggregates via SQLite; returns structured JSON | < 30K per variant |
-| Tier 3 Task-runner | One per task; executes single benchmark task in isolated container; writes result to SQLite | < 15K per task (inner-loop budget, most critical) |
+## Per-Tier Scope
 
-### Rationale
+| Tier | Role | Implementation | LLM context budget |
+|------|------|----------------|--------------------|
+| Tier 1 Orchestrator | Reads config, spawns variant-runners, runs champion-promotion logic, writes CHAMPION.md, never reads raw task output or patch diffs | Python process (`ahol.py`) | Not applicable; no LLM in the loop |
+| Tier 2 Variant-runner | One per variant; spawns task-runners; aggregates via SQLite; writes structured JSON | Python process invoked by the orchestrator | Not applicable; no LLM in the loop |
+| Tier 3 Task-runner | One per task; invokes `claude --print` inside an isolated container; writes result to SQLite | Shell wrapper (`invoke-task.sh`) plus `claude --print` | < 15K per task (inner-loop budget, most critical) |
 
-Context degradation is non-linear past ~100K tokens (Lost in the Middle, NIAH benchmarks). The 40K / 30K / 15K budgets keep each tier well below that threshold with room for input plus output plus tool results.
+### Tier 1 and Tier 2 budgets (OBSOLETE)
 
-Tier 3's 15K is the tightest because it runs 240 times per dev round (8 variants x 30 tasks); even 5K of bloat per task compounds to 1.2M wasted tokens.
+The former 40K (Tier 1) and 30K (Tier 2) per-spawn LLM context budgets are OBSOLETE. Both tiers are now Python processes that execute Python code and shell out to Docker and `claude --print`. They do not load system prompts, tool definitions, or conversation history into a model context window, so there is no LLM context to budget.
 
-## Measurement Methodology
+Python memory usage is a separate concern tracked via OS-level metrics (resident set size), not token counts. See `GROUP-C-SCOPE.md` for observability scope.
 
-SQLite token-accounting logs per tier per spawn.
+### Tier 3 rationale
+
+Context degradation is non-linear past ~100K tokens (Lost in the Middle, NIAH benchmarks). The 15K budget keeps each `claude --print` invocation well below that threshold with room for input plus output plus tool results.
+
+Tier 3's 15K matters because it runs many times per dev round (nominally 8 variants x 30 tasks = 240 invocations); even 5K of bloat per task compounds to 1.2M wasted tokens.
+
+## Measurement Methodology (Tier 3 only)
+
+SQLite token-accounting logs per Tier 3 invocation. Tiers 1 and 2 are Python processes and do not contribute to token accounting.
 
 ### Schema
 
 ```
-spawn_log (
-  spawn_id,
-  tier,
-  parent_spawn_id,
+task_token_log (
+  invocation_id,
   variant_id,
   task_id,
   started_at,
@@ -34,23 +40,26 @@ spawn_log (
   tokens_in,
   tokens_out,
   tokens_total,
+  cache_read_input_tokens,
+  cache_creation_input_tokens,
   exit_code
 )
 ```
 
 ### Post-run Aggregation Queries
 
-* Max tokens per tier
-* p99 per tier
-* Outlier spawns exceeding budget
+* Max tokens per Tier 3 invocation
+* p99 per Tier 3 invocation
+* Outlier tasks exceeding the 15K budget
+* Cache-hit ratio across tasks within a round
 
-### Per-spawn Instrumentation
+### Per-invocation Instrumentation
 
-Each tier emits an opening log entry with `parent_spawn_id` and a closing log entry with `tokens_total` at exit. Token count is sourced from the Claude Code API's response metadata.
+`invoke-task.sh` captures the `claude --print` response metadata (including `tokens_in`, `tokens_out`, `cache_read_input_tokens`, `cache_creation_input_tokens`) and the Python variant-runner inserts the row into SQLite. Token count is sourced from the Claude Code CLI response metadata emitted by `claude --print`.
 
 ## Regression Threshold
 
-If any tier exceeds its budget during V0 / V4 spike, surface the overshoot as a regression before proceeding to the full AHOL build. This gates Group C.
+If Tier 3 per-task tokens exceed the 15K budget during the V0 / V4 spike, surface the overshoot as a regression before proceeding to the full AHOL build. This gates Group C.
 
 Likely causes of overshoot:
 
@@ -58,49 +67,56 @@ Likely causes of overshoot:
 2. Tier 3 tasks that produce long patch diffs or error logs.
 3. Cascading tool-call loops on harder BigCodeBench-Hard tasks.
 
-## Spawn Overhead Accounting
+## Process-Startup Overhead (replaces "Spawn Overhead")
 
-Per-spawn cost: 5K to 15K tokens of system prompt plus tool-definition overhead (Claude Code's default subagent bootstrap, no custom tools adds 5K to 8K; with typical tool surface for AHOL, 10K to 15K).
+Python processes do not have spawn overhead in the LLM sense. There is no system prompt or tool-definition bootstrap to load into a context window when a Python interpreter starts. The relevant overhead categories are:
 
-### Initial 8-variant x 30-task Matrix
+1. **Python process startup**: Sub-second per process (import cost of `jsonschema`, `sqlite3`, `opentelemetry-*`). Negligible at spike scale.
+2. **Docker container startup per task**: Measurable (typically 1 to 5 seconds per container on a warm daemon) but NOT token-denominated. Tracked via wall-clock, not tokens.
+3. **`claude --print` bootstrap per task (Tier 3)**: This IS token-denominated. Claude Code loads its default system prompt plus any configured tools; the 15K budget must accommodate this prefix plus the task payload plus output.
 
-| Component | Spawns |
-|-----------|--------|
-| Orchestrator (already running, no spawn cost) | 1 |
-| Variant-runners | 8 |
-| Task-runners (8 x 30) | 240 |
-| Total | 248 |
+### Tier 3 Invocation Count (unchanged)
 
-### Spawn-overhead Cost Range
+| Component | Invocations |
+|-----------|-------------|
+| Python orchestrator (ahol.py; not token-denominated) | 1 |
+| Python variant-runners (not token-denominated) | 8 |
+| Tier 3 `claude --print` task invocations (8 x 30) | 240 |
+| Total LLM invocations per round | 240 |
+
+### Tier 3 Token Cost Range (aspirational, budget-respecting)
 
 | Estimate | Math | Tokens |
 |----------|------|--------|
-| Floor | 248 x 5K | 1.24M |
-| Ceiling | 248 x 15K | 3.72M |
-| Midpoint | | 2.48M |
+| Per-task budget | 15K | 15K |
+| Per-variant total | 30 x 15K | 450K |
+| Per-round total (8 variants) | 240 x 15K | 3.6M |
+
+Actual V0 cost will be measured in the spike; actual V4 cost will be measured in the spike. The 15K-per-task target may be violated; see `REALITY-CHECK.md` and `COST-MODEL.md` for outcome-conditional cost brackets that range from 3M (floor) to 25M (ceiling).
 
 ## Constraint: Do Not Collapse Tiers
 
-> "Do not optimize spawn overhead by collapsing tiers. Context isolation is the point. A cheaper non-isolated architecture defeats the experiment."
+> "Do not optimize by collapsing tiers. Contamination separation and per-tier attribution are the point. A cheaper non-isolated architecture defeats the experiment."
 
 ### Rationale
 
-Collapsing Tier 2 into Tier 1 would accumulate 8 x (variant overhead) in orchestrator context, blowing past the 40K budget and degrading champion-promotion reasoning.
+Collapsing Tier 2 into Tier 1 would force the orchestrator to hold per-variant state in memory across all 8 variants, defeating the isolation goal even though neither tier is LLM-context-bound.
 
-Collapsing Tier 3 into Tier 2 would accumulate 30 x (task overhead) in variant-runner context, degrading per-variant aggregation.
+Collapsing Tier 3 into Tier 2 would mean a single Python process issuing 30 `claude --print` calls in-band; the failure-isolation and restart discipline that Tier 3 provides would be lost.
 
-The overhead is the price of coherence.
+Tier separation is architectural, not token-driven.
 
 ## Reconciliation with COST-MODEL.md
 
 Cross-reference `/Users/donmega/Desktop/donnyclaude/.planning/research/ahol/COST-MODEL.md`.
 
-Dev-round nominal total: 52.5M tokens (5 variants x 10M eval, plus 2.5M variant-gen, plus 0.05M aggregation).
+Per-round token cost is now entirely accounted for by Tier 3 `claude --print` invocations. In the aspirational budget-respecting case:
 
-| Spawn overhead | Tokens | Percent of dev-round total | Assessment |
-|----------------|--------|----------------------------|------------|
-| Floor | 1.24M | ~2 percent | Essentially free |
-| Midpoint | 2.48M | ~5 percent | Acceptable |
-| Ceiling | 3.72M | ~7 percent | Still acceptable |
+| Scope | Math | Tokens |
+|-------|------|--------|
+| Per variant (Tier 3) | 30 tasks x 15K | 450K |
+| Per round (8 variants, Tier 3) | 240 tasks x 15K | 3.6M |
 
-Also cross-reference `/Users/donmega/Desktop/donnyclaude/.planning/research/ahol/REALITY-CHECK.md` for the GEPA-hybrid D2 plus D4 build plan that sits on top of this three-tier architecture.
+V0 spike measurement may differ from this aspirational projection. COST-MODEL.md documents the outcome-conditional brackets that reflect real-world measurement (floor 3M, midpoint 17.5M, ceiling 52.5M dev-round totals), because per-task costs in practice exceed the 15K target when harness complexity is high.
+
+Also cross-reference `/Users/donmega/Desktop/donnyclaude/.planning/research/ahol/REALITY-CHECK.md` for the GEPA-hybrid D2 plus D4 build plan that sits on top of this runner architecture, and `packages/ahol/GROUP-C-SCOPE.md` for the Python runner observability scope (OpenTelemetry traces, raw task logs, prompt-cache verification).

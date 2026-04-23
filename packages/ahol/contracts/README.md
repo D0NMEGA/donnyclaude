@@ -1,25 +1,34 @@
 # AHOL Contracts
 
-JSON Schema contracts for the return values produced by each tier of the AHOL
-(Adaptive Hierarchical Orchestration Loop) subagent tree. Every subagent MUST
-validate its output against the relevant schema immediately before exit. Prose
-returns are bugs; validation failures are treated as infrastructure errors by
-the calling tier, NOT as task failures.
+JSON Schema contracts for the data produced by each tier of the AHOL
+(Autonomous Harness Optimization Loop) runner hierarchy. These are
+Python-to-Python data contracts enforced via `jsonschema.validate()`. The
+orchestrator and variant-runner are Python processes; they produce and consume
+JSON per the schemas in this directory. Prose returns are not even possible at
+Tiers 1 and 2 because there is no LLM in the loop at those tiers. Every Python
+process writing a contract-conforming JSON payload validates the payload
+against its schema before writing to SQLite or returning to the caller.
+
+Validation failures are treated as infrastructure errors by the calling tier,
+NOT as task failures.
 
 ## Tier map
 
-AHOL spawns three tiers of subagents per round:
+AHOL runs three tiers per round:
 
-| Tier | Role              | Returns to parent?                  | Schema                                |
-| :--: | :---------------- | :---------------------------------- | :------------------------------------ |
-|  1   | Orchestrator      | No (top of tree, writes to disk)    | `orchestrator-output.schema.json`     |
-|  2   | Variant runner    | Yes (returns JSON to orchestrator)  | `variant-runner-return.schema.json`   |
-|  3   | Task runner       | Yes (returns JSON to variant)       | `task-runner-return.schema.json`      |
+| Tier | Role              | Implementation                | Writes to                           | Schema                                |
+| :--: | :---------------- | :---------------------------- | :---------------------------------- | :------------------------------------ |
+|  1   | Orchestrator      | Python (`ahol.py`)            | `CHAMPION.md` plus round summary JSON | `orchestrator-output.schema.json`     |
+|  2   | Variant runner    | Python (invoked by `ahol.py`) | SQLite row plus return dict          | `variant-runner-return.schema.json`   |
+|  3   | Task runner       | Shell (`invoke-task.sh`) plus `claude --print` | SQLite row plus JSON file | `task-runner-return.schema.json`      |
 
-The Tier 1 orchestrator is the only subagent that does not return a value. It
-writes `CHAMPION.md` and a round summary JSON file conforming to
-`orchestrator-output.schema.json`. Tier 2 and Tier 3 both return a dict that
-their parent deserializes and re-validates defensively.
+The Tier 1 orchestrator writes `CHAMPION.md` and a round summary JSON file
+conforming to `orchestrator-output.schema.json`. Tier 2 variant-runner
+processes construct a dict, validate it, write a row to SQLite, and return the
+dict to the orchestrator (as either a return value or a JSON file handoff,
+depending on invocation style). Tier 3 task-runner invocations write a JSON
+file per task that the Tier 2 process reads, validates, and aggregates into
+SQLite.
 
 ## Schemas
 
@@ -47,50 +56,64 @@ to catch runaway loops.
 
 ## Validation flow
 
-Each subagent executes this sequence immediately before exit:
+Each Python process executes this sequence before writing to SQLite or
+returning to the caller:
 
-1. Build the return dict in memory.
+1. Python function constructs a dict in memory.
 2. Load the matching schema from `packages/ahol/contracts/`.
 3. Call `jsonschema.validate(instance=return_dict, schema=schema)`.
-4. On success: serialize to stdout (Tier 2 and Tier 3) or write to disk
-   (Tier 1), then exit 0.
-5. On `jsonschema.ValidationError`: print a diagnostic to stderr including the
-   failing JSON path and the schema message, then exit nonzero.
+4. On failure: raise `jsonschema.ValidationError` (Tier 1 and Tier 2 Python
+   processes propagate the exception with a diagnostic; the orchestrator logs
+   and treats it as infrastructure error).
+5. On success: write the row to SQLite (Tier 2 aggregation) or write the JSON
+   file (Tier 1 round summary; Tier 3 per-task output consumed by Tier 2).
 
-The calling tier treats a nonzero exit from a child subagent as an
-infrastructure error, NOT a task failure. For the variant-runner this means a
-crashing task-runner does NOT decrement `tasks_passed`; it is logged in
-`error_log` and `tasks_completed` does not count the crashed task.
+For Tier 3: `invoke-task.sh` collects the `claude --print` output and exit
+status, assembles the task-runner return dict, and passes it to the Tier 2
+Python process which runs `jsonschema.validate()` before inserting the SQLite
+row.
+
+The calling tier treats a validation error or nonzero exit from a child
+process as an infrastructure error, NOT a task failure. For the variant-runner
+this means a crashing task-runner does NOT decrement `tasks_passed`; it is
+logged in `error_log` and `tasks_completed` does not count the crashed task.
 
 ### Python validation pseudocode
 
 ```python
 import json
-import sys
+import sqlite3
 from pathlib import Path
 
 import jsonschema
 
 CONTRACTS_DIR = Path(__file__).resolve().parent / "packages" / "ahol" / "contracts"
 
-def validate_and_emit(return_dict: dict, schema_filename: str) -> None:
+
+def validate_payload(payload: dict, schema_filename: str) -> None:
+    """Raise jsonschema.ValidationError on failure; return None on success."""
     schema_path = CONTRACTS_DIR / schema_filename
     with schema_path.open("r", encoding="utf-8") as fh:
         schema = json.load(fh)
-    try:
-        jsonschema.validate(instance=return_dict, schema=schema)
-    except jsonschema.ValidationError as exc:
-        print(
-            f"[ahol] schema violation in {schema_filename}: "
-            f"path={list(exc.absolute_path)} message={exc.message}",
-            file=sys.stderr,
-        )
-        sys.exit(2)
-    json.dump(return_dict, sys.stdout)
-    sys.exit(0)
+    jsonschema.validate(instance=payload, schema=schema)
 
-# Tier 3 example
-validate_and_emit(task_return, "task-runner-return.schema.json")
+
+def persist_task_result(conn: sqlite3.Connection, task_payload: dict) -> None:
+    """Tier 2 variant-runner persists a Tier 3 task result to SQLite."""
+    validate_payload(task_payload, "task-runner-return.schema.json")
+    conn.execute(
+        "INSERT INTO task_results (task_id, passed, tokens_used, wall_clock_sec, "
+        "patch_sha, error_summary) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            task_payload["task_id"],
+            task_payload["passed"],
+            task_payload["tokens_used"],
+            task_payload["wall_clock_sec"],
+            task_payload["patch_sha"],
+            task_payload["error_summary"],
+        ),
+    )
+    conn.commit()
 ```
 
 ## Examples
