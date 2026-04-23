@@ -117,6 +117,77 @@ Primary-source cites included inline above. All fetched 2026-04-23 within the Ta
 2. **Do NOT proceed to Group C spike execution until the two follow-up fetches (Environments API, Sessions API) resolve blockers 1 and 4.** The 4-hour cap and arbitrary-Docker-image questions are independently load-bearing for D3 adoption.
 3. **Surface the finding to user.** User explicitly gated Group C on Task 9 outcome. A "MISSTATED, D3 REOPENED" verdict triggers the surface-and-pause branch of user's instruction.
 
+## D3 Final Decision (post-follow-up-fetches)
+
+Appended: 2026-04-23 UTC after fetching `platform.claude.com/docs/en/managed-agents/environments` and `platform.claude.com/docs/en/managed-agents/sessions`.
+
+### Verdict: C - BUILD (unchanged). Keep bespoke Docker orchestration for D3.
+
+### Blocker 1 resolution: DEFINITIVELY BLOCKED
+
+Primary source: `platform.claude.com/docs/en/managed-agents/environments`. The Environments API accepts exactly one config `type` value: `"cloud"`. The documented configuration fields are:
+
+- `packages`: manifest layered on Anthropic's base container. Supported package managers are `apt`, `cargo`, `gem`, `go`, `npm`, `pip`. Values are package names with optional version pins (e.g., `"pandas==2.2.0"`, `"ffmpeg"`, `"ripgrep@14.0.0"`).
+- `networking`: either `unrestricted` or `limited` with `allowed_hosts`, `allow_mcp_servers`, `allow_package_managers`.
+- Pre-installed runtimes are fixed by Anthropic: "Cloud containers include common runtimes out of the box" (Python, Node.js, Go, etc. per Container reference).
+
+**No `base_image`, no `dockerfile`, no `image_ref`, no OCI registry reference, no arbitrary Docker image parameter exists anywhere in the Create Environment payload.** There is no documented way to pull `jefzda/sweap-images:astropy-11693`, `starryzhang/sweb.eval.*`, Terminal-Bench-Core per-task images, or any third-party registry image into a Managed Agents session.
+
+AHOL's benchmark pipeline depends on per-task pinned Docker images from third-party registries (SWE-Bench Pro via jefzda, SWE-bench-Live via starryzhang, Terminal-Bench-Core v0.1.1, HAL SWE-bench Verified Mini, BigCodeBench-Hard). These images are NOT expressible as package manifests on Anthropic's base cloud container. The test harnesses, test databases, pinned compiler versions, and repo-specific environment configurations in the upstream images cannot be reconstructed via `apt` + `pip` + `npm` layering.
+
+Blocker 1 is confirmed in the strongest form.
+
+### Blocker 4 resolution: NOT CONFIRMED AS 4h, but no guaranteed ceiling either
+
+Primary source: `platform.claude.com/docs/en/managed-agents/sessions`. The Sessions API reference does not mention any explicit session duration cap. There is no `max_duration_hours` parameter in Create Session. No explicit maximum appears in the Session statuses table (`idle`, `running`, `rescheduling`, `terminated`).
+
+The Medium article's `max_duration_hours: 4` claim appears to be fabricated, outdated, or from an earlier beta iteration. It is not reproduced in current primary docs.
+
+However, the absence of a stated cap is NOT the same as a guaranteed unlimited duration. Anthropic's overview page describes Managed Agents as best for "Long-running execution: Tasks that run for minutes or hours with multiple tool calls." This suggests hours-scale is supported but does not promise arbitrary duration. Sessions can be `archived` and `deleted`, and can enter `terminated` status on unrecoverable errors.
+
+Blocker 4 does not hold in the specific form claimed (4h hard cap). But it cannot be relied on to resolve favorably for AHOL at arbitrary run length either. Moot regardless: blocker 1 alone is sufficient to reject.
+
+### Why blocker 1 alone is sufficient
+
+AHOL is fundamentally a benchmark runner. Benchmark tasks run inside benchmark-specific Docker images, each with its own repo snapshot, test harness, and pinned toolchain. The whole point of benchmark containers is that they CANNOT be reconstructed from package manifests on a generic base. SWE-bench Verified Mini, Terminal-Bench-Core, and BigCodeBench-Hard each ship prebuilt images precisely because reconstructing them at runtime is error-prone and version-drift-prone.
+
+Managed Agents' Anthropic-curated-base + package-overlay model is architecturally oriented toward user-facing agent applications (data analysis, code assistant, research helper) where the runtime environment is the developer's choice. Benchmark runners are a different product category. Adopting Managed Agents for AHOL D3 would require either:
+
+- Rewriting AHOL-Proxy-30, SWE-Bench Pro, and SWE-bench-Live to NOT use their upstream images (significant reduction in benchmark validity; invalidates leaderboard-comparable claims)
+- Running the benchmark's Docker image INSIDE a Managed Agents container via nested virtualization (not documented as supported; likely not permitted; Anthropic's sandbox model is explicit about user code running inside a SINGLE container, not docker-in-docker)
+
+Both options defeat the purpose. Bespoke Docker orchestration on the user's machine (or a single VPS) directly uses the upstream images at their pinned SHAs, preserving benchmark integrity.
+
+### Build-hour impact
+
+No change from REALITY-CHECK.md estimate. D3 stays ~20h bespoke Docker orchestration. No ~15 to 25h savings realized.
+
+### Corrections to REALITY-CHECK.md worth noting (no D3 impact, but clarifies record)
+
+Even though the D3 decision is unchanged, the following claims in REALITY-CHECK.md were misstated by secondary sources and should be read with caution in any future decision:
+
+- "No trace export (Console inspect only)" is wrong. Managed Agents exposes programmatic event history via the Sessions API and SSE streaming. If a future phase of donnyclaude work benefits from Managed Agents for non-benchmark use (e.g., long-running user agents with external observability requirements), this capability matters.
+- "Parallel fan-out research-preview-gated" is wrong. Independent parallel sessions are rate-limited (60 create per minute) but not gated. Only `multiagent` (parent-child orchestration) is preview.
+- "4h session cap" is unconfirmed; treat as unknown rather than true.
+
+These corrections do not reopen D3 for AHOL, but they should be remembered if Managed Agents becomes relevant to a non-benchmark AHOL use case (e.g., deploying a donnyclaude-optimized agent as a service).
+
+### Remaining risks with bespoke Docker (unchanged from prior plan)
+
+- Local Docker Desktop on a 2018 MBP is the spike substrate; may not reflect production conditions if AHOL graduates to a cloud VM. Low priority until spike passes.
+- Registry rate limits on Docker Hub for pulling benchmark images (first pull of 30 AHOL-Proxy-30 images is bursty). Mitigation: pre-pull in bootstrap.sh, which already exists as Task 4.
+- The `ahol-variant-V*-*` container naming convention from DOCKER-API-CHOICE.md assumes exclusive use of that prefix; any cross-process name collision would cause AHOL cleanup to affect unrelated containers. Mitigation: document the naming convention in the AHOL bootstrap docs so users know not to co-opt the prefix.
+
+### No planning-artifact rework required
+
+The BUILD verdict is the same as originally decided. `spike-results.md`, `COST-MODEL.md`, `CONTAMINATION-ANALYSIS.md`, `DOCKER-API-CHOICE.md`, `context-budgets.md`, `contracts/`, `baseline/`, and `benchmarks/README.md` all stand as written. No updates needed.
+
+### What DOES need doing (optional, low priority)
+
+If you want to reflect the blocker corrections in REALITY-CHECK.md for future-reader accuracy:
+- Add a one-paragraph "Post-Task-9 correction" section noting blockers 3 and 5 were misstated, and blocker 4 unconfirmed, but D3 decision unchanged due to blocker 1 (~15 minutes edit).
+- Optional; does not affect any downstream decision.
+
 ## Em-dash audit
 
 Zero U+2014 and zero U+2013 in this document.
