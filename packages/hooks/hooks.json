@@ -163,6 +163,17 @@
           }
         ],
         "description": "WS-3 backup-restore advisor: on session start, inject path of most recent .claude/backups/ entry; advisory only, no auto-restore"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/skill-index.js\"",
+            "timeout": 5
+          }
+        ],
+        "description": "WS-1 skill progressive disclosure: prompt-aware top-K skill manifest emitted as additionalContext, paired with install-time disable-model-invocation flip on non-top-K skills"
       }
     ],
     "PostToolUse": [

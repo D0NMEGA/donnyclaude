@@ -17,19 +17,25 @@ Baseline session 9742c210 surfaced a platform-level reliability gap that affects
 
 Concrete examples from BASELINE.md surprising-findings section (tool_use positions 35, 36, 37). The fix lives in `packages/hooks/gsd-verify-edit.js` lines containing the word-boundary regex; any AHOL-generated verifier must carry the same logic.
 
-## WS-1 Skill Progressive Disclosure
+## WS-1 Skill Progressive Disclosure (Path B shipped, re-measured 2026-04-23)
 
 | Metric | Baseline | Post-change value | Absolute delta | Percent delta | Measurement type | Confidence |
 |---|---|---|---|---|---|---|
-| Skill-catalog always-on tokens (name + description, all 105 skills) | 3,196 tokens (12,782 chars) | 3,196 tokens unchanged; WS-1 is additive, does not modify SKILL.md frontmatter | 0 | 0% | MEASURED | HIGH: direct char count of packages/skills/*/SKILL.md frontmatter |
-| WS-1 SessionStart manifest payload (top-10) | 0 (hook did not exist) | 415 tokens median across 3 representative prompts (Django, Go tests, security review) | +415 | new overhead | MEASURED | HIGH: direct invocation with 3 prompts, averaged |
-| Composite always-on (native catalog + WS-1 manifest) | 3,196 tokens | 3,611 tokens | +415 | +13.0% | MEASURED | HIGH |
-| Full SKILL.md bodies (reference, not loaded always-on) | 155,020 tokens (620,080 chars across 105 bodies) | 155,020 unchanged | 0 | 0% | MEASURED | HIGH |
-| Intended spec goal comparison (if WS-1 had replaced native catalog) | 3,196 tokens | 415 tokens | -2,781 | -87.0% | PROJECTED | HIGH if architectural gap is closed; see Regressions |
-| Session-level cache-read amplification (across 76 assistant turns like baseline) | ~243K tokens (native catalog cached) | ~274K tokens (native + manifest cached) | +31K | +0.44% of baseline total | PROJECTED | MEDIUM: assumes cache warmth behavior mirrors baseline |
-| >50% reduction target on skill-catalog always-on | N/A | NOT MET on measured reality; met on intended-spec projection only | - | - | PASS-FAIL | FAIL on measured interpretation |
+| Skill-catalog always-on tokens (name + description, all 105 skills in native Claude Code catalog) | 3,196 tokens (12,782 chars) | 274 tokens (1,097 chars; only the 10 top-K GSD workflow skills remain in the native catalog after install-time disable-model-invocation flip on the other 95) | -2,922 | -91.4% | MEASURED | HIGH: direct char count of the top-10 GSD skills' name+description; integration-tested against a fake install at /tmp/pathb-test with 3/3 flips correct |
+| WS-1 SessionStart manifest payload (top-K, prompt-aware) | 0 (hook did not exist) | 415 tokens median across 3 representative prompts (Django, Go tests, security review) | +415 | new overhead | MEASURED | HIGH: direct invocation with 3 prompts, averaged |
+| Composite always-on (native catalog + WS-1 manifest) | 3,196 tokens | 689 tokens | -2,507 | -78.4% | MEASURED | HIGH |
+| Full SKILL.md bodies (reference, not loaded always-on; users can still invoke any skill by name) | 155,020 tokens (620,080 chars across 105 bodies) | 155,020 unchanged; bodies remain loadable on explicit invocation | 0 | 0% | MEASURED | HIGH |
+| >50% reduction target on skill-catalog always-on | N/A | MET: 78.4% reduction exceeds the 50% threshold | - | - | PASS-FAIL | PASS |
+| `disable-model-invocation: true` honored in Claude Code 2.1.117 | N/A | VERIFIED via fresh claude --print subprocess (test skill with disable flag did NOT load; sentinel phrase count in JSONL was 4 but all 4 were user-prompt echoes, 0 were system-prompt skill catalog) | - | - | PASS-FAIL | PASS |
+| Session-level cache-read amplification on a 76-turn baseline-class session | ~243K tokens (full native catalog cached) | ~52K tokens (274 + 415 = 689 per session, cached across 76 turns) | -191K | -2.7% of baseline total | PROJECTED | MEDIUM: assumes cache behavior mirrors baseline |
 
-**Critical caveat**: WS-1 as shipped is purely additive. It does not modify packages/skills/*/SKILL.md frontmatter to set `disable-model-invocation: true`, which would be required to suppress Claude Code's native always-on skill catalog. The spec's >50% reduction target assumes replacement behavior that the implementation does not achieve. Full analysis in REGRESSIONS.md.
+**Path B architecture**: `bin/donnyclaude.js` gained four additions at install time:
+1. `DEFAULT_TOP_K_AUTOINVOKE_SKILLS` constant: 10 GSD workflow skills get disable-model-invocation: false at install.
+2. `loadUserAutoInvokeOverrides()`: reads user's settings.json `skills.autoInvoke` block for per-skill overrides.
+3. `setFrontmatterBoolean()`: upsert helper for SKILL.md frontmatter.
+4. `applyInvocationFlags()`: walks installed skills dir, sets flag per skill.
+
+Source tree `packages/skills/*/SKILL.md` is UNCHANGED. The frontmatter flip happens on the copied installed files at `~/.claude/skills/*/SKILL.md`. See [ws-1/SCOPE-EXPANSION.md](./ws-1/SCOPE-EXPANSION.md) for the full design + verification log.
 
 ## WS-2 PostToolUse Verify-Edit Hook
 
@@ -81,7 +87,7 @@ Per the split agreed: WS-3 uses a PASS-FAIL gate on the synthetic round-trip ins
 
 | Workstream | Commit decision | Why |
 |---|---|---|
-| WS-1 skill progressive disclosure | FLAGGED FOR REVIEW, DO NOT COMMIT | MEASURED token delta is +13% on the skill-catalog-always-on dimension (additive, not replacing). Intended spec goal (>50% reduction) is not achieved without also modifying packages/skills/* frontmatter, which is out of scope. See REGRESSIONS.md. |
+| WS-1 skill progressive disclosure | COMMITTED via Path B after verification and re-measurement (2026-04-23) | Scope expansion approved for WS-1 only; install-time disable-model-invocation flip on 95 non-top-K skills. MEASURED: 78.4% composite reduction, meets >50% target. Verification of disable-model-invocation behavior in Claude Code 2.1.117 PASSED via fresh-subprocess test. See ws-1/SCOPE-EXPANSION.md. |
 | WS-2 post-edit verify | COMMIT | Hook latency bounded and measured. Payload size small. Delta on current baseline is 0 (no Edit failures in baseline), but architecture is sound and the error-flag intel is honored. |
 | WS-3 backup + restore | COMMIT | PASS on synthetic round-trip. All 8 required fields present. Restore payload compact. Baseline did not trigger compaction so null-null is the honest read. |
 | WS-4 SessionStart refactor | COMMIT | 83 ms median cold-start is well under the 8 s budget. 83.4% reduction in hooks.json block size. Structured context payload is ~138 tokens of clearly useful content (git state, commits, test runner). |

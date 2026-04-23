@@ -3,6 +3,14 @@
 Generated: 2026-04-23 UTC
 Purpose: Flag any workstream whose Step 2 DELTA shows a worse-than-baseline metric. Per user directive, flagged workstreams are NOT committed; they are surfaced here for discussion.
 
+## RESOLVED 2026-04-23: WS-1 shipped via Path B
+
+The original flag stands for audit trail (see below) but the regression is resolved. User picked Path B, verified `disable-model-invocation: true` is honored in Claude Code 2.1.117 via a fresh-subprocess empirical test (test skill with the flag set to true did NOT appear in the subprocess's skill catalog; 0 occurrences of skill name / description / directive text in the JSONL's system prompt, 4 occurrences of the sentinel phrase all attributable to user-prompt echoes). Scope expansion granted for WS-1 ONLY (other workstreams and the v1.3 prune question remain untouched). Implementation lands the frontmatter flip at install time on the runtime copies at `~/.claude/skills/*/SKILL.md`, not the source tree at `packages/skills/*/SKILL.md`. Re-measurement shows 78.4% composite reduction, exceeding the >50% target. Full record in `ws-1/SCOPE-EXPANSION.md`.
+
+---
+
+## Original flag (preserved for audit trail)
+
 ## WS-1 Skill Progressive Disclosure: FLAGGED
 
 ### The regression

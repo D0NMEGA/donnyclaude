@@ -17,6 +17,24 @@ const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')).ve
 // Only these commands are allowed in shell execution -- never pass user input
 const SAFE_COMMANDS = new Set(['node', 'npm', 'claude', 'npx']);
 
+// WS-1 Path B: the top-K skills that get disable-model-invocation: false at install
+// time. Every other skill is marked disable-model-invocation: true, keeping it
+// invokable by name via the runtime manifest but out of the always-loaded catalog.
+// User can override per-skill via settings.json skills.autoInvoke.
+// Rotation logic is deferred to a later enhancement; this is the safe static default.
+const DEFAULT_TOP_K_AUTOINVOKE_SKILLS = Object.freeze([
+  'gsd-new-project',
+  'gsd-new-milestone',
+  'gsd-plan-phase',
+  'gsd-discuss-phase',
+  'gsd-execute-phase',
+  'gsd-autonomous',
+  'gsd-progress',
+  'gsd-next',
+  'gsd-verify-work',
+  'gsd-ship',
+]);
+
 // ── Branding ────────────────────────────────────────────────────────────────
 
 const BANNER = `
@@ -170,6 +188,15 @@ function installGlobalTools() {
       } else {
         ok(comp.label ?? `${comp.name} installed`);
       }
+      // Build the skill-index registry during the same install pass.
+      // This powers WS-1 progressive disclosure (skills referenced by name,
+      // loaded on demand by Claude Code) instead of always-loaded blobs.
+      if (comp.name === 'skills') {
+        const topK = new Set(DEFAULT_TOP_K_AUTOINVOKE_SKILLS);
+        const userOverrides = loadUserAutoInvokeOverrides();
+        writeSkillIndex(src, topK, userOverrides);
+        applyInvocationFlags(join(CLAUDE_HOME, 'skills'), topK, userOverrides);
+      }
     } else {
       info(`${comp.name} not found in package -- skipping`);
     }
@@ -177,6 +204,199 @@ function installGlobalTools() {
 
   // Settings merge
   mergeSettings();
+}
+
+/**
+ * Extract frontmatter fields from a SKILL.md file.
+ * Returns null if no frontmatter block is present or required fields are missing.
+ * Handles quoted, unquoted, and multi-line list fields in a simple YAML-subset
+ * parser. We only need name + description for the index.
+ */
+function parseSkillFrontmatter(content) {
+  if (!content.startsWith('---')) return null;
+  const end = content.indexOf('\n---', 3);
+  if (end === -1) return null;
+  const body = content.slice(3, end);
+  const fields = {};
+  for (const rawLine of body.split('\n')) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+    // Skip list-item continuation lines (leading spaces + dash)
+    if (/^\s+-\s/.test(line)) continue;
+    const match = line.match(/^([a-zA-Z_-]+):\s*(.*)$/);
+    if (!match) continue;
+    const key = match[1];
+    let value = match[2].trim();
+    if (!value) continue;
+    // Strip surrounding single or double quotes
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    fields[key] = value;
+  }
+  if (!fields.name || !fields.description) return null;
+  return fields;
+}
+
+/**
+ * Walk the installed skills directory, parse each SKILL.md frontmatter, and
+ * aggregate a small registry at ~/.claude/.donnyclaude-skill-index.json.
+ * The registry is consumed by the skill-index SessionStart hook, which emits
+ * a prompt-aware short manifest instead of dumping every skill into context.
+ * @param {string} skillsSrc absolute path to packages/skills directory
+ */
+function writeSkillIndex(skillsSrc, topKAllowed = new Set(), userOverrides = {}) {
+  const indexPath = join(CLAUDE_HOME, '.donnyclaude-skill-index.json');
+  const skills = {};
+  let entryCount = 0;
+  let skipCount = 0;
+  let entries = [];
+  try {
+    entries = readdirSync(skillsSrc, { withFileTypes: true });
+  } catch {
+    info('Could not enumerate skills for index (install continuing)');
+    return;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue;
+    const skillPath = join(skillsSrc, entry.name, 'SKILL.md');
+    if (!existsSync(skillPath)) {
+      skipCount++;
+      continue;
+    }
+    let content;
+    try {
+      content = readFileSync(skillPath, 'utf-8');
+    } catch {
+      skipCount++;
+      continue;
+    }
+    const fm = parseSkillFrontmatter(content);
+    if (!fm) {
+      skipCount++;
+      continue;
+    }
+    const userFlag = userOverrides && Object.prototype.hasOwnProperty.call(userOverrides, fm.name)
+      ? Boolean(userOverrides[fm.name])
+      : null;
+    const autoInvoke = userFlag !== null ? userFlag : topKAllowed.has(fm.name);
+    skills[fm.name] = {
+      description: fm.description,
+      autoInvoke,
+      path: join(CLAUDE_HOME, 'skills', entry.name),
+    };
+    entryCount++;
+  }
+  const payload = { skills, generatedAt: new Date().toISOString(), version: 1 };
+  try {
+    writeFileSync(indexPath, JSON.stringify(payload, null, 2));
+    const skipNote = skipCount > 0 ? ` (${skipCount} skipped)` : '';
+    ok(`Skill index written (${entryCount} entries${skipNote})`);
+  } catch (err) {
+    warn(`Skill index write failed: ${err.message}`);
+  }
+}
+
+/**
+ * Load the skills.autoInvoke block from the user's existing settings.json, if
+ * present. Returns a plain object mapping skill name to explicit boolean
+ * override. Missing file, malformed JSON, or missing block all resolve to {}.
+ * Explicit overrides win over DEFAULT_TOP_K_AUTOINVOKE_SKILLS in applyInvocationFlags.
+ */
+function loadUserAutoInvokeOverrides() {
+  const settingsPath = join(CLAUDE_HOME, 'settings.json');
+  if (!existsSync(settingsPath)) return {};
+  try {
+    const raw = readFileSync(settingsPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const overrides = parsed && parsed.skills && parsed.skills.autoInvoke;
+    if (!overrides || typeof overrides !== 'object') return {};
+    // Filter to boolean values only so a malformed entry cannot hijack the flag.
+    const clean = {};
+    for (const [k, v] of Object.entries(overrides)) {
+      if (typeof v === 'boolean') clean[k] = v;
+    }
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Upsert a single scalar key in a markdown YAML frontmatter block. Adds the
+ * key at the end of the block if not present, replaces the existing line if it
+ * is. Returns the updated file content. If the input has no frontmatter block,
+ * prepends a fresh one with just this key. The value is serialized as boolean
+ * (unquoted true or false), which is what Claude Code expects for
+ * disable-model-invocation.
+ */
+function setFrontmatterBoolean(content, key, value) {
+  const literal = value === true ? 'true' : 'false';
+  if (!content.startsWith('---')) {
+    return `---\n${key}: ${literal}\n---\n\n${content}`;
+  }
+  const end = content.indexOf('\n---', 3);
+  if (end === -1) return content;
+  const fm = content.slice(3, end);
+  const tail = content.slice(end);
+  const keyRegex = new RegExp(`^${key}:[^\\n]*$`, 'm');
+  if (keyRegex.test(fm)) {
+    return `---${fm.replace(keyRegex, `${key}: ${literal}`)}${tail}`;
+  }
+  const trimmed = fm.replace(/\n+$/, '');
+  return `---${trimmed}\n${key}: ${literal}\n${tail.slice(1)}`;
+}
+
+/**
+ * WS-1 Path B core: walk the INSTALLED skills directory at CLAUDE_HOME/skills
+ * and set disable-model-invocation on each SKILL.md frontmatter. Skills in the
+ * top-K allow-list (or explicitly true in user overrides) get false; everyone
+ * else gets true. Called after the source-to-install cpSync completes, so this
+ * modifies the user's runtime copies, not the packaged source tree.
+ * Users who run `npx donnyclaude` again after editing their own ~/.claude/skills
+ * will see their frontmatter edits overwritten; settings.json skills.autoInvoke
+ * is the stable way to pin a skill to the allow-list across reinstalls.
+ */
+function applyInvocationFlags(installedSkillsDir, topKAllowed, userOverrides = {}) {
+  let entries;
+  try {
+    entries = readdirSync(installedSkillsDir, { withFileTypes: true });
+  } catch {
+    info('Installed skills directory not readable -- skipping invocation flags');
+    return;
+  }
+  let flipped = 0;
+  let kept = 0;
+  let skipped = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue;
+    const skillPath = join(installedSkillsDir, entry.name, 'SKILL.md');
+    if (!existsSync(skillPath)) { skipped++; continue; }
+    let content;
+    try { content = readFileSync(skillPath, 'utf-8'); } catch { skipped++; continue; }
+    const fm = parseSkillFrontmatter(content);
+    if (!fm) { skipped++; continue; }
+    const name = fm.name;
+    const userFlag = Object.prototype.hasOwnProperty.call(userOverrides, name)
+      ? Boolean(userOverrides[name])
+      : null;
+    const autoInvoke = userFlag !== null ? userFlag : topKAllowed.has(name);
+    const disable = !autoInvoke;
+    const updated = setFrontmatterBoolean(content, 'disable-model-invocation', disable);
+    if (updated === content) { kept++; continue; }
+    try {
+      writeFileSync(skillPath, updated);
+      flipped++;
+    } catch (err) {
+      warn(`Could not update frontmatter for ${name}: ${err.message}`);
+      skipped++;
+    }
+  }
+  const note = skipped > 0 ? `, ${skipped} skipped` : '';
+  ok(`Invocation flags applied (${flipped} updated, ${kept} unchanged${note})`);
 }
 
 function mergeSettings() {
