@@ -119,8 +119,14 @@ function buildManifest(selected, totalSkills) {
 }
 
 function run() {
+  // Event name comes from argv[2] when registered via hooks.json.
+  // Defaults to SessionStart for backward compatibility with the original
+  // single-trigger registration. Valid values: SessionStart, UserPromptSubmit.
+  const eventName = (process.argv[2] && /^[A-Za-z]+$/.test(process.argv[2]))
+    ? process.argv[2]
+    : 'SessionStart';
   let input = '';
-  const stdinTimeout = setTimeout(() => emit(''), 5000);
+  const stdinTimeout = setTimeout(() => emit('', eventName), 5000);
   process.stdin.setEncoding('utf-8');
   process.stdin.on('data', chunk => { input += chunk; });
   process.stdin.on('end', () => {
@@ -135,15 +141,15 @@ function run() {
     const promptTokens = tokenize(extractPrompt(payload));
     const scored = scoreSkills(skills, promptTokens, overrides);
     const selected = pickTopK(scored, TOP_K);
-    emit(buildManifest(selected, Object.keys(skills).length));
+    emit(buildManifest(selected, Object.keys(skills).length), eventName);
   });
 }
 
-function emit(message) {
+function emit(message, eventName = 'SessionStart') {
   if (!message) { process.exit(0); return; }
   const output = {
     hookSpecificOutput: {
-      hookEventName: 'SessionStart',
+      hookEventName: eventName,
       additionalContext: message,
     },
   };
