@@ -145,6 +145,22 @@ Approve this verdict set, then proceed to Group A Tasks 2, 3, 5, 7, 8 as scoped.
 
 Flag for user decision before Task 2 starts.
 
+## Post-Task-9 Correction (appended 2026-04-23)
+
+Task 9 re-verification fetched Anthropic's Managed Agents primary documentation directly (platform.claude.com/docs/en/managed-agents/overview, .../sessions, .../environments, release-notes overview). Findings correct several blocker claims above that were originally sourced from secondary writeups (unite.ai, aiproductivity.ai, a Medium fine-print article). Full re-verification trail in MANAGED-AGENTS-PRIMARY-VERIFY.md.
+
+### Blocker-by-blocker corrections
+
+- **Blocker 1 (no Docker-in-session)**: CONFIRMED ABSOLUTELY by primary docs. The Environments API accepts only `type: "cloud"` with package manifests (apt, cargo, gem, go, npm, pip) on Anthropic's base containers. No `base_image`, no `Dockerfile`, no OCI registry reference. Benchmark leaderboard comparability requires user-supplied pinned images, which Managed Agents cannot provide. Cite: `platform.claude.com/docs/en/managed-agents/environments`.
+- **Blocker 2 (no scheduled execution)**: CONFIRMED. D5 calendar scheduler still required.
+- **Blocker 3 (no trace export, Console inspect only)**: MISSTATED. Managed Agents exposes SSE streaming at `/v1/sessions/{id}/stream` plus server-side event history retrieval via the Sessions API. Programmatic machine-readable access is available. Cite: `platform.claude.com/docs/en/managed-agents/sessions`.
+- **Blocker 4 (4h session cap)**: UNCONFIRMED. The Medium article's `max_duration_hours: 4` figure does not appear in primary Sessions API docs. No `max_duration_hours` parameter or explicit cap is documented. Moot for D3 decision because blocker 1 alone rejected Managed Agents adoption.
+- **Blocker 5 (parallel fan-out research-preview-gated)**: MISSTATED. The research-preview gate applies only to `multiagent` (parent-child orchestration). Independent parallel sessions are rate-limited (60/min create, 600/min read) but otherwise unrestricted. Cite: `platform.claude.com/docs/en/managed-agents/overview`.
+
+### Net
+
+Original BUILD verdict stands on blocker 1 alone. Blockers 3 and 5 remain relevant for non-benchmark donnyclaude use cases where Managed Agents might be viable (long-running user agents with SSE observability, parallel independent sessions for multi-user orchestration). If a future phase considers Managed Agents for something other than benchmark running, re-read MANAGED-AGENTS-PRIMARY-VERIFY.md and treat blockers 3 and 5 as inapplicable.
+
 ## Em-dash audit
 
 Zero U+2014 and zero U+2013 in this document.
