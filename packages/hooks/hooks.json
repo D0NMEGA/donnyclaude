@@ -230,6 +230,17 @@
           }
         ],
         "description": "Capture tool use results for continuous learning"
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-verify-edit.js\"",
+            "timeout": 10
+          }
+        ],
+        "description": "WS-2 post-edit verify: run project lint or typecheck, inject failures as additionalContext. Fail-open. False-success detection catches Error text on exit 0."
       }
     ],
     "PostToolUseFailure": [
