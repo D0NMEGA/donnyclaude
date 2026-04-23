@@ -195,7 +195,11 @@ function installGlobalTools() {
         const topK = new Set(DEFAULT_TOP_K_AUTOINVOKE_SKILLS);
         const userOverrides = loadUserAutoInvokeOverrides();
         writeSkillIndex(src, topK, userOverrides);
-        applyInvocationFlags(join(CLAUDE_HOME, 'skills'), topK, userOverrides);
+        // Pass the source skills directory so applyInvocationFlags can scope
+        // strictly to donnyclaude-shipped skills. Without this, the function
+        // would walk the entire ~/.claude/skills/ tree and accidentally
+        // disable plugin or third-party skills the user installed elsewhere.
+        applyInvocationFlags(join(CLAUDE_HOME, 'skills'), src, topK, userOverrides);
       }
     } else {
       info(`${comp.name} not found in package -- skipping`);
@@ -359,31 +363,34 @@ function setFrontmatterBoolean(content, key, value) {
  * will see their frontmatter edits overwritten; settings.json skills.autoInvoke
  * is the stable way to pin a skill to the allow-list across reinstalls.
  */
-function applyInvocationFlags(installedSkillsDir, topKAllowed, userOverrides = {}) {
-  let entries;
+function applyInvocationFlags(installedSkillsDir, donnyclaudeSkillsSrc, topKAllowed, userOverrides = {}) {
+  // Source-of-truth: enumerate skills donnyclaude actually ships, NOT the entire
+  // installed dir. This prevents the installer from touching plugin/third-party
+  // skills the user has installed elsewhere under ~/.claude/skills/.
+  let donnyclaudeNames;
   try {
-    entries = readdirSync(installedSkillsDir, { withFileTypes: true });
+    donnyclaudeNames = readdirSync(donnyclaudeSkillsSrc, { withFileTypes: true })
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => e.name);
   } catch {
-    info('Installed skills directory not readable -- skipping invocation flags');
+    info('Could not enumerate donnyclaude source skills -- skipping invocation flags');
     return;
   }
   let flipped = 0;
   let kept = 0;
   let skipped = 0;
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (entry.name.startsWith('.')) continue;
-    const skillPath = join(installedSkillsDir, entry.name, 'SKILL.md');
+  for (const name of donnyclaudeNames) {
+    const skillPath = join(installedSkillsDir, name, 'SKILL.md');
     if (!existsSync(skillPath)) { skipped++; continue; }
     let content;
     try { content = readFileSync(skillPath, 'utf-8'); } catch { skipped++; continue; }
     const fm = parseSkillFrontmatter(content);
     if (!fm) { skipped++; continue; }
-    const name = fm.name;
-    const userFlag = Object.prototype.hasOwnProperty.call(userOverrides, name)
-      ? Boolean(userOverrides[name])
+    const skillName = fm.name;
+    const userFlag = Object.prototype.hasOwnProperty.call(userOverrides, skillName)
+      ? Boolean(userOverrides[skillName])
       : null;
-    const autoInvoke = userFlag !== null ? userFlag : topKAllowed.has(name);
+    const autoInvoke = userFlag !== null ? userFlag : topKAllowed.has(skillName);
     const disable = !autoInvoke;
     const updated = setFrontmatterBoolean(content, 'disable-model-invocation', disable);
     if (updated === content) { kept++; continue; }
@@ -391,12 +398,12 @@ function applyInvocationFlags(installedSkillsDir, topKAllowed, userOverrides = {
       writeFileSync(skillPath, updated);
       flipped++;
     } catch (err) {
-      warn(`Could not update frontmatter for ${name}: ${err.message}`);
+      warn(`Could not update frontmatter for ${skillName}: ${err.message}`);
       skipped++;
     }
   }
   const note = skipped > 0 ? `, ${skipped} skipped` : '';
-  ok(`Invocation flags applied (${flipped} updated, ${kept} unchanged${note})`);
+  ok(`Invocation flags applied to donnyclaude skills (${flipped} updated, ${kept} unchanged${note})`);
 }
 
 function mergeSettings() {
