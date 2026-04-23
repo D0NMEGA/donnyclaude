@@ -2,6 +2,9 @@
   "permissions": {
     "defaultMode": "acceptEdits"
   },
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "60"
+  },
   "skills": {
     "enabled": [],
     "disabled": [],
