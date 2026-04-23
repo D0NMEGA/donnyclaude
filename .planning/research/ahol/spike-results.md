@@ -1,98 +1,124 @@
-# AHOL D1 Spike Results
+# AHOL V0 vs V4 Spike Plan (revised post-deep-research)
 
-Generated: 2026-04-23 UTC
-Spike scope: SWE-bench Lite noise-floor measurement on bd1f8d2 harness state.
-Budget authorized: 12 wall-clock hours, 6M tokens.
-Hard constraint: no em dashes; spike writes to `.planning/research/ahol/` only.
+Revised: 2026-04-23 UTC
 
-## Pre-spike smoke test: PASS WITH CAVEAT
+This document replaces the prior SWE-bench-Lite-10-task spike plan. The prior plan was obsolete: it relied on a Docker-blocked harness, used a contamination-risk benchmark, lacked outcome-conditional cost brackets, and had no patch-only template validation. Recent deep-research outputs (listed below) supersede it with a V0-vs-V4-on-AHOL-Proxy-30 spike.
 
-**Method**: Spawned a fresh `claude --print --model opus "list the files in this directory"` subprocess from a `/tmp/donny-smoke-bd1f8d2/` working directory containing a project-local `.claude/settings.json` overlay that registered the bd1f8d2 hooks (gsd-session-start.js and skill-index.js) on SessionStart. Inspected the resulting JSONL.
+## Upstream artifacts referenced
 
-**Why a project-local overlay**: donnyclaude is not currently enabled as a Claude Code plugin in the active session, so `packages/hooks/hooks.json` is not read by Claude Code. The overlay registers the bd1f8d2 hooks for the smoke test only, leaving the user's `~/.claude/settings.json` untouched and the test reversible.
+- `.planning/research/ahol/REALITY-CHECK.md` (GEPA hybrid and Managed Agents rejection verdicts)
+- `.planning/research/ahol/COST-MODEL.md` (outcome-conditional budget matrix with 17.5M, 52.5M, 77.5M dev-round brackets)
+- `.planning/research/ahol/Q1B-PATCH-ONLY-TEMPLATE-SOURCE.md` (patch-only system prompt synthesis and 5-criterion validation checklist)
+- `.planning/research/ahol/DOCKER-API-CHOICE.md` (raw Bash with name-prefix allowlist verdict)
+- `packages/ahol/CONTAMINATION-ANALYSIS.md` (three-tier separation; V0 through V7 variant matrix)
+- `packages/ahol/baseline/VALIDATION-CHECKLIST.md` (the 5 pass/fail gates from the Q1B source)
+- `packages/ahol/benchmarks/README.md` (AHOL-Proxy-30 composition)
+- `.planning/research/ahol/thermal-baseline.md` (2018 MBP thermal capture and go/no-go thresholds)
 
-**Findings**:
+## Spike scope (replaces prior 10-task Lite subset)
 
-| Check | Result | Evidence |
+Two variants:
+
+- **V0**: Tier-2 baseline (from `packages/ahol/baseline/`) with the Q1b patch-only template.
+- **V4**: Tier-2 baseline plus full donnyclaude (105 skills, 49 agents, 8 hooks, 70 rules, MCP servers).
+
+Benchmark: **AHOL-Proxy-30** (30 tasks):
+- 15 Terminal-Bench-Core v0.1.1
+- 10 HAL SWE-bench Verified Mini
+- 5 BigCodeBench-Hard
+
+One run per variant in this phase. No triple-run sigma measurement; direction first, variance in later phase.
+
+## Budget and cost bracket
+
+From COST-MODEL.md outcome-conditional matrix:
+
+- **V0 expected cost** (per-task target ~100K on 30 tasks): ~3M floor to ~15M ceiling depending on V0 validation outcome.
+- **V4 expected cost** (per-task target ~500K on 30 tasks): ~15M nominal to ~25M ceiling.
+- **Combined budget cap**: 25M tokens (user-authorized). If projected or observed cost exceeds this cap, pause and resurface before continuing.
+- **Wall clock**: 4 to 8 hours total for both variants. Serial (not parallel) at spike scale, to simplify thermal observability and trace inspection.
+
+## V0 validation gate (5-criterion checklist)
+
+Reproduced from `packages/ahol/baseline/VALIDATION-CHECKLIST.md`:
+
+- **Gate 1**: per-task token consumption median under 100K, p95 under 150K.
+- **Gate 2**: tool-call count distribution median 5 to 15, p95 under 30.
+- **Gate 3**: zero scope-expansion failures (no new files produced).
+- **Gate 4**: zero premature-termination failures (no "Patch applied." before an Edit tool call).
+- **Gate 5**: zero clarification-request failures (no question back to user in final message).
+
+**Gate enforcement policy**: V0 must pass all five gates on at least one 30-task run before V4 runs or before the full 8-variant sweep proceeds. If any gate fails, halt and revise the template per the Q1B source's revision path (tighten stop condition, reduce max-turns, add post-Edit Bash prohibition, adopt LangChain PreCompletionChecklistMiddleware as last resort).
+
+## Container orchestration (adopts DOCKER-API-CHOICE.md verdict)
+
+- Raw Bash (no Docker MCP adoption in this phase).
+- Container naming convention: `ahol-variant-V0-<task_id>`, `ahol-variant-V4-<task_id>`.
+- Cleanup discipline: `docker rm -f ahol-variant-V*-*` at spike end; never use unprefixed `docker rm`.
+- Allowlist patterns for Claude Code Bash tool:
+  - `Bash(docker run:*)`
+  - `Bash(docker logs:*)`
+  - `Bash(docker inspect:*)`
+  - `Bash(docker exec:*)`
+  - `Bash(docker rm -f ahol-variant-*:*)`
+- Full allowlist reference in `DOCKER-API-CHOICE.md`.
+
+## Thermal protocol
+
+Re-capture protocol during the spike per `thermal-baseline.md`:
+
+1. **Pre-run**: capture baseline before the variant starts.
+2. **Mid-run**: capture at task 15 (midpoint of the 30-task run).
+3. **Post-run**: immediately after completion, before cooldown.
+4. **Cooldown**: 5 min after the post-run capture.
+
+- Log each capture as an appendix to this file once runs complete.
+- Exclude throttled runs from analysis: RED threshold is CPU die temp over 92 C OR prochots greater than 0 during the run.
+- Macs Fan Control must be running with custom curve active before the spike starts (PID check in pre-flight).
+
+## Decision tree after spike
+
+| V0 vs V4 outcome | AHOL mode | Next action |
 |---|---|---|
-| WS-4 gsd-session-start.js fires | PASS | `Session context:` marker appears 2 times in the smoke JSONL; exit 0 |
-| WS-4 emits structured additionalContext | PASS | Branch line, recent commits, test runner, backup path all present |
-| WS-1 skill-index.js fires (hook executes, exit 0) | PASS | Hook listed in hook_success attachment with content emitted |
-| WS-1 emits prompt-aware top-K manifest | DOES NOT FIRE on SessionStart | Direct invocation of `skill-index.js` with `{session_id, cwd}` stdin returns the FALLBACK message: `"Skill index ready: 105 skills available via progressive disclosure. Reference a skill by name to load its full content on demand."` because no prompt is present in SessionStart stdin. |
-| Hook errors in stderr | NONE | grep for error/fatal/exception in JSONL only matches text inside skill description content (e.g., continuous-learning skill description), not actual hook stderr |
-| Session completes cleanly | PASS | Exit 0, response: "The directory contains only a .claude subdirectory" |
+| V0 significantly outperforms V4 | cut-mode | Identify which donnyclaude components to remove; run V1 through V7 sweep to isolate contributors of the regression |
+| V4 significantly outperforms V0 | grow-mode | Identify which additions to stack; run V1 through V7 sweep to isolate best-performing subsets |
+| Rough parity (within noise) | decompose | Run full 8-variant V0 through V7 matrix for per-component attribution |
 
-**Architecture finding to surface as a follow-up**: WS-1 was registered on SessionStart but its prompt-aware-matching design requires a user prompt to be present in stdin. SessionStart fires before any user prompt exists, so the hook always falls through to its neutral fallback message. The Path B install-time `disable-model-invocation` flip on 95 non-top-K skills (committed in `bd1f8d2`) still delivers the 78% always-loaded catalog reduction documented in DELTA.md, because that work is install-time, not session-time. What is dormant is the SessionStart hook's runtime prompt-aware refinement.
+"Significantly" is defined as: at least 2 percentage points AND at least 2x the per-task cost ratio (direction lock requires both signal and cost context).
 
-The fix is a one-line registration change: move the WS-1 hook from `SessionStart` to `UserPromptSubmit` in `packages/hooks/hooks.json`, where the prompt is available. This is out of scope for this spike (no packages/ changes in spike). Recommend a follow-up commit `fix(hooks): WS-1 trigger UserPromptSubmit for actual prompt-aware behavior` after the spike concludes.
+## Budget guardrail
 
-**Pre-spike smoke verdict**: PASS. The harness runs cleanly under bd1f8d2. The WS-1 trigger placement is a known, documented, fixable gap; it does not block the SWE-bench Lite spike.
+- If projected spike cost exceeds 25M tokens: pause, surface, re-authorize before continuing.
+- If V0 per-task cost consistently exceeds 150K tokens (Gate 1 fail): halt and revise template before V4.
 
-## Bucketing plan (10 SWE-bench Lite tasks, one per difficulty bucket)
+## Pre-flight checklist
 
-Per Q10, dev-round subset is 10 tasks selected stratified by difficulty. SWE-bench Lite contains 300 tasks across 11 repositories. Native `difficulty` labels in the dataset metadata may not be granular enough; if not, fall back to historical Claude Code pass-rate stratification on SWE-bench Verified.
+Before running the spike:
 
-**Selection strategy** (to be finalized in Docker setup phase below):
-1. Load SWE-bench Lite metadata.
-2. If a `difficulty` field exists with at least 5 distinct values, bin into 10 quantile buckets and pick the median task from each bucket.
-3. If not, use SWE-bench Verified pass-rate-by-task-id (publicly available from Anthropic's Claude 4.5 leaderboard submissions) to stratify into 10 quantiles by historical Claude Code performance, then pick one task per quantile, intentionally including some hard-for-Claude tasks at the upper tail.
+- [ ] Docker Desktop running, resources tuned per `docker-config-required.md` (4 CPUs, 11.68 GiB memory)
+- [ ] Macs Fan Control running (PID check); custom CPU Proximity curve active
+- [ ] `packages/ahol/baseline/bootstrap.sh` produces a clean `.ahol/baseline/` (validated per Task 4)
+- [ ] Three benchmark datasets downloaded and images pulled (per `packages/ahol/benchmarks/README.md`)
+- [ ] SQLite task-run log schema created (per `packages/ahol/context-budgets.md` and `packages/ahol/contracts/`)
+- [ ] 25M-token budget explicitly authorized
 
-**Locked task IDs** (placeholders until Docker harness is set up and metadata is loaded):
-1. astropy__astropy-11693 (typical mid-difficulty astropy bug fix)
-2. django__django-11099 (Django ORM, well-trodden)
-3. django__django-13710 (Django admin, harder)
-4. matplotlib__matplotlib-22871 (mpl rendering, mid)
-5. mwaskom__seaborn-3010 (seaborn data viz, mid)
-6. pylint-dev__pylint-7080 (linter logic, harder)
-7. pytest-dev__pytest-5103 (test framework internals, mid)
-8. scikit-learn__scikit-learn-13439 (sklearn, hard)
-9. sphinx-doc__sphinx-8595 (docs generator, mid)
-10. sympy__sympy-13895 (symbolic math, hard)
+## Status table (PENDING runs)
 
-These are illustrative until verified against the actual SWE-bench Lite dataset. The actual selection will be recorded in `BUCKETING.md` after Docker setup and dataset load.
-
-## Docker harness setup: BLOCKED
-
-**Method**: `docker --version` to confirm the Docker daemon is available.
-
-**Result**: `command not found: docker`. Docker is not installed on this machine.
-
-**Implication**: SWE-bench Lite requires Docker for its task containers (each task spins up a per-repo, per-task container with a pinned environment). Without Docker, the actual benchmark runs cannot execute. The 6M-token spike budget cannot be spent until Docker is installed or an alternative isolation approach is adopted.
-
-**Three resolution paths** (user choice required):
-
-1. **Install Docker Desktop for Mac.** ~500 MB install, requires admin password. After install, docker --version returns `Docker version X.Y.Z`. Spike can proceed.
-2. **Use a colima-based Docker alternative.** `brew install colima docker` is a lighter-weight Docker runtime for macOS. Equivalent functionality.
-3. **Substitute SWE-bench Lite with a Docker-free proxy benchmark.** Examples: a focused subset of `tests/install.test.js` runs against a candidate harness state (cheap, self-contained, but only measures install correctness, not coding-task pass rate). This invalidates the spike's external-validity goal but produces SOME variance number.
-
-**Recommendation**: Path 1 or 2. Path 3 defeats the Correction-1 directive that AHOL benchmarks must be public, externally-validatable, leaderboard-comparable.
-
-## Run results: PENDING
-
-| Metric | Value | Status |
-|---|---|---|
-| Run 1 score (10 SWE-Lite tasks, harness bd1f8d2) | TBD | BLOCKED on Docker |
-| Run 2 score (same harness, same tasks) | TBD | BLOCKED on Docker |
-| Run 3 score (same harness, same tasks) | TBD | BLOCKED on Docker |
-| Sigma (standard deviation across 3 runs) | TBD | depends on runs |
-| Wall-clock per run | TBD | estimated 2 to 4 hours per run with full Claude Code agent |
-| Tokens per run | TBD | estimated 0.3M to 0.6M per run |
-
-## Go / no-go thresholds (per user directive)
-
-| Sigma | Verdict |
-|---|---|
-| < 2 percentage points | **GO** for full AHOL build |
-| 2 to 3 percentage points | **TIGHTEN**: AHOL is viable but needs more tasks per dev round (e.g., 20 instead of 10) to overcome variance |
-| > 3 percentage points | **NO-GO** until noise sources are identified (cache effects, model nondeterminism, task instability) |
-
-These thresholds are fixed; the spike will report sigma and emit the verdict programmatically once runs land.
-
-## What the user controls now
-
-1. **Docker authorization**: install Docker Desktop, install Colima, or accept Path 3 (Docker-free proxy benchmark with reduced validity).
-2. **WS-1 follow-up**: confirm or defer the UserPromptSubmit-trigger fix recommended above.
-3. **Spike continuation**: with Docker installed, the runs can proceed in this session or in a longer-running follow-up. 6 hours of compute time and 6M tokens is too long for a single interactive turn; surfaces a separate execution plan.
+| Metric | V0 result | V4 result | Gate pass/fail | Notes |
+|---|---|---|---|---|
+| Tasks completed / 30 | PENDING | PENDING | - | - |
+| Tasks passed | PENDING | PENDING | - | - |
+| Median per-task tokens | PENDING | PENDING | Gate 1 | <100K target, <150K limit |
+| p95 per-task tokens | PENDING | PENDING | Gate 1 | <150K limit |
+| Median tool calls | PENDING | PENDING | Gate 2 | 5 to 15 target |
+| p95 tool calls | PENDING | PENDING | Gate 2 | <30 limit |
+| Scope-expansion failures | PENDING | PENDING | Gate 3 | zero required |
+| Premature-termination failures | PENDING | PENDING | Gate 4 | zero required |
+| Clarification-request failures | PENDING | PENDING | Gate 5 | zero required |
+| Total tokens | PENDING | PENDING | - | - |
+| Wall-clock (hours) | PENDING | PENDING | - | - |
+| Peak CPU die temp | PENDING | PENDING | - | <92 C required |
+| Prochots during run | PENDING | PENDING | - | zero required |
 
 ## Em-dash audit
 
