@@ -1,0 +1,6 @@
+{
+  "name": "donnyclaude-hooks",
+  "private": true,
+  "type": "commonjs",
+  "description": "CommonJS scope for hook scripts that use require(). Hooks are copied to ~/.claude/hooks/ at install time and run outside this package's ESM context, but a local commonjs declaration lets them execute in place for testing."
+}
