@@ -128,6 +128,17 @@
           }
         ],
         "description": "Save state before context compaction"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-pre-compact-backup.js\"",
+            "timeout": 15
+          }
+        ],
+        "description": "WS-3 active backup: serialize session state to .claude/backups/{timestamp}/state.json before compaction. Fail-open. Complements the existing ECC observational pre-compact entry."
       }
     ],
     "SessionStart": [
@@ -141,6 +152,17 @@
           }
         ],
         "description": "WS-4 structured session context: git state, package manager, test runner, latest backup path. Refactor of the prior 2288-char inline one-liner."
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-backup-restore.js\"",
+            "timeout": 10
+          }
+        ],
+        "description": "WS-3 backup-restore advisor: on session start, inject path of most recent .claude/backups/ entry; advisory only, no auto-restore"
       }
     ],
     "PostToolUse": [
