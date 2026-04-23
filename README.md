@@ -56,6 +56,15 @@ donnyclaude
 
 ---
 
+## Tuned Defaults
+
+DonnyClaude ships a few opinionated harness defaults beyond the raw component count above. They go live the moment `~/.claude/settings.json` is merged at install.
+
+- **Proactive 60% compaction.** `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "60"` lowers Claude Code's automatic compaction trigger from the default ~83.5% to 60% of the context window. Per the harness research consensus (see `.planning/research/DEEP-RESEARCH.md` section 4d, "Optimal compaction thresholds"), late compaction at 83.5% lets the agent spend 15+ minutes producing degraded outputs from noisy context before the lossy summarization fires. 60% pre-empts that drift while still leaving headroom for the response buffer. Combined with the WS-3 PreCompact backup hook (active state serialization to `.claude/backups/`), context loss across compactions becomes recoverable rather than silent.
+- **Skill progressive disclosure.** Only 10 GSD workflow skills (new-project, new-milestone, plan-phase, discuss-phase, execute-phase, autonomous, progress, next, verify-work, ship) keep `disable-model-invocation: false` after install. The other ~95 skills load on demand when invoked by name, surfaced via a SessionStart hook that emits a prompt-aware top-K manifest. Net effect: ~78% reduction in always-loaded skill catalog tokens. Override per-skill via `settings.json` `skills.autoInvoke`.
+
+---
+
 ## Installation
 
 ### Prerequisites
