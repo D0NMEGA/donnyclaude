@@ -50,10 +50,15 @@ with open(os.environ["AHOL_SYSPROMPT_FILLED"], "w") as fh:
 '
 
 # Feed user turn via stdin (avoids positional-arg gobbling by --disallowedTools).
+# --bare was removed (commit fixing C5 integration-test-single FAIL): in Claude
+# Code 2.1.119 --bare bypasses project-level auth discovery and returns
+# "Not logged in" from any CWD outside an authenticated session. See
+# .planning/research/ahol/DRY-RUN-NOTES.md line 72: the dry-run already noted
+# --bare was not used; C1 added it inadvertently and mock-only self-tests
+# masked the regression until C5's first real-claude invocation.
 printf 'Apply the fix.\n' | claude \
   --disallowedTools "Write,Task,WebFetch,WebSearch,TodoWrite" \
   --print \
-  --bare \
   --model opus \
   --max-turns 50 \
   --effort medium \
