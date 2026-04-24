@@ -1,0 +1,11 @@
+{
+  "variants": [
+    {
+      "name": "V0",
+      "description": "Baseline only. Negative control. Bare Tier-2 with the Q1b patch-only template, zero skills, zero agents, zero rules, zero hooks, zero commands, zero MCP. C6 spike pair lower bound.",
+      "mutation_bundle_json": {
+        "mutations": []
+      }
+    }
+  ]
+}

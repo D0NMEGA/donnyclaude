@@ -1,0 +1,18 @@
+{
+  "variants": [
+    {
+      "name": "V6",
+      "description": "Baseline + WS-3 PreCompact active-backup hook only. State-recovery middleware isolation: serializes session state to .claude/backups/{timestamp}/state.json before compaction. Middleware-weighted variant per spike-results.md.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "add_hook",
+            "params": {
+              "hook_files": ["gsd-pre-compact-backup.js"]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

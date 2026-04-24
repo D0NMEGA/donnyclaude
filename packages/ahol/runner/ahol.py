@@ -324,27 +324,17 @@ class Shutdown:
         self.requested = True
 
 
-def load_manifest(path: Path) -> list[Variant]:
-    """load_manifest(Path('manifest.json')) returns list[Variant] from a JSON array of entries."""
-    with path.open("r", encoding="utf-8") as fh:
-        data = json.load(fh)
-    if not isinstance(data, list):
-        raise ValueError(f"manifest at {path} must be a JSON array")
-    out: list[Variant] = []
-    for entry in data:
-        if not isinstance(entry, dict):
-            raise ValueError(f"manifest entry not a dict: {entry!r}")
-        vid = entry.get("id")
-        if not isinstance(vid, str) or not vid:
-            raise ValueError(f"manifest entry missing 'id': {entry!r}")
-        bundle = entry.get("harness_bundle", [])
-        if not isinstance(bundle, list):
-            raise ValueError(f"'harness_bundle' must be a list: {entry!r}")
-        mode = entry.get("mode", "baseline")
-        if not isinstance(mode, str):
-            raise ValueError(f"'mode' must be a string: {entry!r}")
-        out.append(Variant(id=vid, harness_bundle=[str(x) for x in bundle], mode=mode))
-    return out
+def load_manifest(path: Path) -> tuple[list[Variant], dict[str, Any]]:
+    """load_manifest(Path('manifest.json')) returns (list[Variant], {name: VariantManifest}) per variant-manifest.schema.json."""
+    from ahol.runner.variants import load_variant_manifest  # noqa: PLC0415 (lazy)
+    vms = load_variant_manifest(path)
+    variants = [
+        Variant(id=vm.name, harness_bundle=[str(m.get("mutation_type", "")) for m in vm.mutations],
+                mode="bundle")
+        for vm in vms
+    ]
+    lookup: dict[str, Any] = {vm.name: vm for vm in vms}
+    return variants, lookup
 
 
 def load_tasks(benchmark_name: str, limit: Optional[int] = None) -> list[Task]:
@@ -485,15 +475,25 @@ def run_task(
         return result, rowid
 
 
+_VARIANT_MANIFEST_LOOKUP: dict[str, Any] = {}
+
+
+def _set_manifest_lookup(d: dict[str, Any]) -> None:
+    """Install name -> VariantManifest dict for _resolve_variant_harness to consult on cache miss."""
+    _VARIANT_MANIFEST_LOOKUP.clear()
+    _VARIANT_MANIFEST_LOOKUP.update(d)
+
+
 def _resolve_variant_harness(variant: Variant, use_mock: bool) -> Path:
-    """Return AHOL_BASELINE path for this variant. Mock: BASELINE_DIR. Real: variant worktree (C3)."""
+    """Return AHOL_BASELINE path for this variant. Mock or no manifest entry: BASELINE_DIR. Real: bootstrap on cache miss."""
     if use_mock:
         return BASELINE_DIR
-    target = DEFAULT_AHOL_HOME / "worktrees" / f"variant-{variant.id}"
-    if not target.is_dir():
-        logger.info("variant harness not bootstrapped at %s; falling back to BASELINE_DIR", target)
+    vm = _VARIANT_MANIFEST_LOOKUP.get(variant.id)
+    if vm is None:
+        logger.info("no manifest entry for variant %s; falling back to BASELINE_DIR", variant.id)
         return BASELINE_DIR
-    return target
+    from ahol.runner.variants import bootstrap_variant  # noqa: PLC0415 (lazy)
+    return bootstrap_variant(vm, DEFAULT_AHOL_HOME, REPO_ROOT)
 
 
 def run_variant(
@@ -667,15 +667,24 @@ def self_test() -> int:
             ahol_home = tmp_path / ".ahol"
             DEFAULT_AHOL_HOME = ahol_home
             manifest_path = tmp_path / "manifest.json"
-            manifest_path.write_text(json.dumps([
-                {"id": "V0", "harness_bundle": [], "mode": "baseline"},
-                {"id": "variant-test-01", "harness_bundle": ["ws2"], "mode": "middleware"},
-            ]))
+            manifest_path.write_text(json.dumps({"variants": [
+                {"name": "V0", "description": "self-test V0 baseline",
+                 "mutation_bundle_json": {"mutations": []}},
+                {"name": "V1", "description": "self-test V1 add_hook",
+                 "mutation_bundle_json": {"mutations": [
+                     {"mutation_type": "add_hook",
+                      "params": {"hook_files": ["gsd-session-start.js"]}}]}},
+            ]}))
             round_id = "self-test-" + uuid.uuid4().hex[:8]
             conn = init_db(tmp_path / "ahol.db")
             tracer = setup_tracer(round_id, ahol_home, otlp_endpoint=None)
             shutdown = Shutdown()
-            manifest = load_manifest(manifest_path)
+            manifest, lookup = load_manifest(manifest_path)
+            _set_manifest_lookup(lookup)
+            from ahol.runner.variants import bootstrap_variant, reset_bootstrap_cache  # noqa: PLC0415
+            reset_bootstrap_cache()
+            for vm in lookup.values():
+                bootstrap_variant(vm, ahol_home, REPO_ROOT)
             tasks = load_tasks("self-test")
             summary = run_round(manifest=manifest, tasks=tasks, round_id=round_id, conn=conn,
                                 tracer=tracer, shutdown=shutdown, concurrency=2, use_mock=True)
@@ -746,7 +755,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     tracer = setup_tracer(args.round_id, ahol_home, args.otlp_endpoint)
     shutdown = Shutdown()
     shutdown.install()
-    manifest = load_manifest(args.manifest)
+    manifest, lookup = load_manifest(args.manifest)
+    _set_manifest_lookup(lookup)
     tasks = load_tasks(args.benchmark)
     logger.info(
         "starting round %s: %d variants x %d tasks (concurrency=%d)",

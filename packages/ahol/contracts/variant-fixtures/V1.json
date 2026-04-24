@@ -1,0 +1,18 @@
+{
+  "variants": [
+    {
+      "name": "V1",
+      "description": "Baseline + WS-4 session-start hook only. Single-hook isolation: structured session context (git state, package manager, test runner, latest backup path) injected at session start.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "add_hook",
+            "params": {
+              "hook_files": ["gsd-session-start.js"]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

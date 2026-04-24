@@ -1,0 +1,32 @@
+{
+  "variants": [
+    {
+      "name": "V5",
+      "description": "Baseline + 70 rules, no skills, no hooks. Rule-only contribution probe. Sources are the 13 language-specific rule directories under packages/rules/.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "add_rule_file",
+            "params": {
+              "sources": [
+                "common",
+                "cobol",
+                "cpp",
+                "csharp",
+                "golang",
+                "java",
+                "kotlin",
+                "perl",
+                "php",
+                "python",
+                "rust",
+                "swift",
+                "typescript"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -14,20 +14,23 @@ See `packages/ahol/GROUP-C-SCOPE.md` for full scope,
 |------|------|
 | `ahol.py` | Tier-1 orchestrator. Entry point: `python3 packages/ahol/runner/ahol.py`. |
 | `benchmarks.py` | Benchmark loaders invoked by `ahol.load_tasks()`. |
+| `variants.py` | Variant worktree bootstrap and mutation registry (Task C3). |
 | `__init__.py`, `../__init__.py` | Namespace markers so the package is importable as `ahol.runner`. |
 | `py.typed`, `../py.typed` | PEP 561 marker so mypy treats the package as typed. |
 | `requirements.txt` | Runtime + dev dependencies. |
 
 ## Invocation
 
-### Self-test (no network, no claude, no docker, under 3s)
+### Self-test (no network, no claude, no docker, under 15s)
 
 ```
 python3 packages/ahol/runner/ahol.py --self-test
 ```
 
-Mock round with 2 variants x 2 tasks. Exercises SQLite schema, OTel span
-emission, schema validation, and shutdown paths.
+Mock round with 2 variants (V0 + V1) x 2 tasks. Exercises SQLite schema, OTel
+span emission, schema validation, shutdown paths, and (added in C3) variant
+worktree bootstrap via `bootstrap.sh` plus mutation application from a manifest
+that validates against `variant-manifest.schema.json`.
 
 ### Self-test-benchmarks (network required, under 40s on a warm cache)
 
@@ -105,10 +108,70 @@ the benchmark has no real upstream commit.
 Run from `packages/` so the `ahol.runner` namespace resolves:
 
 ```
-cd packages && PYTHONPATH=. python3 -m mypy --strict ahol/runner/ahol.py ahol/runner/benchmarks.py
+cd packages && PYTHONPATH=. python3 -m mypy --strict ahol/runner/ahol.py ahol/runner/benchmarks.py ahol/runner/variants.py
 ```
 
-Expected: `Success: no issues found in 2 source files`.
+Expected: `Success: no issues found in 3 source files`.
+
+## Variant Bootstrap (Task C3)
+
+`variants.py` builds Tier-3 variant worktrees lazily on the first task of each
+round. The orchestrator caches the resolved worktree path per variant for the
+remainder of the round; subsequent tasks reuse the same worktree without
+re-running `bootstrap.sh` or re-applying mutations.
+
+### Worktree lifecycle
+
+| Phase | Trigger | Action |
+|-------|---------|--------|
+| Create | `_resolve_variant_harness` cache miss | run `packages/ahol/baseline/bootstrap.sh` with `AHOL_TARGET=.ahol/worktrees/variant-{name}/`, then dispatch each manifest mutation through `apply_mutation`, then call `validate_variant_worktree` |
+| Reuse  | next task in the same round | look up cached path in `_BOOTSTRAP_CACHE`; re-validate; if invalid, tear down and rebuild |
+| Cleanup | end of round (caller-controlled) | `cleanup_variant(worktree_path)` removes the dir; refuses any path not under `.ahol/worktrees/` |
+
+`reset_bootstrap_cache()` clears the in-process dict; the self-test calls it on
+entry so successive `--self-test` runs in the same Python process do not see
+stale entries.
+
+### Mutation handler registry
+
+The 10 atomic types declared in `packages/ahol/CONTAMINATION-ANALYSIS.md` plus
+the `install_full_donnyclaude` composite for the V4 spike control:
+
+| `mutation_type` | Status (C3) | Handler |
+|-----------------|-------------|---------|
+| `add_hook` | Implemented | copies named files from `packages/hooks/` into `.claude/hooks/` |
+| `add_rule_file` | Implemented | copies files or dirs from `packages/rules/` into `.claude/rules/` |
+| `modify_skill_frontmatter` | Implemented | rewrites a YAML frontmatter line in `.claude/skills/<name>/SKILL.md` |
+| `modify_compaction_threshold` | Implemented | sets `compaction.threshold` in `.claude/settings.json` |
+| `modify_reasoning_effort` | Implemented | sets `reasoning.effort` (low\|medium\|high) in `.claude/settings.json` |
+| `install_full_donnyclaude` | Implemented (V4 only) | copies `packages/{hooks,skills,agents,rules,commands}` and any root `.mcp.json` into `.claude/` |
+| `remove_hook` | Stubbed | raises `NotImplementedError` (C3 deferred) |
+| `modify_hook_config` | Stubbed | raises `NotImplementedError` (C3 deferred) |
+| `add_rule_to_agent_prompt` | Stubbed | raises `NotImplementedError` (C3 deferred) |
+| `remove_rule_from_agent_prompt` | Stubbed | raises `NotImplementedError` (C3 deferred) |
+| `remove_rule_file` | Stubbed | raises `NotImplementedError` (C3 deferred) |
+
+### Adding a new mutation type
+
+1. Add the new name to the `enum` array in
+   `packages/ahol/contracts/variant-manifest.schema.json`.
+2. Add the name to either `ALLOWED_ATOMIC_MUTATIONS` (atomic) or
+   `COMPOSITE_MUTATIONS` (composite) in `variants.py`.
+3. Implement `_handle_<name>(params, target, repo_root)`. Keep it small (10 to
+   30 lines). Validate `params` shape before touching the filesystem.
+4. Register it in `_MUTATION_HANDLERS`.
+5. If the handler has a deterministic post-mutation marker, extend
+   `validate_variant_worktree` to confirm the marker exists.
+6. Add a fixture under `packages/ahol/contracts/variant-fixtures/` that
+   exercises the new type, and re-run the self-test.
+
+### Variant fixtures
+
+`packages/ahol/contracts/variant-fixtures/V0.json` through `V7.json` cover the
+8-variant matrix from `.planning/research/ahol/spike-results.md`. Each fixture
+is a complete manifest containing a single variant entry and validates
+independently against `variant-manifest.schema.json`. C3's self-test exercises
+V0 + V1 only to keep the wall-clock under 15 seconds.
 
 ## Scope deviations (carried over from C1)
 

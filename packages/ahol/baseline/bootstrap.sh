@@ -37,7 +37,7 @@ set -euo pipefail
 # in packages/ahol/baseline/. If source files change, regenerate this script.
 # ---------------------------------------------------------------------------
 EXPECTED_SPROMPT_SHA256="d888c24b007968d1a42418fec37de34fa4bf99d4f1b613a94431493f5214a026"
-EXPECTED_INVOKE_SHA256="dce6f2f61090790300b162b65e0aec90a7246625d7ba759b3b23fe4bc9b300ea"
+EXPECTED_INVOKE_SHA256="d2e6a0c4ef27219da5935ed2f810c80aaecd65f2acccc897548452e3799be330"
 
 # ---------------------------------------------------------------------------
 # Helpers

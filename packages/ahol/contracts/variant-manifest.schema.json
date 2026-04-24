@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://donnyclaude.dev/ahol/contracts/variant-manifest.schema.json",
+  "title": "AHOL Variant Manifest",
+  "description": "Schema for the variant manifest JSON consumed by ahol.runner.variants.bootstrap_variant. The manifest declares one or more Tier-3 variants. Each variant has a unique name, an ordered mutation bundle (zero or more atomic mutations from the 10 declared types in CONTAMINATION-ANALYSIS.md, plus the install_full_donnyclaude composite for the V4 spike control), and an optional human description. The manifest is the source of truth: a worktree mutation that is not in the manifest is not in the variant. Variant name uniqueness is enforced by the loader, not the schema.",
+  "type": "object",
+  "required": ["variants"],
+  "additionalProperties": false,
+  "properties": {
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per variant. Order is preserved; the orchestrator runs variants in manifest order (subject to concurrency).",
+      "items": { "$ref": "#/$defs/variant" }
+    }
+  },
+  "$defs": {
+    "variant": {
+      "type": "object",
+      "required": ["name", "mutation_bundle_json"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Variant identifier. Must match either the canonical AHOL short form (V followed by digits, for example V7) or the long form (variant-<slug>). Used as the worktree directory suffix and the variant_id in SQLite, OTel spans, and contract payloads. Loader enforces uniqueness across the manifest.",
+          "pattern": "^(V[0-9]+|variant-[0-9a-z-]+)$"
+        },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Optional free-form description. Used in logs and the round summary; not load-bearing for behavior.",
+          "minLength": 1
+        },
+        "mutation_bundle_json": { "$ref": "#/$defs/mutation_bundle" }
+      }
+    },
+    "mutation_bundle": {
+      "type": "object",
+      "required": ["mutations"],
+      "additionalProperties": false,
+      "description": "Ordered collection of atomic and composite mutations applied to a freshly bootstrapped Tier-2 baseline to produce the Tier-3 variant worktree. Empty list (mutations: []) is valid and produces V0-style bare baseline.",
+      "properties": {
+        "mutations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/mutation" }
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "required": ["mutation_type", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "mutation_type": {
+          "type": "string",
+          "description": "10 atomic mutation types from CONTAMINATION-ANALYSIS.md plus the install_full_donnyclaude composite used by the V4 spike control. Unknown types raise ValueError in apply_mutation.",
+          "enum": [
+            "add_hook",
+            "remove_hook",
+            "modify_hook_config",
+            "add_rule_to_agent_prompt",
+            "remove_rule_from_agent_prompt",
+            "add_rule_file",
+            "remove_rule_file",
+            "modify_skill_frontmatter",
+            "modify_compaction_threshold",
+            "modify_reasoning_effort",
+            "install_full_donnyclaude"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "description": "Free-shape per-mutation parameter object. Each handler defines its own required keys; see ahol.runner.variants for handler signatures."
+        }
+      }
+    }
+  }
+}

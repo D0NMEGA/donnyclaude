@@ -1,0 +1,23 @@
+{
+  "variants": [
+    {
+      "name": "V2",
+      "description": "Baseline + WS-1/2/3/4 hook stack. Full hook stack, no skills or rules. Probes whether the hook ensemble outperforms any single hook in isolation.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "add_hook",
+            "params": {
+              "hook_files": [
+                "skill-index.js",
+                "gsd-verify-edit.js",
+                "gsd-pre-compact-backup.js",
+                "gsd-session-start.js"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

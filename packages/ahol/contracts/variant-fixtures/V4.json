@@ -1,0 +1,16 @@
+{
+  "variants": [
+    {
+      "name": "V4",
+      "description": "Baseline + full donnyclaude (105 skills, 49 agents, 8 hooks, 70 rules, MCP servers). Positive control. C6 spike pair upper bound. Uses the install_full_donnyclaude composite mutation to copy packages/{hooks,skills,agents,rules,commands} into the worktree's .claude/ directory.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "install_full_donnyclaude",
+            "params": {}
+          }
+        ]
+      }
+    }
+  ]
+}

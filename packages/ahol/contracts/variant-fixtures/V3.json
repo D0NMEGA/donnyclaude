@@ -1,0 +1,18 @@
+{
+  "variants": [
+    {
+      "name": "V3",
+      "description": "Baseline + WS-2 PostToolUse verify-edit hook only. Lint-gate middleware isolation: runs project lint and typecheck after every Edit or Write and injects failures back into context. Middleware-weighted variant per spike-results.md.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "add_hook",
+            "params": {
+              "hook_files": ["gsd-verify-edit.js"]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

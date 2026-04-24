@@ -1,0 +1,34 @@
+{
+  "variants": [
+    {
+      "name": "V7",
+      "description": "Baseline + WS-1/2/3/4 hook stack + Context7 MCP server. Hook plus MCP interaction probe. Note: modify_hook_config is C3-stubbed; this fixture validates against the schema but cannot fully bootstrap until the handler ships.",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "add_hook",
+            "params": {
+              "hook_files": [
+                "skill-index.js",
+                "gsd-verify-edit.js",
+                "gsd-pre-compact-backup.js",
+                "gsd-session-start.js"
+              ]
+            }
+          },
+          {
+            "mutation_type": "modify_hook_config",
+            "params": {
+              "mcp_servers": {
+                "context7": {
+                  "command": "npx",
+                  "args": ["-y", "@upstash/context7-mcp@latest"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
