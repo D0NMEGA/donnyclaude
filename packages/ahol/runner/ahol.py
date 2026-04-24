@@ -61,7 +61,7 @@ LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 logger = logging.getLogger("ahol")
 
 SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS task_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, round_id TEXT NOT NULL, variant_id TEXT NOT NULL, task_id TEXT NOT NULL, sequence INTEGER NOT NULL, passed INTEGER NOT NULL, tokens_used INTEGER NOT NULL, tool_call_count INTEGER, cache_read_input_tokens INTEGER, wall_clock_sec REAL NOT NULL, patch_sha TEXT, error_summary TEXT, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, exit_code INTEGER, UNIQUE (round_id, variant_id, task_id));
+CREATE TABLE IF NOT EXISTS task_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, round_id TEXT NOT NULL, variant_id TEXT NOT NULL, task_id TEXT NOT NULL, sequence INTEGER NOT NULL, passed INTEGER NOT NULL, tokens_used INTEGER NOT NULL, tool_call_count INTEGER, cache_read_input_tokens INTEGER, cache_creation_input_tokens INTEGER DEFAULT 0, wall_clock_sec REAL NOT NULL, patch_sha TEXT, error_summary TEXT, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, exit_code INTEGER, UNIQUE (round_id, variant_id, task_id));
 CREATE TABLE IF NOT EXISTS variant_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, round_id TEXT NOT NULL, variant_id TEXT NOT NULL, tasks_completed INTEGER NOT NULL, tasks_passed INTEGER NOT NULL, total_tokens INTEGER NOT NULL, wall_clock_sec REAL NOT NULL, error_log TEXT, sqlite_row_ids TEXT NOT NULL, UNIQUE (round_id, variant_id));
 CREATE TABLE IF NOT EXISTS round_summaries (round_id TEXT PRIMARY KEY, champion_variant_id TEXT, champion_score REAL NOT NULL, prior_champion_score REAL NOT NULL, sigma_gate_passed INTEGER NOT NULL, cost_gate_passed INTEGER NOT NULL, total_tokens INTEGER NOT NULL, total_wall_clock_sec REAL NOT NULL, timestamp TEXT NOT NULL, summary_json TEXT NOT NULL);
 """
@@ -99,6 +99,7 @@ class TaskResult:
     error_summary: Optional[str]
     tool_call_count: Optional[int] = None
     cache_read_input_tokens: Optional[int] = None
+    cache_creation_input_tokens: Optional[int] = None
 
 
 @dataclass
@@ -143,7 +144,7 @@ def validate_payload(payload: dict[str, Any], schema_name: str) -> None:
 
 
 def init_db(db_path: Path) -> sqlite3.Connection:
-    """init_db(Path('.ahol/benchmarks.db')) returns a WAL-mode connection with schema applied."""
+    """init_db(Path('.ahol/ahol.db')) returns a WAL-mode connection with schema applied."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), isolation_level=None, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -159,11 +160,14 @@ def insert_task_result(
     """Insert one task row and return its rowid."""
     cur = conn.execute(
         "INSERT OR REPLACE INTO task_runs (round_id, variant_id, task_id, sequence, passed, "
-        "tokens_used, tool_call_count, cache_read_input_tokens, wall_clock_sec, patch_sha, "
-        "error_summary, started_at, ended_at, exit_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "tokens_used, tool_call_count, cache_read_input_tokens, cache_creation_input_tokens, "
+        "wall_clock_sec, patch_sha, error_summary, started_at, ended_at, exit_code) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (round_id, variant_id, result.task_id, sequence, int(result.passed), result.tokens_used,
-         result.tool_call_count, result.cache_read_input_tokens, result.wall_clock_sec,
-         result.patch_sha, result.error_summary, started_at, ended_at, exit_code),
+         result.tool_call_count, result.cache_read_input_tokens,
+         int(result.cache_creation_input_tokens or 0),
+         result.wall_clock_sec, result.patch_sha, result.error_summary,
+         started_at, ended_at, exit_code),
     )
     return int(cur.lastrowid or 0)
 
@@ -202,9 +206,22 @@ def snapshot_session_files() -> dict[Path, float]:
     return out
 
 
+def snapshot_project_dirs() -> set[Path]:
+    """snapshot_project_dirs() returns the set of top-level project slug dirs
+    under CLAUDE_PROJECTS_DIR at call time. Used to identify which session
+    directories a task's invocation created, so extract_metrics can be scoped
+    to ONLY that task's sessions rather than aggregating over every concurrent
+    variant's sessions. Fixes a byte-identity bug where V0 and V4 under
+    concurrency=2 both summed both variants' session files.
+    """
+    if not CLAUDE_PROJECTS_DIR.is_dir():
+        return set()
+    return {p for p in CLAUDE_PROJECTS_DIR.iterdir() if p.is_dir()}
+
+
 def parse_session_jsonl(path: Path) -> dict[str, int]:
-    """parse_session_jsonl(session_path) returns {'tokens_used': N, 'cache_read_input_tokens': M, 'tool_call_count': K}."""
-    tokens = cache_read = tool_calls = 0
+    """parse_session_jsonl(session_path) returns {'tokens_used': N, 'cache_read_input_tokens': M, 'cache_creation_input_tokens': C, 'tool_call_count': K}."""
+    tokens = cache_read = cache_creation = tool_calls = 0
     try:
         with path.open("r", encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -227,6 +244,7 @@ def parse_session_jsonl(path: Path) -> dict[str, int]:
                     tokens += int(usage.get("cache_creation_input_tokens") or 0)
                     tokens += int(usage.get("cache_read_input_tokens") or 0)
                     cache_read += int(usage.get("cache_read_input_tokens") or 0)
+                    cache_creation += int(usage.get("cache_creation_input_tokens") or 0)
                 content = msg.get("content")
                 if isinstance(content, list):
                     for block in content:
@@ -234,31 +252,58 @@ def parse_session_jsonl(path: Path) -> dict[str, int]:
                             tool_calls += 1
     except OSError:
         pass
-    return {"tokens_used": tokens, "cache_read_input_tokens": cache_read, "tool_call_count": tool_calls}
+    return {
+        "tokens_used": tokens,
+        "cache_read_input_tokens": cache_read,
+        "cache_creation_input_tokens": cache_creation,
+        "tool_call_count": tool_calls,
+    }
 
 
 def extract_metrics(
     before: dict[Path, float], t_start: float, t_end: float,
+    scope_dirs: Optional[set[Path]] = None,
 ) -> dict[str, Optional[int]]:
-    """extract_metrics(before_snap, t_start, t_end) aggregates over session files modified in window.
+    """extract_metrics(before_snap, t_start, t_end, scope_dirs) aggregates over
+    session files modified in window, optionally scoped to given project dirs.
 
     t_start and t_end are epoch seconds (time.time()), NOT time.monotonic(); the
     window is compared against os.stat().st_mtime which is also epoch. The C5
     integration test surfaced a clock mismatch where monotonic clocks made the
     window unreachable. Window padded -5s / +30s to absorb post-invocation
     session-file flush latency.
+
+    scope_dirs (2026-04-24): when supplied, only JSONL files under those
+    directories are counted. Prevents cross-variant contamination under
+    concurrent execution — without this filter, a V0 task running at the same
+    time as a V4 task would aggregate over BOTH variants' session JSONL files
+    whose mtime falls in the overlapping window, producing byte-identical
+    metrics across variants and defeating variant differentiation entirely.
     """
     after = snapshot_session_files()
     candidates: set[Path] = set()
+    scope_prefixes: Optional[list[str]] = None
+    if scope_dirs is not None:
+        scope_prefixes = [str(d) + os.sep for d in scope_dirs]
     for p, mt in after.items():
         in_window = t_start - 5.0 <= mt <= t_end + 30.0
         is_new_or_newer = p not in before or mt > before[p]
-        if in_window and is_new_or_newer:
+        in_scope = True
+        if scope_prefixes is not None:
+            p_str = str(p)
+            in_scope = any(p_str.startswith(prefix) for prefix in scope_prefixes)
+        if in_window and is_new_or_newer and in_scope:
             candidates.add(p)
     if not candidates:
         logger.warning("no session file modified during task window; token metrics unavailable")
-        return {"tokens_used": None, "cache_read_input_tokens": None, "tool_call_count": None}
-    agg = {"tokens_used": 0, "cache_read_input_tokens": 0, "tool_call_count": 0}
+        return {
+            "tokens_used": None, "cache_read_input_tokens": None,
+            "cache_creation_input_tokens": None, "tool_call_count": None,
+        }
+    agg = {
+        "tokens_used": 0, "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0, "tool_call_count": 0,
+    }
     for p in candidates:
         m = parse_session_jsonl(p)
         for k, v in m.items():
@@ -576,6 +621,50 @@ def _run_real_pipeline(
     invoke_sh = BASELINE_DIR / "invoke.sh"
     if not invoke_sh.is_file():
         raise FileNotFoundError(f"invoke.sh not found at {invoke_sh}")
+    # Variant differentiation: symlink the variant's .claude/ into the cloned
+    # repo. Combined with invoke.sh's --setting-sources project, this makes
+    # claude discover ONLY the variant's config (not the caller's ~/.claude/).
+    variant_dotclaude = variant_harness_path / ".claude"
+    # Fail-loud on vanished variant .claude/ for a variant with mutations.
+    # Bootstrap populates variant_harness/.claude/ before run_task; if it is
+    # missing here, something wiped it between bootstrap return and task
+    # execution (see HEISENBUG-AUDIT.md). Silent skip would make the task
+    # run as bare V0, producing invalid measurement data.
+    if not variant_dotclaude.is_dir():
+        expected_mutations = 0
+        vm = _VARIANT_MANIFEST_LOOKUP.get(variant_id)
+        if vm is not None:
+            expected_mutations = len(getattr(vm, "mutations", []) or [])
+        if expected_mutations > 0:
+            raise RuntimeError(
+                f"variant {variant_id} expects .claude/ populated by "
+                f"{expected_mutations} mutation(s) but {variant_dotclaude} is "
+                f"missing at task-invocation time. Bootstrap ran and succeeded "
+                f"but the directory was wiped before this task's symlink step. "
+                f"Refusing to invoke claude with an empty harness."
+            )
+        logger.warning(
+            "variant %s has no mutations and no .claude/ at invocation time; "
+            "proceeding with bare harness (legitimate for zero-mutation baseline)",
+            variant_id,
+        )
+    if variant_dotclaude.is_dir():
+        repo_dotclaude = repo_path / ".claude"
+        if repo_dotclaude.exists() or repo_dotclaude.is_symlink():
+            if repo_dotclaude.is_symlink() or repo_dotclaude.is_dir():
+                try:
+                    if repo_dotclaude.is_symlink():
+                        repo_dotclaude.unlink()
+                    else:
+                        shutil.rmtree(repo_dotclaude)
+                except OSError as exc:
+                    logger.warning("could not clear repo .claude at %s: %s", repo_dotclaude, exc)
+        try:
+            os.symlink(variant_dotclaude, repo_dotclaude, target_is_directory=True)
+        except OSError as exc:
+            logger.error("symlink variant .claude failed (%s -> %s): %s",
+                         repo_dotclaude, variant_dotclaude, exc)
+            raise
     env = {**os.environ, "AHOL_BASELINE": str(variant_harness_path),
            "TASK_PROMPT": task.issue_body}
     stdout = stderr = ""
@@ -638,12 +727,14 @@ def run_task(
         t_start = time.monotonic()
         ts_start_epoch = time.time()
         before = snapshot_session_files() if not use_mock else {}
+        projects_before = snapshot_project_dirs() if not use_mock else set()
         stdout = stderr = ""
         exit_code: Optional[int] = None
         error_summary: Optional[str] = None
         tokens_used: int
         tool_call_count: Optional[int]
         cache_read: int
+        cache_creation: int
         passed: bool
         patch_sha: Optional[str]
         patch: str = ""
@@ -655,6 +746,7 @@ def run_task(
             tokens_used = 1500 + sequence * 100
             tool_call_count = 3
             cache_read = 1000 if sequence > 0 else 0
+            cache_creation = 500 if sequence > 0 else 0
             passed = True
             patch_sha = hashlib.sha1(f"{variant_id}/{task.id}".encode()).hexdigest()
         else:
@@ -671,19 +763,40 @@ def run_task(
                 logger.error("pipeline crash %s/%s: %s", variant_id, task.id, exc)
             t_end = time.monotonic()
             ts_end_epoch = time.time()
-            m = extract_metrics(before, ts_start_epoch, ts_end_epoch)
+            # Scope extract_metrics to the project dirs this task CREATED. Without
+            # this scope under concurrency>=2, V0 and V4 running overlapping
+            # windows both aggregate over BOTH variants' JSONL files and produce
+            # byte-identical metrics. See snapshot_project_dirs docstring.
+            projects_after = snapshot_project_dirs()
+            new_project_dirs = projects_after - projects_before
+            if not new_project_dirs:
+                logger.warning(
+                    "no new project dir detected for %s/%s; falling back to unscoped extract_metrics",
+                    variant_id, task.id,
+                )
+            m = extract_metrics(
+                before, ts_start_epoch, ts_end_epoch,
+                scope_dirs=new_project_dirs if new_project_dirs else None,
+            )
             tokens_used = int(m["tokens_used"] or 0)
             tool_call_count = m["tool_call_count"]
             cache_read = int(m["cache_read_input_tokens"] or 0)
+            cache_creation = int(m.get("cache_creation_input_tokens") or 0)
             patch_sha = hashlib.sha1(patch.encode("utf-8", errors="replace")).hexdigest() if passed else None
 
         wall = time.monotonic() - t_start
         ended_at = datetime.now(timezone.utc)
+        # Token cap removed 2026-04-24. The previous min(..., 2_000_000) clamp
+        # truncated real usage on every task (observed cache_read alone was
+        # 3.5M-5.1M per task on the V0-vs-V4 diagnostic spike), making the
+        # --budget-cap argument meaningless. Real token counts from JSONL
+        # parsing are authoritative.
         result = TaskResult(
             task_id=task.id, passed=passed,
-            tokens_used=min(max(int(tokens_used), 0), 2_000_000),
+            tokens_used=max(int(tokens_used), 0),
             wall_clock_sec=wall, patch_sha=patch_sha, error_summary=error_summary,
             tool_call_count=tool_call_count, cache_read_input_tokens=cache_read,
+            cache_creation_input_tokens=cache_creation,
         )
         payload_sha = result.patch_sha if result.patch_sha is not None else "no_patch"
         payload: dict[str, Any] = {
@@ -982,7 +1095,7 @@ def integration_test_single() -> int:
     [vm0] = load_variant_manifest(fixtures / "V0.json", contracts_dir=CONTRACTS_DIR)
     harness = bootstrap_variant(vm0, DEFAULT_AHOL_HOME, REPO_ROOT)
     round_id = f"integ-test-{uuid.uuid4().hex[:8]}"
-    conn = init_db(DEFAULT_AHOL_HOME / "benchmarks.db")
+    conn = init_db(DEFAULT_AHOL_HOME / "ahol.db")
     tracer = setup_tracer(round_id, DEFAULT_AHOL_HOME, otlp_endpoint=None)
     shutdown = Shutdown()
     variant = Variant(id=vm0.name, harness_bundle=[], mode="bundle")
@@ -1011,6 +1124,135 @@ def integration_test_single() -> int:
     return 0
 
 
+def calibration_check(benchmark: str = "ahol-proxy-15", task_limit: int = 2) -> int:
+    """Regression gate for variant differentiation (discovery-based).
+
+    Runs the first `task_limit` tasks of `benchmark` through both V0 and V4
+    using the shipping variant-fixtures manifests, then asserts that for
+    every V4 task Claude Code discovered the variant's project-level
+    skills at invocation time. V0 is bypassed (zero-mutation baseline has
+    nothing to discover).
+
+    Gate derivation (Direction B, 2026-04-24):
+      After 8 failed cycles trying to infer variant differentiation from
+      cache-token ratios (see HEISENBUG-AUDIT.md for the Case-B wipe that
+      defeated both per-turn cache_read and first-turn cache_creation
+      gates), the gate pivoted to direct discovery verification: did
+      V4's skills appear in the session JSONL that Claude Code wrote?
+      See packages/ahol/runner/discovery.py for the implementation.
+
+      V0 bypass rationale: V0's manifest has zero mutations, so its
+      .claude/ tree contains only the baseline settings.json (no
+      skills/hooks/agents/rules/commands). There is nothing for Claude
+      Code to discover, so V0 is recorded as "bypass" and its presence
+      or absence in the skill_listing is not gated on.
+
+      cache_creation is retained in the diagnostic table as informational
+      (it remains useful for tracking preamble-size trends across
+      cycles) but is no longer gate-bearing.
+
+    Exit 0 on pass (V0 rows present + every V4 row passes discovery),
+    1 on any failure. Used as both a regression gate and step 5 of the
+    post-diagnostic fix smoke test.
+    """
+    from ahol.runner.discovery import (  # noqa: PLC0415 (lazy, avoids at-import cost)
+        select_variant_markers, verify_variant_discovery,
+    )
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    fixtures = CONTRACTS_DIR / "variant-fixtures"
+    v0_manifest = fixtures / "V0.json"
+    v4_manifest = fixtures / "V4.json"
+    if not v0_manifest.is_file() or not v4_manifest.is_file():
+        print(f"calibration-check FAIL: variant fixtures missing at {fixtures}")
+        return 1
+    skills_dir = REPO_ROOT / "packages" / "skills"
+    try:
+        markers = select_variant_markers(skills_dir)
+    except ValueError as exc:
+        print(f"calibration-check FAIL: marker selection failed: {exc}")
+        return 1
+    print(f"calibration-check: V4 discovery markers = {markers}")
+    combined = json.loads(v0_manifest.read_text())
+    combined["variants"] = combined["variants"] + json.loads(v4_manifest.read_text())["variants"]
+    tmp_manifest = Path(tempfile.mkstemp(prefix="ahol-calibration-", suffix=".json")[1])
+    tmp_manifest.write_text(json.dumps(combined, indent=2))
+    round_id = f"calibration-{uuid.uuid4().hex[:8]}"
+    ahol_home = DEFAULT_AHOL_HOME
+    conn = init_db(ahol_home / "ahol.db")
+    tracer = setup_tracer(round_id, ahol_home, otlp_endpoint=None)
+    shutdown = Shutdown()
+    manifest, lookup = load_manifest(tmp_manifest)
+    _set_manifest_lookup(lookup)
+    tasks = load_tasks(benchmark, limit=task_limit)
+    print(f"calibration-check: round_id={round_id} benchmark={benchmark} tasks={len(tasks)}")
+    t0 = time.monotonic()
+    try:
+        # concurrency=1: extract_metrics scopes by project-dir delta, which
+        # under concurrency>=2 captures BOTH concurrent variants' newly-
+        # created ~/.claude/projects/ dirs in each task's scope.
+        run_round(
+            manifest=manifest, tasks=tasks, round_id=round_id, conn=conn,
+            tracer=tracer, shutdown=shutdown, concurrency=1, use_mock=False,
+        )
+    except Exception as exc:
+        print(f"calibration-check FAIL: run_round crashed: {exc}")
+        return 1
+    finally:
+        conn.close()
+    wall = time.monotonic() - t0
+    verify_conn = sqlite3.connect(str(ahol_home / "ahol.db"))
+    try:
+        rows = verify_conn.execute(
+            "SELECT task_id, variant_id, tokens_used, tool_call_count, "
+            "cache_read_input_tokens, cache_creation_input_tokens "
+            "FROM task_runs WHERE round_id=? ORDER BY task_id, variant_id",
+            (round_id,),
+        ).fetchall()
+    finally:
+        verify_conn.close()
+    by_task: dict[str, dict[str, tuple[int, Optional[int], int, int]]] = {}
+    for task_id, variant_id, tokens_used, tool_call_count, cache_read, cache_creation in rows:
+        by_task.setdefault(task_id, {})[variant_id] = (
+            tokens_used, tool_call_count, cache_read, int(cache_creation or 0),
+        )
+    failures: list[str] = []
+    print(
+        f"{'task':<32} {'V0 cc':>10} {'V4 cc':>10} {'V4 markers found':<40} verdict"
+    )
+    for task_id in sorted(by_task.keys()):
+        v0 = by_task[task_id].get("V0")
+        v4 = by_task[task_id].get("V4")
+        if v0 is None or v4 is None:
+            failures.append(f"{task_id}: missing row (V0={v0} V4={v4})")
+            print(f"{task_id:<32} MISSING")
+            continue
+        _, _, _, v0_cc = v0
+        _, _, _, v4_cc = v4
+        v4_ok, v4_diag, v4_found = verify_variant_discovery(
+            round_id, "V4", task_id, markers,
+        )
+        markers_col = f"{len(v4_found)}/{len(markers)}: {','.join(v4_found) or '-'}"
+        if len(markers_col) > 39:
+            markers_col = markers_col[:36] + "..."
+        verdict = "PASS" if v4_ok else "FAIL"
+        print(
+            f"{task_id:<32} {v0_cc:>10} {v4_cc:>10} {markers_col:<40} {verdict}"
+        )
+        if not v4_ok:
+            failures.append(f"{task_id}: V4 discovery {v4_diag}")
+    print(f"calibration-check wall={wall:.1f}s round_id={round_id}")
+    if failures:
+        print(f"calibration-check FAIL: {len(failures)} task(s) failed V4 discovery gate")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    print(
+        f"calibration-check PASS: V4 discovered project skills on all "
+        f"{len(by_task)} task(s) (V0 bypass; >=3/5 markers required)"
+    )
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """AHOL CLI; --self-test runs a mock cycle, otherwise runs a real round."""
     p = argparse.ArgumentParser(
@@ -1026,11 +1268,31 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--integration-test-single", action="store_true",
         help="Run one real django__django-11099 task through the full pipeline (network + Docker + ~3 min + claude tokens)",
     )
+    p.add_argument(
+        "--calibration-check", action="store_true",
+        help="Regression gate: run 2 tasks through V0 and V4 and assert that V4 discovered its project-level skills on every task via session-JSONL inspection (V0 is bypassed). Discovery-based gate replaces the cache-token-ratio approach; see discovery.py and HEISENBUG-AUDIT.md for background.",
+    )
     p.add_argument("--manifest", type=Path, help="Path to variant manifest JSON")
     p.add_argument("--benchmark", type=str, default="ahol-proxy-30", help="Benchmark name")
     p.add_argument("--round-id", type=str, help="Round ID (ISO-8601 UTC recommended)")
-    p.add_argument("--concurrency", type=int, default=4, help="Variant-runner fan-out")
+    p.add_argument(
+        "--concurrency", type=int, default=1,
+        help=(
+            "Variant-runner fan-out. Default=1 (serialized) until expected-slug "
+            "scoping lands in extract_metrics: under concurrency>=2 the "
+            "snapshot_project_dirs() before/after delta captures BOTH variants' "
+            "newly-created ~/.claude/projects/ dirs in each task's scope, so V0 "
+            "and V4 aggregate the same JSONL set and produce byte-identical "
+            "metrics. See calibration_check docstring for the race mechanism. "
+            "Can be overridden to >=2 once extract_metrics scopes by "
+            "cwd-to-project-slug encoding."
+        ),
+    )
     p.add_argument("--budget-cap", type=int, default=25_000_000, help="Abort if projected exceeds")
+    p.add_argument(
+        "--task-limit", type=int, default=None,
+        help="Cap the number of tasks loaded from the benchmark (smoke tests, calibration)",
+    )
     p.add_argument("--otlp-endpoint", type=str,
                    default=os.environ.get("AHOL_OTLP_ENDPOINT"),
                    help="Optional OTLP HTTP endpoint for trace export")
@@ -1044,16 +1306,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         return self_test_benchmarks(limit_per_loader=1)
     if args.integration_test_single:
         return integration_test_single()
+    if args.calibration_check:
+        return calibration_check(benchmark=args.benchmark, task_limit=args.task_limit or 2)
     if not args.manifest or not args.round_id:
         p.error("--manifest and --round-id required unless --self-test is set")
     ahol_home = DEFAULT_AHOL_HOME
-    conn = init_db(ahol_home / "benchmarks.db")
+    conn = init_db(ahol_home / "ahol.db")
     tracer = setup_tracer(args.round_id, ahol_home, args.otlp_endpoint)
     shutdown = Shutdown()
     shutdown.install()
     manifest, lookup = load_manifest(args.manifest)
     _set_manifest_lookup(lookup)
-    tasks = load_tasks(args.benchmark)
+    tasks = load_tasks(args.benchmark, limit=args.task_limit)
     logger.info(
         "starting round %s: %d variants x %d tasks (concurrency=%d)",
         args.round_id, len(manifest), len(tasks), args.concurrency,

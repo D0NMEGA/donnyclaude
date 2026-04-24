@@ -176,6 +176,107 @@ swebench >= 4.1 in its module path works. If swebench is not installed when
 report-parse step records a clear error in `error_summary` (you'll see
 `swebench errored: No module named 'swebench.harness'` or similar).
 
+## Variant differentiation calibration
+
+`--calibration-check` is a fast regression gate that asserts V4 actually
+runs under a different configuration than V0. After 8 failed cycles
+trying to infer differentiation from cache-token ratios (see
+`.planning/research/ahol/HEISENBUG-AUDIT.md` for the Case-B wipe that
+defeated both per-turn `cache_read` and first-turn `cache_creation`
+gates), the gate pivoted to direct discovery verification: did V4's
+project-level skill names appear in the session JSONL Claude Code wrote?
+The implementation lives in `discovery.py`.
+
+```
+python3 packages/ahol/runner/ahol.py --calibration-check \
+  --benchmark ahol-proxy-15 --task-limit 2
+```
+
+Behaviour:
+
+1. Loads the first `--task-limit` tasks (default 2) from `--benchmark`.
+2. Runs each task through V0 and V4 serially (concurrency=1) using the
+   shipping `packages/ahol/contracts/variant-fixtures/V{0,4}.json` manifests.
+3. For each task, locates V4's session JSONL under
+   `~/.claude/projects/<slug>/*.jsonl` and inspects the first user
+   turn plus the `skill_listing` attachment for at least 3 of 5
+   variant-specific marker skill names (selected deterministically from
+   `packages/skills/` at runtime via `discovery.select_variant_markers`).
+   V0 is bypassed (zero mutations; nothing to discover).
+4. Exits 0 on pass (every V4 row >=3/5 markers), 1 on any failure.
+   Prints a table showing `cache_creation` (informational) and the
+   V4 markers actually found per task.
+
+### Why discovery, not cache tokens
+
+The v1–v8 calibration attempts used cache-token ratios as a proxy for
+"did V4 load its harness?" That approach is immune to most regressions
+but was defeated by a concurrent Case-B heisenbug (not fully diagnosed)
+that wipes `.ahol/worktrees/variant-V4/.claude/` in a narrow window
+between `bootstrap_variant` return and the per-task symlink step. With
+V4's `.claude/` gone at invocation, V4 ran as V0 and cache_creation
+collapsed to equal V0's (9368 observed vs 9369 for V0 on the same
+task), so the ratio gate always tripped even when bootstrap succeeded.
+
+Direction B sidesteps the wipe by measuring the outcome rather than
+the state: when V4's skills are discovered, the names appear in Claude
+Code's `skill_listing` attachment regardless of whatever happens to
+`.ahol/` on disk.
+
+### Expected discovery markers
+
+Selected at runtime by `discovery.select_variant_markers` from
+`packages/skills/`: `gsd-` prefix, name length >= 12 chars, sorted
+descending by length. Current selection (packages/skills/ snapshot
+2026-04-24):
+
+| marker | where |
+|--------|-------|
+| `gsd-list-phase-assumptions` | packages/skills/ |
+| `gsd-analyze-dependencies`   | packages/skills/ |
+| `gsd-plan-milestone-gaps`    | packages/skills/ |
+| `gsd-complete-milestone`     | packages/skills/ |
+| `gsd-milestone-summary`      | packages/skills/ |
+
+All five reliably appear in Claude Code's `skill_listing` content when
+the project-level `.claude/skills/` directory is populated. V0's
+`skill_listing` (only 10 built-in Claude Code skills) contains none of
+them.
+
+Use it:
+
+- After any change to `invoke.sh`, `_run_real_pipeline`,
+  `variants.bootstrap_variant`, or the V0/V4 fixtures.
+- Before re-running a full AHOL round, as a smoke to catch
+  config-discovery drift in new Claude Code versions (the
+  `--setting-sources project` flag and the `--append-system-prompt-file`
+  mode are the load-bearing pieces that keep the default preamble and
+  the variant's project skills flowing into the session).
+- As a standalone debugging tool when V0 and V4 produce suspiciously
+  similar results on a full round.
+
+Runtime: 2 tasks serialized at concurrency=1 means roughly 6 to 8 minutes
+plus clone time.
+
+### DB location
+
+All round data (including calibration rounds) lives in `.ahol/ahol.db`
+(renamed from `.ahol/benchmarks.db` on 2026-04-24 to match the task spec
+and avoid confusion with the HF dataset cache). Three tables:
+
+| Table | Row granularity |
+|-------|-----------------|
+| `task_runs` | one row per (round, variant, task) |
+| `variant_runs` | one row per (round, variant) |
+| `round_summaries` | one row per round |
+
+Useful ad-hoc queries:
+
+```
+sqlite3 .ahol/ahol.db "SELECT variant_id, task_id, tokens_used, cache_read_input_tokens \
+  FROM task_runs WHERE round_id LIKE 'calibration-%' ORDER BY task_id, variant_id;"
+```
+
 ## Variant Bootstrap (Task C3)
 
 `variants.py` builds Tier-3 variant worktrees lazily on the first task of each

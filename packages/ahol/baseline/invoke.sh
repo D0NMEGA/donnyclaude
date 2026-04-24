@@ -56,10 +56,24 @@ with open(os.environ["AHOL_SYSPROMPT_FILLED"], "w") as fh:
 # .planning/research/ahol/DRY-RUN-NOTES.md line 72: the dry-run already noted
 # --bare was not used; C1 added it inadvertently and mock-only self-tests
 # masked the regression until C5's first real-claude invocation.
+# --setting-sources project suppresses ~/.claude/ loading so variant
+# differentiation is real: V0 inherits nothing, V4 loads only the per-variant
+# .claude/ tree that ahol.py symlinks into repo_path.
+#
+# --append-system-prompt-file (not --system-prompt-file) keeps Claude Code's
+# default system preamble, which is what injects the listings of skills,
+# agents, commands, and CLAUDE.md content into the model context. Without
+# this, the Q1b template REPLACES the default preamble entirely, making V4's
+# 105 skills / 49 agents invisible to the model. The Q1b constraints are
+# appended after the default preamble so they still bound the agent's
+# behaviour ("patch only, no refactor, limited tools"). The first-smoke
+# failure on 2026-04-24 (V0 cache_read == V4 cache_read == 384K exactly)
+# was caused by the --system-prompt-file full-replace masking this listing.
 printf 'Apply the fix.\n' | claude \
   --disallowedTools "Write,Task,WebFetch,WebSearch,TodoWrite" \
   --print \
   --model opus \
   --max-turns 50 \
   --effort medium \
-  --system-prompt-file "$FILLED_SYSPROMPT"
+  --setting-sources project \
+  --append-system-prompt-file "$FILLED_SYSPROMPT"

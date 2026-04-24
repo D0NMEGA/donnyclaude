@@ -24,9 +24,13 @@
     },
     "tokens_used": {
       "type": "integer",
-      "description": "Total tokens consumed by the inner model call or agent loop for this single task. Hard-capped at 2,000,000 to catch runaway loops before they skew the variant total.",
-      "minimum": 0,
-      "maximum": 2000000
+      "description": "Total tokens consumed by the inner model call or agent loop for this single task. Includes input + output + cache_read + cache_creation across all turns; a single large SWE-bench task routinely exceeds 20,000,000 once cache_read is counted per-turn. The ahol.py budget-cap argument provides the runaway-loop protection that the schema maximum used to claim.",
+      "minimum": 0
+    },
+    "cache_creation_input_tokens": {
+      "type": "integer",
+      "description": "Total tokens written to Anthropic's prompt cache during this task. Dominated by the first turn's preamble-caching cost; subsequent turns add only incremental cache entries. Used by --calibration-check as a pure preamble-size proxy (independent of turn count). Optional — older rows that predate this column may be absent or zero.",
+      "minimum": 0
     },
     "wall_clock_sec": {
       "type": "number",
