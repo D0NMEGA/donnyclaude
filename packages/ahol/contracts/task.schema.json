@@ -8,7 +8,8 @@
     "instance_id",
     "problem_statement",
     "repo",
-    "base_commit"
+    "base_commit",
+    "benchmark_origin"
   ],
   "properties": {
     "instance_id": {
@@ -30,6 +31,11 @@
       "type": "string",
       "description": "40-character lowercase hex SHA-1 of the upstream commit the task is pinned to. For benchmarks without a real commit pin (BigCodeBench-Hard), synthesize via sha1(task_id) so every Task has a deterministic hex id suitable for later reproducibility checks.",
       "pattern": "^[a-f0-9]{40}$"
+    },
+    "benchmark_origin": {
+      "type": "string",
+      "description": "Canonical HuggingFace dataset name this task was loaded from. Used by ahol.runner.ahol.run_task to route swebench --dataset_name when scoring the model patch. Examples: 'princeton-nlp/SWE-bench_Lite', 'princeton-nlp/SWE-bench_Verified', 'SWE-bench-Live/SWE-bench-Live', 'bigcode/bigcodebench-hard'. Loaders set it; the orchestrator never modifies it.",
+      "minLength": 1
     },
     "difficulty_bucket": {
       "type": "string",

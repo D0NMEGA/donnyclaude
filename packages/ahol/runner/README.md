@@ -113,6 +113,69 @@ cd packages && PYTHONPATH=. python3 -m mypy --strict ahol/runner/ahol.py ahol/ru
 
 Expected: `Success: no issues found in 3 source files`.
 
+## Task execution pipeline (Task C5)
+
+`run_task` runs each benchmark task through a 9-step pipeline that ports the
+manually-validated dry-run from `.planning/research/ahol/DRY-RUN-NOTES.md`.
+Mock mode (`use_mock=True` from `--self-test`) skips the pipeline and returns
+synthetic results.
+
+### Real-task steps
+
+| # | Step | Code | Notes |
+|---|------|------|-------|
+| a | Per-task workdir | `_run_real_pipeline` | `/tmp/ahol-run-{round_id}/{variant_id}/{task_id}/`. Idempotent (deleted on re-entry). |
+| b | Clone + checkout | `_clone_task_repo` | `git clone --no-tags --single-branch <task.repo>` then `git checkout <task.base_commit>`. Falls back to `--unshallow` if shallow checkout misses the commit. One retry on network failure. |
+| c | Env preparation | inline | `AHOL_BASELINE=variant_harness_path`, `TASK_PROMPT=task.problem_statement`. Same envelope as C1. |
+| d | claude invocation | inline | `subprocess.run([invoke.sh], cwd=repo_path, ...)` — **the cwd= argument is the safety fix**, redirects Edit-tool writes off the donnyclaude repo. |
+| e | Patch extraction | `_extract_patch` | `git diff` against the cloned working tree. |
+| f | Predictions JSON | inline | One-task array `[{instance_id, model_patch, model_name_or_path}]` per swebench's prediction format. |
+| g | swebench scoring | `_run_swebench` | `python -m swebench.harness.run_evaluation` with `--cache_level instance --max_workers 1`. 600s per-task timeout. |
+| h | Report parse | `_run_swebench` | Reads `{run_id}.{model_name}.json` or `logs/run_evaluation/{run_id}/{model_name}/{instance_id}/report.json`. Maps `resolved_instances > 0` to `passed=True`. |
+| i | Cleanup | `_archive_swebench_outputs` + `shutil.rmtree` | Copies report JSON and swebench logs to `.ahol/logs/round-{N}/variant-{V}/task-{T}-swebench/`, then `rm -rf` the /tmp workdir. |
+
+### Safety rail
+
+`_safety_assert_workdir` runs before any subprocess that takes a `cwd=`
+argument inside the per-task pipeline. It refuses to proceed if the workdir
+is the donnyclaude repo, lives inside it, or contains a `.git/config` whose
+remote URL mentions `donnyclaude` or `D0NMEGA`. The primary safety mechanism
+is the `cwd=` parameter to `subprocess.run`; this rail is defense in depth.
+
+`SafetyError` (subclass of `RuntimeError`) is raised on violation and is
+re-raised by `run_task` so the variant pool sees it and aborts the variant
+rather than silently moving on.
+
+### Benchmark origin routing
+
+Task carries `benchmark_origin` (the canonical HF dataset name set by the
+loader). `_is_swebench_origin` returns True for SWE-bench Lite, Verified,
+and any name containing `SWE-bench-Live`. Origins outside that set (notably
+`bigcode/bigcodebench-hard`) bypass swebench scoring and report
+`error_summary="swebench scoring not supported for benchmark_origin=..."`.
+Wiring up BCB's own scoring harness is deferred.
+
+### Integration test
+
+```
+python3 packages/ahol/runner/ahol.py --integration-test-single
+```
+
+Runs one real task (`django__django-11099` from SWE-bench Lite) through the
+full pipeline. Requires network, Docker (for swebench), `swebench>=4.1`, and
+a working `claude` CLI. Wall-clock ~3 minutes; consumes ~10K-30K tokens.
+Asserts `passed=True` and `tokens_used > 0`. Exit 0 on pass, 1 on any
+failure.
+
+### External dependencies
+
+`ahol.py` does not import `swebench` directly; it subprocesses
+`python -m swebench.harness.run_evaluation` so any Python env that has
+swebench >= 4.1 in its module path works. If swebench is not installed when
+`--integration-test-single` runs, the swebench subprocess fails and the
+report-parse step records a clear error in `error_summary` (you'll see
+`swebench errored: No module named 'swebench.harness'` or similar).
+
 ## Variant Bootstrap (Task C3)
 
 `variants.py` builds Tier-3 variant worktrees lazily on the first task of each

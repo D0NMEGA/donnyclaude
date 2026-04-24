@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import signal
 import sqlite3
 import subprocess
@@ -77,12 +78,13 @@ class Variant:
 
 @dataclass(frozen=True)
 class Task:
-    """Task(id='django__django-11099', issue_body='...', repo='django/django', base_commit='d26b...')."""
+    """Task(id='django__django-11099', issue_body='...', repo='django/django', base_commit='d26b...', benchmark_origin='princeton-nlp/SWE-bench_Lite')."""
 
     id: str
     issue_body: str
     repo: str
     base_commit: str
+    benchmark_origin: str = ""
 
 
 @dataclass
@@ -347,9 +349,9 @@ def load_tasks(benchmark_name: str, limit: Optional[int] = None) -> list[Task]:
     if benchmark_name == "self-test":
         return [
             Task(id="self-test-task-01", issue_body="mock 01", repo="mock/repo",
-                 base_commit="0" * 40),
+                 base_commit="0" * 40, benchmark_origin="self-test"),
             Task(id="self-test-task-02", issue_body="mock 02", repo="mock/repo",
-                 base_commit="1" * 40),
+                 base_commit="1" * 40, benchmark_origin="self-test"),
         ]
     from ahol.runner.benchmarks import (  # noqa: PLC0415 (lazy to avoid import cycle)
         load_ahol_proxy_30, load_swe_bench_lite, load_swe_bench_live,
@@ -383,6 +385,224 @@ def _write_task_log(
     )
 
 
+SWEBENCH_TIMEOUT_SEC: int = 600
+CLONE_TIMEOUT_SEC: int = 300
+GIT_DIFF_TIMEOUT_SEC: int = 30
+SWEBENCH_COMPATIBLE_ORIGINS: frozenset[str] = frozenset({
+    "princeton-nlp/SWE-bench_Lite",
+    "princeton-nlp/SWE-bench_Verified",
+})
+
+
+class SafetyError(RuntimeError):
+    """Raised when a workdir or cwd would mutate the donnyclaude repo."""
+
+
+def _safe_path_segment(s: str) -> str:
+    return s.replace("/", "-").replace(":", "-").replace(" ", "-")[:80] or "x"
+
+
+def _safety_assert_workdir(workdir: Path) -> None:
+    """Refuse if workdir is the donnyclaude repo, lives inside it, or has a donnyclaude git remote."""
+    real = workdir.resolve()
+    repo = REPO_ROOT.resolve()
+    if real == repo or repo == real or repo in real.parents:
+        raise SafetyError(f"workdir is donnyclaude repo or inside it: {real}")
+    git_config = real / ".git" / "config"
+    if git_config.is_file():
+        text = git_config.read_text(encoding="utf-8", errors="replace").lower()
+        if "donnyclaude" in text or "d0nmega" in text:
+            raise SafetyError(f"workdir has donnyclaude-like git remote: {real}")
+
+
+def _is_swebench_origin(origin: str) -> bool:
+    """True when task.benchmark_origin is a swebench-scoreable dataset (Lite, Verified, or Live)."""
+    return origin in SWEBENCH_COMPATIBLE_ORIGINS or "SWE-bench-Live" in origin
+
+
+def _clone_task_repo(task: Task, workdir: Path) -> tuple[Path, Optional[str]]:
+    """Clone task.repo at task.base_commit into workdir/repo. Returns (repo_path, error_or_None)."""
+    if workdir.exists():
+        shutil.rmtree(workdir, ignore_errors=True)
+    workdir.mkdir(parents=True, exist_ok=True)
+    repo_path = workdir / "repo"
+    if "/" in task.repo and not task.repo.startswith(("http", "git@")):
+        url = f"https://github.com/{task.repo}"
+    else:
+        url = task.repo
+    last_err: Optional[str] = None
+    for attempt in (1, 2):
+        try:
+            subprocess.run(
+                ["git", "clone", "--no-tags", "--single-branch", url, str(repo_path)],
+                capture_output=True, text=True, check=True, timeout=CLONE_TIMEOUT_SEC,
+            )
+            try:
+                subprocess.run(
+                    ["git", "checkout", task.base_commit],
+                    cwd=str(repo_path), capture_output=True, text=True, check=True,
+                    timeout=GIT_DIFF_TIMEOUT_SEC * 4,
+                )
+                return repo_path, None
+            except subprocess.CalledProcessError:
+                subprocess.run(
+                    ["git", "fetch", "--unshallow"],
+                    cwd=str(repo_path), capture_output=True, text=True, check=False,
+                    timeout=CLONE_TIMEOUT_SEC,
+                )
+                subprocess.run(
+                    ["git", "fetch", "origin", task.base_commit],
+                    cwd=str(repo_path), capture_output=True, text=True, check=False,
+                    timeout=CLONE_TIMEOUT_SEC,
+                )
+                subprocess.run(
+                    ["git", "checkout", task.base_commit],
+                    cwd=str(repo_path), capture_output=True, text=True, check=True,
+                    timeout=GIT_DIFF_TIMEOUT_SEC * 4,
+                )
+                return repo_path, None
+        except subprocess.CalledProcessError as exc:
+            last_err = (exc.stderr or "").strip()[:300] or "clone failed"
+            logger.warning("clone attempt %d failed for %s: %s", attempt, task.id, last_err)
+            shutil.rmtree(repo_path, ignore_errors=True)
+        except subprocess.TimeoutExpired:
+            last_err = f"clone timeout ({CLONE_TIMEOUT_SEC}s)"
+            shutil.rmtree(repo_path, ignore_errors=True)
+    return repo_path, last_err or "clone failed (no specific error captured)"
+
+
+def _extract_patch(repo_path: Path) -> str:
+    proc = subprocess.run(
+        ["git", "diff"], cwd=str(repo_path), capture_output=True, text=True,
+        check=False, timeout=GIT_DIFF_TIMEOUT_SEC,
+    )
+    return proc.stdout
+
+
+def _run_swebench(
+    predictions_path: Path, instance_id: str, dataset_name: str,
+    run_id: str, model_name: str, workdir: Path, timeout: int = SWEBENCH_TIMEOUT_SEC,
+) -> dict[str, Any]:
+    """Invoke `python -m swebench.harness.run_evaluation` and return the parsed report dict."""
+    cmd = [
+        sys.executable, "-m", "swebench.harness.run_evaluation",
+        "--dataset_name", dataset_name,
+        "--instance_ids", instance_id,
+        "--predictions_path", str(predictions_path),
+        "--max_workers", "1",
+        "--run_id", run_id,
+        "--cache_level", "instance",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(workdir), capture_output=True, text=True, check=False, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"error_instances": 1, "_swebench_error": f"timeout {timeout}s"}
+    candidates = [
+        workdir / f"{run_id}.{model_name}.json",
+        workdir / "logs" / "run_evaluation" / run_id / model_name / instance_id / "report.json",
+    ]
+    for rp in candidates:
+        if rp.is_file():
+            try:
+                data = json.loads(rp.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return data
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning("swebench report at %s unreadable: %s", rp, exc)
+    return {
+        "error_instances": 1,
+        "_swebench_error": (proc.stderr or proc.stdout or "no swebench report")[-500:],
+    }
+
+
+def _archive_swebench_outputs(
+    workdir: Path, ahol_home: Path, round_id: str, variant_id: str, task_id: str,
+) -> None:
+    """Move swebench logs and report JSON out of /tmp workdir into .ahol/logs/.../swebench/."""
+    safe_round = round_id.replace(":", "-").replace("/", "-")
+    archive_dir = (ahol_home / "logs" / f"round-{safe_round}" /
+                   f"variant-{variant_id}" / f"task-{task_id}-swebench")
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    for fp in workdir.glob("*.json"):
+        try:
+            shutil.copy2(fp, archive_dir / fp.name)
+        except OSError as exc:
+            logger.warning("archive %s failed: %s", fp, exc)
+    swebench_logs = workdir / "logs"
+    if swebench_logs.is_dir():
+        try:
+            shutil.copytree(swebench_logs, archive_dir / "logs", dirs_exist_ok=True)
+        except OSError as exc:
+            logger.warning("archive logs failed: %s", exc)
+
+
+def _run_real_pipeline(
+    task: Task, variant_harness_path: Path, round_id: str, variant_id: str,
+) -> tuple[str, str, Optional[int], Optional[str], bool, str]:
+    """Execute the 9-step real pipeline. Returns (stdout, stderr, exit_code, error_summary, passed, patch).
+
+    Steps a-i per .planning/research/ahol/DRY-RUN-NOTES.md and the C5 task spec.
+    """
+    workdir = Path("/tmp") / f"ahol-run-{_safe_path_segment(round_id)}" / \
+        _safe_path_segment(variant_id) / _safe_path_segment(task.id)
+    repo_path, clone_err = _clone_task_repo(task, workdir)
+    if clone_err:
+        return "", clone_err, 1, f"clone failed: {clone_err[:300]}", False, ""
+    _safety_assert_workdir(repo_path)
+    invoke_sh = BASELINE_DIR / "invoke.sh"
+    if not invoke_sh.is_file():
+        raise FileNotFoundError(f"invoke.sh not found at {invoke_sh}")
+    env = {**os.environ, "AHOL_BASELINE": str(variant_harness_path),
+           "TASK_PROMPT": task.issue_body}
+    stdout = stderr = ""
+    exit_code: Optional[int] = None
+    error_summary: Optional[str] = None
+    try:
+        proc = subprocess.run(
+            [str(invoke_sh)], env=env, cwd=str(repo_path), capture_output=True, text=True,
+            timeout=TASK_TIMEOUT_SEC, check=False,
+        )
+        stdout, stderr, exit_code = proc.stdout, proc.stderr, proc.returncode
+    except subprocess.TimeoutExpired as exc:
+        so = exc.stdout
+        se = exc.stderr
+        stdout = so if isinstance(so, str) else (so.decode("utf-8", "replace") if so else "")
+        stderr = se if isinstance(se, str) else (se.decode("utf-8", "replace") if se else "")
+        exit_code = 124
+        error_summary = f"invoke.sh exceeded TASK_TIMEOUT_SEC={TASK_TIMEOUT_SEC}"
+    patch = _extract_patch(repo_path)
+    model_name = f"ahol-{variant_id}"
+    run_id_full = f"{round_id}-{variant_id}-{task.id}"
+    predictions_path = workdir / "predictions.json"
+    predictions_path.write_text(json.dumps([{
+        "instance_id": task.id, "model_patch": patch, "model_name_or_path": model_name,
+    }]), encoding="utf-8")
+    passed = False
+    if patch.strip() == "":
+        error_summary = error_summary or "empty patch from claude"
+    elif _is_swebench_origin(task.benchmark_origin):
+        report = _run_swebench(predictions_path, task.id, task.benchmark_origin,
+                               run_id_full, model_name, workdir)
+        passed = int(report.get("resolved_instances") or 0) > 0
+        if not passed:
+            if int(report.get("empty_patch_instances") or 0) > 0:
+                error_summary = error_summary or "empty patch (swebench)"
+            elif int(report.get("error_instances") or 0) > 0:
+                err = report.get("_swebench_error") or "swebench errored"
+                error_summary = error_summary or f"swebench errored: {err[:200]}"
+            else:
+                error_summary = error_summary or "tests did not resolve"
+    else:
+        error_summary = error_summary or (
+            f"swebench scoring not supported for benchmark_origin={task.benchmark_origin!r}"
+        )
+    _archive_swebench_outputs(workdir, DEFAULT_AHOL_HOME, round_id, variant_id, task.id)
+    shutil.rmtree(workdir, ignore_errors=True)
+    return stdout, stderr, exit_code, error_summary, passed, patch
+
+
 def run_task(
     task: Task, variant_harness_path: Path, round_id: str, variant_id: str,
     conn: sqlite3.Connection, sequence: int, tracer: trace.Tracer, shutdown: Shutdown,
@@ -403,6 +623,7 @@ def run_task(
         cache_read: int
         passed: bool
         patch_sha: Optional[str]
+        patch: str = ""
 
         if use_mock:
             time.sleep(0.01)
@@ -414,36 +635,23 @@ def run_task(
             passed = True
             patch_sha = hashlib.sha1(f"{variant_id}/{task.id}".encode()).hexdigest()
         else:
-            invoke_sh = BASELINE_DIR / "invoke.sh"
-            if not invoke_sh.is_file():
-                raise FileNotFoundError(f"invoke.sh not found at {invoke_sh}")
-            env = {**os.environ, "AHOL_BASELINE": str(variant_harness_path),
-                   "TASK_PROMPT": task.issue_body}
             try:
-                proc = subprocess.run(
-                    [str(invoke_sh)], env=env, capture_output=True, text=True,
-                    timeout=TASK_TIMEOUT_SEC, check=False,
+                stdout, stderr, exit_code, error_summary, passed, patch = _run_real_pipeline(
+                    task, variant_harness_path, round_id, variant_id,
                 )
-                stdout = proc.stdout
-                stderr = proc.stderr
-                exit_code = proc.returncode
-            except subprocess.TimeoutExpired as exc:
-                so = exc.stdout
-                se = exc.stderr
-                stdout = so if isinstance(so, str) else (so.decode("utf-8", "replace") if so else "")
-                stderr = se if isinstance(se, str) else (se.decode("utf-8", "replace") if se else "")
-                exit_code = 124
-                error_summary = f"invoke.sh exceeded TASK_TIMEOUT_SEC={TASK_TIMEOUT_SEC}"
+            except SafetyError as exc:
+                logger.error("SafetyError in run_task %s/%s: %s", variant_id, task.id, exc)
+                raise
+            except Exception as exc:
+                exit_code = exit_code if exit_code is not None else 1
+                error_summary = error_summary or f"{type(exc).__name__}: {exc}"
+                logger.error("pipeline crash %s/%s: %s", variant_id, task.id, exc)
             t_end = time.monotonic()
             m = extract_metrics(before, t_start, t_end)
             tokens_used = int(m["tokens_used"] or 0)
             tool_call_count = m["tool_call_count"]
             cache_read = int(m["cache_read_input_tokens"] or 0)
-            passed = exit_code == 0 and "Patch applied" in stdout
-            patch_sha = hashlib.sha1(stdout.encode(errors="replace")).hexdigest() if passed else None
-            if exit_code != 0 and not error_summary:
-                lines = stderr.strip().splitlines() or ["nonzero exit"]
-                error_summary = lines[-1][:500]
+            patch_sha = hashlib.sha1(patch.encode("utf-8", errors="replace")).hexdigest() if passed else None
 
         wall = time.monotonic() - t_start
         ended_at = datetime.now(timezone.utc)
@@ -721,6 +929,64 @@ def self_test() -> int:
         DEFAULT_AHOL_HOME = original_home
 
 
+def integration_test_single() -> int:
+    """Single-task end-to-end pipeline test against django__django-11099.
+
+    Requires network (clone django/django), Docker (swebench), claude CLI, and
+    swebench >=4.1 in PATH. ~3 minutes wall-clock. Exits 0 on pass, 1 on any
+    failure. Asserts: clone OK, claude returned 'Patch applied', git diff
+    non-empty, swebench report parsed, run_task returns passed=True with
+    tokens_used > 0.
+    """
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    target_id = "django__django-11099"
+    try:
+        from ahol.runner.benchmarks import load_swe_bench_lite  # noqa: PLC0415
+        candidates = load_swe_bench_lite(instance_ids=[target_id])
+    except Exception as exc:
+        print(f"integration-test-single FAIL: load failed: {exc}")
+        return 1
+    if not candidates:
+        print(f"integration-test-single FAIL: task {target_id} not in SWE-bench Lite")
+        return 1
+    task = candidates[0]
+    fixtures = CONTRACTS_DIR / "variant-fixtures"
+    from ahol.runner.variants import (  # noqa: PLC0415
+        bootstrap_variant, load_variant_manifest, reset_bootstrap_cache,
+    )
+    reset_bootstrap_cache()
+    [vm0] = load_variant_manifest(fixtures / "V0.json", contracts_dir=CONTRACTS_DIR)
+    harness = bootstrap_variant(vm0, DEFAULT_AHOL_HOME, REPO_ROOT)
+    round_id = f"integ-test-{uuid.uuid4().hex[:8]}"
+    conn = init_db(DEFAULT_AHOL_HOME / "benchmarks.db")
+    tracer = setup_tracer(round_id, DEFAULT_AHOL_HOME, otlp_endpoint=None)
+    shutdown = Shutdown()
+    variant = Variant(id=vm0.name, harness_bundle=[], mode="bundle")
+    t0 = time.monotonic()
+    try:
+        result, _rowid = run_task(
+            task=task, variant_harness_path=harness, round_id=round_id, variant_id=variant.id,
+            conn=conn, sequence=0, tracer=tracer, shutdown=shutdown, use_mock=False,
+        )
+    except Exception as exc:
+        print(f"integration-test-single FAIL: run_task crashed: {exc}")
+        return 1
+    finally:
+        conn.close()
+    wall = time.monotonic() - t0
+    print(f"integration-test-single result: passed={result.passed} "
+          f"tokens={result.tokens_used} wall={wall:.1f}s "
+          f"patch_sha={result.patch_sha} error={result.error_summary}")
+    if not result.passed:
+        print(f"integration-test-single FAIL: task {target_id} did not resolve")
+        return 1
+    if result.tokens_used <= 0:
+        print(f"integration-test-single FAIL: tokens_used={result.tokens_used} (expected > 0)")
+        return 1
+    print(f"integration-test-single PASS: round_id={round_id} wall={wall:.1f}s")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """AHOL CLI; --self-test runs a mock cycle, otherwise runs a real round."""
     p = argparse.ArgumentParser(
@@ -731,6 +997,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument(
         "--self-test-benchmarks", action="store_true",
         help="Exercise each benchmark loader with limit=1 (requires network)",
+    )
+    p.add_argument(
+        "--integration-test-single", action="store_true",
+        help="Run one real django__django-11099 task through the full pipeline (network + Docker + ~3 min + claude tokens)",
     )
     p.add_argument("--manifest", type=Path, help="Path to variant manifest JSON")
     p.add_argument("--benchmark", type=str, default="ahol-proxy-30", help="Benchmark name")
@@ -748,6 +1018,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.self_test_benchmarks:
         from ahol.runner.benchmarks import self_test_benchmarks  # noqa: PLC0415
         return self_test_benchmarks(limit_per_loader=1)
+    if args.integration_test_single:
+        return integration_test_single()
     if not args.manifest or not args.round_id:
         p.error("--manifest and --round-id required unless --self-test is set")
     ahol_home = DEFAULT_AHOL_HOME

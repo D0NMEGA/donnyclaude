@@ -51,6 +51,7 @@ def validate_task(task: Task) -> None:
         "problem_statement": task.issue_body,
         "repo": task.repo,
         "base_commit": task.base_commit,
+        "benchmark_origin": task.benchmark_origin,
     }
     schema = load_schema(TASK_SCHEMA_NAME)
     jsonschema.validate(instance=payload, schema=schema)
@@ -78,13 +79,14 @@ def _hf_load(dataset_name: str, split: Optional[str] = None, retries: int = 1) -
     ) from last_exc
 
 
-def _row_to_task_swe(row: dict[str, Any]) -> Task:
+def _row_to_task_swe(row: dict[str, Any], benchmark_origin: str) -> Task:
     """Map a SWE-bench-style row (instance_id, problem_statement, repo, base_commit) to Task."""
     return Task(
         id=str(row["instance_id"]),
         issue_body=str(row.get("problem_statement") or ""),
         repo=str(row.get("repo") or ""),
         base_commit=str(row.get("base_commit") or "0" * 40),
+        benchmark_origin=benchmark_origin,
     )
 
 
@@ -98,7 +100,7 @@ def load_swe_bench_lite(
     for row in ds:
         if id_filter and str(row["instance_id"]) not in id_filter:
             continue
-        tasks.append(_row_to_task_swe(dict(row)))
+        tasks.append(_row_to_task_swe(dict(row), SWE_BENCH_LITE_DATASET))
     tasks.sort(key=lambda t: t.id)
     if limit is not None:
         tasks = tasks[: max(0, limit)]
@@ -123,7 +125,7 @@ def load_swe_bench_live(
     ds = _hf_load(ds_name, split="test")
     tasks: list[Task] = []
     for row in ds:
-        tasks.append(_row_to_task_swe(dict(row)))
+        tasks.append(_row_to_task_swe(dict(row), ds_name))
     tasks.sort(key=lambda t: t.id)
     if date_window:
         tasks = [t for t in tasks if date_window in t.id]
@@ -155,7 +157,7 @@ def _load_hal_verified_mini(n: int = 10) -> list[Task]:
     else:
         stride = max(1, len(rows) // max(1, n))
         picked = rows[::stride][:n]
-    return [_row_to_task_swe(r) for r in picked]
+    return [_row_to_task_swe(r, SWE_BENCH_VERIFIED_DATASET) for r in picked]
 
 
 def _load_bigcodebench_hard(n: int = 5) -> list[Task]:
@@ -179,6 +181,7 @@ def _load_bigcodebench_hard(n: int = 5) -> list[Task]:
                 issue_body=body,
                 repo="bigcode/bigcodebench-hard",
                 base_commit=_synthetic_base_commit(task_id),
+                benchmark_origin=BIGCODEBENCH_HARD_DATASET,
             )
         )
     return tasks
