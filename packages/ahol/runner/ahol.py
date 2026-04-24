@@ -240,11 +240,20 @@ def parse_session_jsonl(path: Path) -> dict[str, int]:
 def extract_metrics(
     before: dict[Path, float], t_start: float, t_end: float,
 ) -> dict[str, Optional[int]]:
-    """extract_metrics(before_snap, t_start, t_end) aggregates over session files modified in window."""
+    """extract_metrics(before_snap, t_start, t_end) aggregates over session files modified in window.
+
+    t_start and t_end are epoch seconds (time.time()), NOT time.monotonic(); the
+    window is compared against os.stat().st_mtime which is also epoch. The C5
+    integration test surfaced a clock mismatch where monotonic clocks made the
+    window unreachable. Window padded -5s / +30s to absorb post-invocation
+    session-file flush latency.
+    """
     after = snapshot_session_files()
     candidates: set[Path] = set()
     for p, mt in after.items():
-        if t_start - 2.0 <= mt <= t_end + 2.0 and (p not in before or mt > before[p]):
+        in_window = t_start - 5.0 <= mt <= t_end + 30.0
+        is_new_or_newer = p not in before or mt > before[p]
+        if in_window and is_new_or_newer:
             candidates.add(p)
     if not candidates:
         logger.warning("no session file modified during task window; token metrics unavailable")
@@ -500,7 +509,7 @@ def _run_swebench(
     except subprocess.TimeoutExpired:
         return {"error_instances": 1, "_swebench_error": f"timeout {timeout}s"}
     candidates = [
-        workdir / f"{run_id}.{model_name}.json",
+        workdir / f"{model_name}.{run_id}.json",
         workdir / "logs" / "run_evaluation" / run_id / model_name / instance_id / "report.json",
     ]
     for rp in candidates:
@@ -508,6 +517,19 @@ def _run_swebench(
             try:
                 data = json.loads(rp.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
+                    inner = data.get(instance_id)
+                    if isinstance(inner, dict) and "resolved" in inner:
+                        resolved = bool(inner["resolved"])
+                        empty = bool(inner.get("patch_is_None")) or not bool(inner.get("patch_exists"))
+                        applied = bool(inner.get("patch_successfully_applied"))
+                        return {
+                            "resolved_instances": 1 if resolved else 0,
+                            "completed_instances": 1,
+                            "empty_patch_instances": 1 if empty else 0,
+                            "error_instances": 0 if applied else 1,
+                            "_source": str(rp),
+                            "_raw_inner": data,
+                        }
                     return data
             except (OSError, json.JSONDecodeError) as exc:
                 logger.warning("swebench report at %s unreadable: %s", rp, exc)
@@ -614,6 +636,7 @@ def run_task(
         span.set_attribute("task_id", task.id)
         started_at = datetime.now(timezone.utc)
         t_start = time.monotonic()
+        ts_start_epoch = time.time()
         before = snapshot_session_files() if not use_mock else {}
         stdout = stderr = ""
         exit_code: Optional[int] = None
@@ -647,7 +670,8 @@ def run_task(
                 error_summary = error_summary or f"{type(exc).__name__}: {exc}"
                 logger.error("pipeline crash %s/%s: %s", variant_id, task.id, exc)
             t_end = time.monotonic()
-            m = extract_metrics(before, t_start, t_end)
+            ts_end_epoch = time.time()
+            m = extract_metrics(before, ts_start_epoch, ts_end_epoch)
             tokens_used = int(m["tokens_used"] or 0)
             tool_call_count = m["tool_call_count"]
             cache_read = int(m["cache_read_input_tokens"] or 0)
