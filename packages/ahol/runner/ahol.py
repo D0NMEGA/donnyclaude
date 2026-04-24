@@ -24,6 +24,16 @@ import tempfile
 import threading
 import time
 import uuid
+from pathlib import Path as _Path
+
+# Package-mode import shim: when ahol.py is invoked as a direct script via
+# `python3 packages/ahol/runner/ahol.py`, Python only puts the script's
+# directory on sys.path. load_tasks later imports ahol.runner.benchmarks, which
+# in turn imports ahol.runner.ahol, so the `packages/` parent must also be on
+# sys.path. Adding it here is idempotent and harmless when invoked as a module.
+_packages_dir = _Path(__file__).resolve().parent.parent.parent
+if str(_packages_dir) not in sys.path:
+    sys.path.insert(0, str(_packages_dir))
 from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -338,7 +348,12 @@ def load_manifest(path: Path) -> list[Variant]:
 
 
 def load_tasks(benchmark_name: str, limit: Optional[int] = None) -> list[Task]:
-    """load_tasks('self-test') returns 2 canned mock tasks; other benchmarks are C2 scope."""
+    """load_tasks('swe-bench-lite', limit=5) dispatches to benchmarks.py; 'self-test' returns 2 mocks.
+
+    Valid benchmark_name values: self-test, swe-bench-lite, swe-bench-live,
+    ahol-proxy-30, ahol-proxy-15 (alias for the partial 15-task composite).
+    Raises ValueError with a listing on unknown names.
+    """
     if benchmark_name == "self-test":
         return [
             Task(id="self-test-task-01", issue_body="mock 01", repo="mock/repo",
@@ -346,9 +361,17 @@ def load_tasks(benchmark_name: str, limit: Optional[int] = None) -> list[Task]:
             Task(id="self-test-task-02", issue_body="mock 02", repo="mock/repo",
                  base_commit="1" * 40),
         ]
-    raise NotImplementedError(
-        f"benchmark loader for {benchmark_name!r} is C2 scope; see packages/ahol/benchmarks/README.md"
+    from ahol.runner.benchmarks import (  # noqa: PLC0415 (lazy to avoid import cycle)
+        load_ahol_proxy_30, load_swe_bench_lite, load_swe_bench_live,
     )
+    if benchmark_name == "swe-bench-lite":
+        return load_swe_bench_lite(limit=limit)
+    if benchmark_name == "swe-bench-live":
+        return load_swe_bench_live(limit=limit)
+    if benchmark_name in ("ahol-proxy-30", "ahol-proxy-15"):
+        return load_ahol_proxy_30(limit=limit)
+    valid = "self-test, swe-bench-lite, swe-bench-live, ahol-proxy-30, ahol-proxy-15"
+    raise ValueError(f"unknown benchmark {benchmark_name!r}; valid: {valid}")
 
 
 def _write_task_log(
@@ -696,6 +719,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         description="AHOL Tier 1 orchestrator. See packages/ahol/GROUP-C-SCOPE.md.",
     )
     p.add_argument("--self-test", action="store_true", help="Run mock no-op cycle and exit")
+    p.add_argument(
+        "--self-test-benchmarks", action="store_true",
+        help="Exercise each benchmark loader with limit=1 (requires network)",
+    )
     p.add_argument("--manifest", type=Path, help="Path to variant manifest JSON")
     p.add_argument("--benchmark", type=str, default="ahol-proxy-30", help="Benchmark name")
     p.add_argument("--round-id", type=str, help="Round ID (ISO-8601 UTC recommended)")
@@ -709,6 +736,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format=LOG_FORMAT)
     if args.self_test:
         return self_test()
+    if args.self_test_benchmarks:
+        from ahol.runner.benchmarks import self_test_benchmarks  # noqa: PLC0415
+        return self_test_benchmarks(limit_per_loader=1)
     if not args.manifest or not args.round_id:
         p.error("--manifest and --round-id required unless --self-test is set")
     ahol_home = DEFAULT_AHOL_HOME

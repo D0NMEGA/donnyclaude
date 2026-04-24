@@ -1,0 +1,12 @@
+# AHOL runner Python dependencies.
+# Versions pinned to the compatible 1.x / 4.x series; upgrade cautiously.
+# See packages/ahol/GROUP-C-SCOPE.md for rationale.
+
+opentelemetry-api>=1.41.0,<2.0
+opentelemetry-sdk>=1.41.0,<2.0
+jsonschema>=4.26.0,<5.0
+datasets>=4.8.0,<5.0
+
+# Type stubs (dev-time only; safe to skip in a minimal runtime install)
+types-jsonschema>=4.26.0
+mypy>=1.20.0

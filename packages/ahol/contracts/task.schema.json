@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://donnyclaude.dev/ahol/contracts/task.schema.json",
+  "title": "AHOL Benchmark Task",
+  "description": "Schema for a single benchmark task instance loaded by packages/ahol/runner/benchmarks.py. AHOL's internal Task dataclass uses short field names (id, issue_body); this schema uses SWE-bench-style industry-standard names (instance_id, problem_statement) so payloads are self-documenting when emitted to logs, OpenTelemetry spans, or downstream verifier harnesses. validate_task() maps Task dataclass attributes to schema field names before validation.",
+  "type": "object",
+  "required": [
+    "instance_id",
+    "problem_statement",
+    "repo",
+    "base_commit"
+  ],
+  "properties": {
+    "instance_id": {
+      "type": "string",
+      "description": "Unique benchmark task identifier, for example 'django__django-11099', 'swe-bench-live-2026-04-abc123', or 'BigCodeBench/42'. Used as the task_id foreign key in the task-runner-return contract.",
+      "minLength": 1
+    },
+    "problem_statement": {
+      "type": "string",
+      "description": "The issue body, problem description, or natural-language spec that the variant agent must solve. Substituted into the Q1b patch-only system prompt at the {{ISSUE_BODY}} placeholder by packages/ahol/baseline/invoke.sh.",
+      "minLength": 1
+    },
+    "repo": {
+      "type": "string",
+      "description": "Canonical repository identifier such as 'django/django', 'princeton-nlp/SWE-bench_Verified', or 'bigcode/bigcodebench-hard'. For algorithmic benchmarks without a real upstream repo (BigCodeBench-Hard), synthesize a stable dataset-qualified identifier.",
+      "minLength": 1
+    },
+    "base_commit": {
+      "type": "string",
+      "description": "40-character lowercase hex SHA-1 of the upstream commit the task is pinned to. For benchmarks without a real commit pin (BigCodeBench-Hard), synthesize via sha1(task_id) so every Task has a deterministic hex id suitable for later reproducibility checks.",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "difficulty_bucket": {
+      "type": "string",
+      "description": "Optional benchmark-specific difficulty label such as 'basic', 'advanced', 'expert', 'hard', or a numeric tier. Used for stratified sampling and variance analysis across difficulty cohorts.",
+      "minLength": 1
+    },
+    "expected_patch_size_range": {
+      "type": "array",
+      "description": "Optional [min_bytes, max_bytes] hint for the expected diff size the variant agent should produce. Used for premature-termination detection in the Q1B validation checklist Gate 3 and Gate 4.",
+      "items": {"type": "integer", "minimum": 0},
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "test_command": {
+      "type": "string",
+      "description": "Optional verifier command invoked inside the benchmark container after the patch is applied, for example 'pytest tests/ -x' or 'go test ./...'. When absent, the benchmark harness uses the benchmark-native verifier.",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}
