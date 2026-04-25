@@ -1,6 +1,6 @@
 # Harness field test: targeted ECG submission harness on DanMLProject
 
-**Status:** POPULATED 2026-04-24 by DanMLProject session post-harness-install.
+**Status:** PHASE 1 (static verification) populated 2026-04-24 by DanMLProject session post-harness-install. PHASE 2 (active iteration / V3 attempt) populated 2026-04-24 ~22:00 CDT.
 **Harness committed:** 2026-04-24 by donnyclaude session (ECG harness build, see `~/Desktop/DanMLProject/.claude/`)
 **Project under test:** UT 214L ECG AFib Classifier (`~/Desktop/DanMLProject/`)
 **Submission deadline window:** 2026-04-27 (bonus) / 2026-04-29 (hard)
@@ -166,3 +166,131 @@ Findings worth flagging that don't fit the template above:
 ## False-positive Vercel skill injection (noted per prompt)
 
 The session start surfaced Vercel "workflow" and "vercel-sandbox" skill recommendations triggered by keywords in the field-test prompt itself ("workflow", "sandbox" appeared in agent descriptions and skill names). These were correctly ignored per prompt instructions. This is a project-environment-vs-prompt mismatch, not a harness flaw — the targeted harness contains zero Vercel content.
+
+---
+
+## Phase 2: Active iteration (V3 attempt)
+
+**Status:** Phase 2 measures harness behavior during real ML iteration, the high-value path that Phase 1 explicitly could not exercise. The user's directive: "the point is to MEASURE harness behavior during active edits, not to ship a marginally better model."
+
+### V3 design and outcome (one-paragraph version)
+
+V3 added two changes on top of V2's focal-loss + time-shift recipe:
+1. **Per-batch mixup augmentation** inside `train_model` via `tf.data.Dataset.map()`, sampling Beta(0.2, 0.2) interpolation weights from a ratio of two `tf.random.gamma` draws (stock TF, no scipy). Mixes features, one-hot labels, and per-sample weights.
+2. **Two-phase training protocol** — Phase A: 5 seeds (42, 123, 7, 99, 2024) at 80/20 split for selection; Phase B: retrain winning seed on 100% of data for fixed 30 epochs. Implemented as a single `train_model` branch on whether `val_features`/`val_labels` are provided.
+
+Phase A leaderboard: seed 7 won at **79.02%**, beating V2's 78.58% by **+0.44pp**. Three of five V3 seeds (7, 123, 2024) cleared V2; spread was 0.63pp. Phase B retrain was undertrained at 30 epochs (78.70% on overlapped val < Phase A's 79.02% on clean val) so the Phase A seed-7 winner is the submission. Total Colab time: ~75 min.
+
+**V3 wins.** But the win margin is narrow enough that the more interesting data is the harness behavior during the iteration itself.
+
+### Hook fires during V3 active iteration (organic only, not smoke tests)
+
+| Hook | Tool | Total fires | Blocks (legitimate) | False positives | Notes |
+|------|------|-------------|---------------------|------------------|-------|
+| verify-contract.py | Edit | 3 | 0 | 0 | Three real Edits to `Donovan_Santine-submission.py`: (1) docstring V3 update, (2) `train_model` overhaul adding nested `_mixup` fn + Phase B branch, (3) dtype cast fix after the Colab error. Each fired AST parse + globals audit + early return `{"continue": true}` in <100ms. **All three were legitimate edits that the hook correctly allowed because the contract was preserved.** Zero false blocks, zero missed contract issues (all three were contract-clean by design). |
+| keras-save-format-guard.py | Bash | ~12 | 0 | 0 | Fired on every Bash command during V3 work (git status, ls, contract-hook smoke test, pandoc PDF regen, etc.). Zero contained `.h5` / `save_format='tf'` / `TF_USE_LEGACY_KERAS=1` patterns. All silent passes. Hook overhead per fire: imperceptible. |
+| **NotebookEdit (no hook coverage)** | NotebookEdit | 0 | n/a | n/a | I made **4 NotebookEdits** to `ecg_classifier.ipynb` (cells 12 V3 initial, 19 markdown, 20 multi-seed protocol, 12 dtype fix). Cell 12 contains a `%%writefile submission.py` block with a complete copy of the graded function code. **None of these edits triggered any contract validation** because verify-contract.py's matcher is `Edit\|Write\|MultiEdit`, NotebookEdit isn't included. This is the same Risk #4 flagged in Phase 1, now confirmed as a real coverage gap during real iteration. |
+
+**Net during V3 iteration: 0 organic blocks across ~15 hook fires. 0 false positives. 1 confirmed coverage gap (NotebookEdit).**
+
+The harness's contract-validation hooks did exactly what they're spec'd to do: cheap, silent insurance on every edit. No friction, no false alarms. The cost of that insurance was effectively zero token volume and zero wall-clock — each fire was a sub-100ms AST parse or regex match.
+
+### The dtype runtime bug (harness-scope-gap data point)
+
+The most interesting Phase 2 finding. V3's mixup function did `lam * batch_one_hot` where `lam` was float32 and `batch_one_hot` was int64 (from `IntegerLookup(output_mode='one_hot')`). V2 didn't hit this because mixup wasn't in the pipeline; Keras's loss internals cast int→float on the way into the loss, but mixup runs *before* the loss in the dataset graph, so the cast had to be explicit.
+
+| Layer | Caught by | When |
+|-------|-----------|------|
+| verify-contract.py hook | NO | Out of scope. The hook validates signatures + globals audit, not dataset dtype consistency. |
+| submission-reviewer agent | NO | Reviewed contract compliance (signatures, no banned imports, save format, etc.) and verbose-passed the V3 changes. Out of scope to trace the dataset element_spec. |
+| keras3-serialization-gotchas skill | NO | The skill describes `.keras`-format pitfalls (Dense(5), built-in losses, no save_format='tf'). It correctly told me CategoricalFocalCrossentropy handles soft targets, but it doesn't enumerate which Keras layers produce int64 vs float32. |
+| ecg-grading-contract skill | NO | Describes the grader contract; says nothing about training-time dtype semantics. |
+| **Colab runtime** | **YES** | TypeError 20 frames deep in `tensorflow/python/framework/op_def_library.py`, fired on epoch 1 of seed 42 in Phase A. |
+
+The cost: ~1 minute of training time wasted on the failed seed-42 epoch-1 attempt, plus ~5 minutes of human-in-the-loop diagnose-and-patch latency (read error, identify cause, edit submission.py + cell 12, instruct user to re-run cell 12 → 14 → 20). Then the run completed cleanly.
+
+**Interpretation: this is NOT a harness failure.** The harness scope is grader-contract compliance. Runtime ML correctness is checked by actually running the model. These don't overlap. The bug was always going to be caught at training time, with or without the harness, and the marginal cost of catching-by-running vs catching-by-static-analysis is small for a tf.data graph that's hard to reason about statically anyway. Mark this as a known scope gap rather than a harness flaw.
+
+### submission-reviewer agent during V3
+
+| Stage | Token cost | Wall clock | Catches | Verdict |
+|-------|------------|------------|---------|---------|
+| V3 review (mixup + Phase B added) | ~32K | ~70s | 0 contract issues, 2 informational notes (unseeded random ops, intentional unprefixed checkpoint filename) | **GO** |
+
+Same value profile as Phase 1: the agent confirmed zero contract issues in a structured template that took ~70s and one tool call, vs. ~10 sequential reads/greps if I'd done it by hand. The agent did NOT catch the dtype bug (out of scope, not a contract issue), but it did line-audit the nested `_mixup` function and confirm it uses only `tf.random.gamma` / `tf.gather` / arithmetic — i.e., no banned imports, no Keras subclassing. That's the kind of nested-scope check the AST hook can't do (the hook stops at top-level FunctionDef boundaries), so the agent fills a real gap.
+
+### Skill loads during V3
+
+| Skill | When loaded | Influenced design decision? | Verdict |
+|-------|-------------|------------------------------|---------|
+| keras3-serialization-gotchas | Session start (passive) + referenced during mixup design | YES — confirmed `CategoricalFocalCrossentropy` is built-in (so mixup integration with focal loss is safe, no need for a custom loss subclass). Confirmed `tf.random.gamma` is stock TF (so Beta sampling for mixup doesn't need scipy). | **Helpful.** Encoded the intersection of (Keras 3 quirks) ∩ (this project) precisely enough that "should I write a custom focal-mixup loss?" took ~1 second to answer instead of being a design rabbit hole. |
+| ecg-grading-contract | Session start (passive) + referenced in submission-reviewer prompt | YES — kept me from drifting on signatures when adding the Phase B branch. The plan was to detect Phase B from the existing val args being None rather than adding a kwarg, exactly because the contract is byte-locked. | **Helpful.** Saved me from at least one signature-drift attempt. |
+| rationale-pdf-prep | Loaded during deliverable update (PDF regen) | YES — provided the exact pandoc + tectonic command, no improvising. | **Helpful.** Zero friction PDF regen with the correct margins/fontsize/header. |
+
+### What changed about the harness's value proposition between Phase 1 and Phase 2
+
+Phase 1 conclusion (paraphrased): "harness was net positive but had thin margin because the session was static-verification-only — hooks didn't fire on real edits, can't generalize."
+
+Phase 2 conclusion: **harness is net positive during real iteration too, but for different reasons than I expected**.
+
+- The hooks **didn't catch any V3 issues** because V3 was contract-clean by design (I had the contract loaded in context before I started editing). Their value during iteration is *negative-space* value: every silent pass is a "yes, the contract still holds" confirmation that lets me move forward without manually re-verifying.
+- The submission-reviewer agent caught 0 issues but provided **a structured artifact I could trust** before sending V3 to Colab. That's a 75-minute compute commitment; spending 70s of agent time to confirm "no contract drift" before the commitment is straightforwardly +EV.
+- The skills directly **shaped V3's design choices** — mixup using stock TF (no scipy), no custom loss subclass, Phase B branch via existing args (no signature change). Without the skills these would have been one-by-one decisions; with the skills they were already-decided.
+- The dtype bug **was out of scope** and that's fine — the harness doesn't claim to catch runtime ML bugs, and the cost of catching it via runtime was small (~6 min round-trip).
+- The NotebookEdit coverage gap **is the most actionable improvement** flagged by Phase 2. Same gap as Phase 1's Risk #4, now empirically confirmed during real iteration. Cell 12's `%%writefile submission.py` is an unprotected duplicate of the graded code; a future edit there could break the contract and only get caught when the user runs the model. Fix: extend the verify-contract.py matcher to include NotebookEdit, and AST-parse the cell content if it matches `%%writefile submission.py`.
+
+### Subjective harness assessment for V3 active iteration
+
+**Net positive.** Specifically:
+
+- **Friction:** zero. No false blocks, no false agent-spawn, no skill-load that distracted from the work. The 5 read-before-edit runtime reminders were noise but they're a Claude Code runtime feature, not part of this harness.
+- **Cost:** ~10-15% of total V3-iteration tokens went to harness artifacts (mostly the agent call). Hook fires were rounding-error in token volume.
+- **Observable wins during V3 design phase:** mixup using stock TF (no scipy detour), no custom loss subclass, Phase B as a branch on existing args (no signature drift attempted). Each of these would have been a 1-2 minute decision without the skills; with them they were ~10 second decisions.
+- **Observable wins during V3 edit phase:** every Edit to the submission file came back contract-clean in <100ms. I never had to mentally re-verify "did this edit drift the signature".
+- **Observable wins during V3 hand-off phase:** structured review verdict from submission-reviewer before Colab compute commitment. I didn't ship a contract-drifted file to a 75-min training run.
+- **Misses:** the dtype runtime bug (out of scope, accepted), the NotebookEdit coverage gap (same as Phase 1 Risk #4).
+- **Compared to bare baseline:** the harness saved ~5-10 minutes of contract re-verification and design dithering. It did not save the ~6 minutes spent diagnosing the dtype bug — that was unavoidable given the harness's scope.
+- **Compared to V4 full-donnyclaude:** AHOL data shows V4 cost 1.56× vs V0 baseline. This targeted harness probably cost ~1.10-1.15× during V3 iteration (mostly the agent call). The targeted harness's specificity advantage held — generic Python-review or test-coverage agents would have produced noise that didn't apply (no tests in this project, idiomatic-Python concerns don't help when the constraint is grader-contract compliance).
+
+**The headline finding from Phase 2:** during real iteration, the harness's silent-pass behavior on every Edit + Bash is the dominant value, not its block-on-violation behavior. Insurance you don't have to think about. The submission-reviewer agent is the second-largest value source, and it's the same value as Phase 1: a structured contract verdict before each compute commitment.
+
+### Hook-fire deltas Phase 1 → Phase 2
+
+| Hook | Phase 1 (static verify session) | Phase 2 (V3 active iteration) |
+|------|-------------------------------|--------------------------------|
+| verify-contract.py organic fires | 0 (only smoke tests) | 3 (real Edits to submission.py) |
+| verify-contract.py blocks | 0 | 0 |
+| verify-contract.py false positives | 0 | 0 |
+| keras-save-format-guard.py organic fires | 0 (only smoke tests) | ~12 (every Bash command) |
+| keras-save-format-guard.py blocks | 0 | 0 |
+| keras-save-format-guard.py false positives | 0 | 0 |
+| NotebookEdit covered | n/a (didn't edit notebook in P1) | NO — 4 unprotected edits |
+| submission-reviewer agent fires | 1 | 1 (V3 pre-Colab review) |
+| Skill loads (active references) | ~3 | ~3 (different subset) |
+
+### What to change in the harness next time (revised priority list, based on Phase 1 + Phase 2 combined)
+
+1. **Add NotebookEdit coverage to verify-contract.py.** Now confirmed as a real-iteration gap. Fix: extend the matcher in `.claude/settings.json` to `Edit|Write|MultiEdit|NotebookEdit`, and in the hook, check `tool_input.notebook_path` and `tool_input.new_source`. If `new_source` starts with `%%writefile submission.py` or `%%writefile Donovan_Santine-submission.py`, AST-parse the cell content (after stripping the `%%writefile <path>` first line) and run the same `check_source` function. ~30 lines.
+
+2. **Document the harness-scope boundary in `README.md`.** The dtype bug surfaced cleanly that the harness scope is grader-contract compliance, not runtime correctness. Future contributors should not expect dataset-graph dtype validation. Add a one-paragraph "What the harness does not catch" section so this is explicit.
+
+3. **(Promoted from Phase 1)** Strip point-in-time project state out of skills. Phase 1 found stale `<FILL IN CODE NAME HERE>` claim; Phase 2 didn't surface new staleness but the principle holds.
+
+4. **(Promoted from Phase 1)** Make `verify-contract.py` do post-edit content reconstruction for Edit calls. Still a real gap but lower priority because Phase 2 didn't hit it (the AST hook fired on the on-disk content correctly because the Edits were already-applied by the time the next hook fired).
+
+5. **(Promoted from Phase 1)** Round-trip verification hook for `.keras` re-saves. Phase 2 again didn't hit this because the user's round-trip cell 30 confirmed the model loads. But it's still a real gap.
+
+6. **Read-before-edit runtime reminder noise.** Phase 2 fired this 5 times across all my Edits to files I'd already read. Not a project-harness issue — Claude Code runtime feature. But it's noise that affects the harness's perceived signal/noise. No action this is outside the project's control, just noted.
+
+### Cross-reference to AHOL data (Phase 2 update)
+
+| AHOL data point | Phase 2 (V3 active iteration) |
+|------------------|-------------------------------|
+| V0 SWE-bench resolved rate (retry): 9/10 | V3 contract-compliance self-score: 5/5 hard-fail items PASS, 2/2 soft-fail items PASS, 0 grader-blocking issues. Same 100% as Phase 1. |
+| V4 SWE-bench resolved rate: 8/10 | V3 outcome: **+0.44pp val accuracy over V2** (78.58% → 79.02%). 3-of-5 V3 seeds cleared V2 baseline. Lift came from the mixup augmentation, not from harness speedup. |
+| V0 → V4 cost ratio: 1.56× | **Phase 2 estimated 1.10-1.15× vs bare baseline.** Largest single token contributor was the submission-reviewer agent (~32K). Hook fires were rounding-error. Skill loads were rounding-error. The dtype bug round-trip cost ~6 min wall-clock but no harness-attributable token cost. |
+| V3 (single hook): 0.98× cost, 8/10 pass | This harness has 2 hooks active across ~15 organic fires in Phase 2; total hook overhead was ~1.5 seconds of wall-clock and effectively zero token cost. Consistent with V3's 0.98× finding. |
+
+### What to check in the next field-test session (if there is one)
+
+Phase 1 was static, Phase 2 was active iteration with a new feature (mixup) on the same architecture. A useful Phase 3 would test the harness during a *failed* iteration — e.g., a V4 attempt that loses to V3 and gets reverted. That would measure whether the harness's structured-rollback support (planning artifacts, atomic commits) holds up when the iteration's *outcome* is "no, ship the previous version" instead of "yes, ship the new version". The current harness is silent on the rollback path. Worth flagging because it's the failure mode that Phase 1 + Phase 2 haven't yet exercised.
