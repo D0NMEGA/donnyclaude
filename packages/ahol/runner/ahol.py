@@ -295,10 +295,10 @@ def extract_metrics(
         if in_window and is_new_or_newer and in_scope:
             candidates.add(p)
     if not candidates:
-        logger.warning("no session file modified during task window; token metrics unavailable")
+        logger.warning("no session file modified during task window; returning zero-token metrics")
         return {
-            "tokens_used": None, "cache_read_input_tokens": None,
-            "cache_creation_input_tokens": None, "tool_call_count": None,
+            "tokens_used": 0, "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0, "tool_call_count": 0,
         }
     agg = {
         "tokens_used": 0, "cache_read_input_tokens": 0,
@@ -365,10 +365,14 @@ def setup_tracer(
 
 
 class Shutdown:
-    """Cooperative flag set by SIGINT/SIGTERM; each run_task checks .requested."""
+    """Cooperative flag set by SIGINT/SIGTERM or budget-cap exhaustion; each
+    run_task / run_variant checks .requested and breaks at the next task boundary.
+    .reason records the first cause set (signal vs budget_exceeded) so main()
+    can pick a distinct exit code (130 for signal, 2 for budget_exceeded)."""
 
     def __init__(self) -> None:
         self.requested = False
+        self.reason: Optional[str] = None
 
     def install(self) -> None:
         """Wire SIGINT + SIGTERM handlers in the current process."""
@@ -377,6 +381,13 @@ class Shutdown:
 
     def _handle(self, signum: int, frame: Optional[FrameType]) -> None:
         logger.warning("shutdown signal %d received; flushing in-flight work", signum)
+        self.set("signal")
+
+    def set(self, reason: str) -> None:
+        """Mark shutdown requested; records reason on first call only so the
+        original cause survives subsequent set() calls from other variants."""
+        if not self.requested:
+            self.reason = reason
         self.requested = True
 
 
@@ -770,14 +781,27 @@ def run_task(
             projects_after = snapshot_project_dirs()
             new_project_dirs = projects_after - projects_before
             if not new_project_dirs:
+                # Fast-fail / no-session-file path: BCB clone failures, network
+                # errors, or any task that exits before claude even opens a
+                # session log. Falling back to unscoped extract_metrics here
+                # would aggregate over the parent Claude Code session's JSONL
+                # files (which ARE active in the same window), reporting tens
+                # of millions of tokens for a 2-3 second task. V1's BCB/553
+                # row in the ablation showed 52.4M tokens for a 2.8s task via
+                # exactly this contamination. Return zeros instead.
                 logger.warning(
-                    "no new project dir detected for %s/%s; falling back to unscoped extract_metrics",
+                    "fast-fail or no-session-file path: returning zero-token metrics for %s/%s",
                     variant_id, task.id,
                 )
-            m = extract_metrics(
-                before, ts_start_epoch, ts_end_epoch,
-                scope_dirs=new_project_dirs if new_project_dirs else None,
-            )
+                m: dict[str, Optional[int]] = {
+                    "tokens_used": 0, "tool_call_count": 0,
+                    "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+                }
+            else:
+                m = extract_metrics(
+                    before, ts_start_epoch, ts_end_epoch,
+                    scope_dirs=new_project_dirs,
+                )
             tokens_used = int(m["tokens_used"] or 0)
             tool_call_count = m["tool_call_count"]
             cache_read = int(m["cache_read_input_tokens"] or 0)
@@ -786,11 +810,11 @@ def run_task(
 
         wall = time.monotonic() - t_start
         ended_at = datetime.now(timezone.utc)
-        # Token cap removed 2026-04-24. The previous min(..., 2_000_000) clamp
-        # truncated real usage on every task (observed cache_read alone was
-        # 3.5M-5.1M per task on the V0-vs-V4 diagnostic spike), making the
-        # --budget-cap argument meaningless. Real token counts from JSONL
-        # parsing are authoritative.
+        # Per-task token cap removed 2026-04-24. The previous min(..., 2_000_000)
+        # clamp truncated real usage on every task (observed cache_read alone
+        # was 3.5M-5.1M per task on the V0-vs-V4 diagnostic spike). Real token
+        # counts from JSONL parsing are authoritative; round-level budget
+        # enforcement now lives in run_variant via --budget-cap.
         result = TaskResult(
             task_id=task.id, passed=passed,
             tokens_used=max(int(tokens_used), 0),
@@ -844,6 +868,7 @@ def _resolve_variant_harness(variant: Variant, use_mock: bool) -> Path:
 def run_variant(
     variant: Variant, tasks: list[Task], round_id: str, conn: sqlite3.Connection,
     tracer: trace.Tracer, shutdown: Shutdown, use_mock: bool = False,
+    budget_cap: Optional[int] = None,
 ) -> VariantResult:
     """run_variant(variant, tasks, 'rnd-1', conn, tracer, shutdown) iterates tasks, returns VariantResult."""
     with tracer.start_as_current_span(f"variant/{variant.id}") as span:
@@ -884,6 +909,30 @@ def run_variant(
                     "(cache_read_input_tokens=0); see GROUP-C-SCOPE.md",
                     variant.id, completed,
                 )
+            # Round-level budget-cap enforcement. Sum tokens_used across ALL
+            # variants and tasks for this round_id (the just-completed task is
+            # already inserted by run_task -> insert_task_result above). On
+            # exceedance, set shutdown so this variant breaks at the next loop
+            # iteration AND every other concurrently-executing variant breaks
+            # at its next shutdown.requested check (run_variant line ~862).
+            if budget_cap is not None:
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(tokens_used), 0) FROM task_runs WHERE round_id = ?",
+                    (round_id,),
+                ).fetchone()
+                round_total = int(row[0]) if row else 0
+                if round_total > budget_cap:
+                    logger.warning(
+                        "budget cap exceeded for round %s: %d > %d "
+                        "(after variant %s task %s); halting round gracefully",
+                        round_id, round_total, budget_cap, variant.id, task.id,
+                    )
+                    error_log = (error_log or "") + (
+                        f"[budget-cap] round total {round_total} exceeded cap {budget_cap} "
+                        f"after variant {variant.id} task {task.id}\n"
+                    )
+                    shutdown.set("budget_exceeded")
+                    break
         wall = time.monotonic() - t_start
         vr = VariantResult(
             variant_id=variant.id, tasks_completed=completed, tasks_passed=passed,
@@ -949,6 +998,7 @@ def promote_champion(
 def run_round(
     manifest: list[Variant], tasks: list[Task], round_id: str, conn: sqlite3.Connection,
     tracer: trace.Tracer, shutdown: Shutdown, concurrency: int = 4, use_mock: bool = False,
+    budget_cap: Optional[int] = None,
 ) -> RoundSummary:
     """run_round([V0, V4], tasks, '2026-04-23T10Z', conn, tracer, shutdown) fans out variants and promotes a champion."""
     with tracer.start_as_current_span(f"round/{round_id}") as span:
@@ -959,6 +1009,7 @@ def run_round(
             futures: dict[Future[VariantResult], Variant] = {
                 pool.submit(
                     run_variant, v, tasks, round_id, conn, tracer, shutdown, use_mock,
+                    budget_cap,
                 ): v for v in manifest
             }
             for fut in as_completed(futures):
@@ -1288,7 +1339,18 @@ def main(argv: Optional[list[str]] = None) -> int:
             "cwd-to-project-slug encoding."
         ),
     )
-    p.add_argument("--budget-cap", type=int, default=25_000_000, help="Abort if projected exceeds")
+    p.add_argument(
+        "--budget-cap", type=int, default=25_000_000,
+        help=(
+            "Round-level token budget. After each task completes, the round's "
+            "cumulative tokens_used (SUM across all variants and tasks for "
+            "this round_id from the task_runs table) is compared against this "
+            "cap. On exceedance, shutdown is requested gracefully: in-flight "
+            "tasks finish, no new tasks start, every variant breaks at its "
+            "next loop iteration. CLI exits with code 2 (distinct from clean "
+            "completion 0, crash 1, and signal-shutdown 130). Default 25M."
+        ),
+    )
     p.add_argument(
         "--task-limit", type=int, default=None,
         help="Cap the number of tasks loaded from the benchmark (smoke tests, calibration)",
@@ -1326,6 +1388,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         summary = run_round(
             manifest=manifest, tasks=tasks, round_id=args.round_id, conn=conn,
             tracer=tracer, shutdown=shutdown, concurrency=args.concurrency, use_mock=False,
+            budget_cap=args.budget_cap,
         )
     finally:
         conn.close()
@@ -1337,6 +1400,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         summary.round_id, summary.champion_variant_id, summary.champion_score,
         summary.total_tokens,
     )
+    if shutdown.reason == "budget_exceeded":
+        return 2
     return 130 if shutdown.requested else 0
 
 
