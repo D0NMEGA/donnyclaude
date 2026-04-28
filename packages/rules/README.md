@@ -18,7 +18,8 @@ rules/
 ├── python/          # Python specific
 ├── golang/          # Go specific
 ├── swift/           # Swift specific
-└── php/             # PHP specific
+├── php/             # PHP specific
+└── cobol/           # COBOL specific
 ```
 
 - **common/** contains universal principles — no language-specific code examples.
