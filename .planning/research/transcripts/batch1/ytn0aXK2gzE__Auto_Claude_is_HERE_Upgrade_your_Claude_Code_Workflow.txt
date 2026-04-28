@@ -1,0 +1,335 @@
+Title: Auto Claude is HERE… Upgrade your Claude Code Workflow
+Uploader: AI LABS
+URL: https://www.youtube.com/watch?v=ytn0aXK2gzE
+Video ID: ytn0aXK2gzE
+Upload date: 20250804
+Duration (s): 644
+Caption language: en-orig
+Source: ytn0aXK2gzE.en-orig.vtt
+
+============================================================
+
+The code that your AI agents are writing
+is not good. And I'll tell you why. On
+this channel, we've solved a lot of
+problems with AI coding, such as the
+models not having enough context of the
+project it's building. And then the
+models even forget the app that they
+were supposed to make. But many of these
+were solved by coding using context and
+task management. But even when humans
+write out code, they are bound to make
+mistakes and they might miss something
+causing poor quality code that fails.
+So, even before AI, there were already
+ways to check that the written code was
+up to standards and being written
+correctly. And today, we're going to
+combine these existing ways with AI
+coding. I'm going to show you how to
+actually get your AI agents to write
+clean code. Now, as we all know, Claude
+Code is an amazing AI coding tool. It
+has given us so many features that make
+Claude Code the best coding agent out
+there. And one of those features is
+hooks. Hooks allow you to run specific
+commands at certain points while Claude
+Code is writing code. So you don't rely
+only on giving instructions in a simple
+MD file, but you actually hard-code the
+commands to be run at certain points.
+Therefore, there is no chance of
+failure. Now, a quick break to tell you
+about today's sponsor, Scribba. So,
+here's the thing. I've been scrolling
+through Twitter lately, and suddenly AI
+is everywhere. Everyone's building,
+prompting, deploying, and honestly, it
+started making me feel like I was being
+left behind. That's when I finally found
+a place to actually learn AI, but in a
+structured, hands-on way. It's not just
+another site with random lessons. The
+learning experience is fully
+interactive. You're coding right
+alongside the instructor directly inside
+your browser. And their new course, the
+AI engineer path is a total gamecher.
+This path is built specifically for
+developers like me. It focuses on real
+tools you can use like OpenAI's API,
+hugging face embeddings, AI agents, and
+more. Everything you build is practical,
+visual, and designed to help you
+understand what's happening behind the
+scenes. So, if you're serious about
+learning AI and want to build real
+projects that actually make sense, this
+is where you start. Save 20% on Scribba
+Pro with the link in the description.
+So, for example, we can actually get
+notifications using Claude Code hooks.
+Meaning that whenever Claude Code stops
+giving out its output, I can program it
+to play a sound that's on my system. Let
+me actually show you. I'm going to ask
+it to create a hello.md file and then
+I'll switch tabs. So you can see the
+hello.md file was created and shortly
+after that we heard the sound and that
+happened because it was programmed to
+trigger the sound whenever cla code
+stops outputting. Just like this we can
+make sure that it runs commands when it
+stops working on certain files such as a
+swift UI file. For example, we have
+prettier which is a code formatter that
+many people use. It works with a lot of
+languages and we can now program claude
+code to run these code formatterers
+every time it edits certain files. That
+way we get good code quality and good
+coding practices are enforced and these
+types of formatters exist for every
+language. Now making these hooks might
+seem a little complicated with the
+syntax and everything but that is what I
+will show you in this video. A way that
+you can automatically generate the best
+clawed code hooks for any project. Now
+to clearly show you what I'm actually
+talking about take a look at this Swift
+UI project that I made. I've implemented
+this small recipe app and I'm going to
+guide you on how I use the Claude code
+hooks to make sure the code being
+written is clean. Every time Claude Code
+writes code, it's tested and so I don't
+have to come back later to check for
+errors or fix anything that's broken.
+Claude Code automatically takes care of
+that. First of all, I went ahead and
+created this implement.md file. For the
+sake of this video, I just made this
+small task file that Claude Code could
+read and use to set up its own tasks.
+It's an iOS app with a local SQLite
+database and it's pretty simple. If I
+were to implement it fully, there would
+have been better ways like using the
+BMAD method. But for simplicity, I use
+this approach. I then opened up clawed
+code with the dangerously skip
+permissions tag so it would
+automatically write the code without
+requiring me to accept the commands. I
+told it the iOS app was already set up
+and that it needed to start implementing
+the implement file as the plan. It then
+set up its to-dos and began executing
+them one by one. Along the way, whenever
+it wrote code, it ran three commands
+after every write, specifically on Swift
+UI files only. You can actually
+configure this in hooks so that a
+specific hook only runs on a specific
+file. So, let me show you what those
+were. Okay, so the hooks are actually
+implemented in this settings.json file.
+And if you look here, you can see the
+three bash commands that run after
+claude code has written any code.
+Basically, if I use edit, multi-edit, or
+the write tool to write to those swift
+files, then these three bash commands
+are the ones that execute. First, we run
+the Swift format command, which formats
+our Swift code. It's a separate
+formatter that automatically formats the
+Swift code when you run it. We also have
+its configuration file here, and it uses
+that configuration. It then formats the
+code automatically, making sure our code
+is clean and properly maintained. One of
+the advantages of having properly clean
+code is that it's also easier for clawed
+code to come back and read it. Clean
+maintained code is easier for claude
+code to understand as opposed to
+unmaintained code which can cause some
+level of hallucination. Next we have our
+swiftlint code quality check. For that
+we use our swiftlint.yiml file. These
+are just some conditions that make sure
+the proper rules for code are being
+followed. If they are not then when the
+lint check runs it flags any violations.
+In most cases it passed but in some
+cases it did give a lint check error.
+Claude code automatically caught those
+errors and used them to fix the code
+quality. As I mentioned earlier, every
+language has a similar tool specific to
+it. The method I'm showing you can be
+replicated easily. You can ask any model
+to generate these code quality checks
+for you. Then using a slash command that
+I will give you, everything can be
+implemented for you just like it was
+done for me in my settings.json file.
+The next command that runs after file
+editing is a build verification. You can
+actually run a Swift UI app from the
+terminal and if anything is broken,
+whether something isn't connected or the
+app isn't receiving data, the terminal
+outputs errors automatically. What
+happens then is Claude Code fetches
+those errors and fixes them immediately.
+This way I don't have to come back to a
+broken app, screenshot the errors from
+this pane and send them to Claude Code
+to fix because it already performs the
+verification by building the app itself.
+This is why it becomes a loop. Every
+time it edits files, all three of these
+commands run. My code quality is
+maintained and the app is always checked
+to ensure it's working as expected. At
+first, the UI it created was pretty
+basic. So, I went ahead and gave it this
+screenshot right here and told it to
+implement the color scheme from it.
+Again, there are better ways to
+implement a design from an image, but
+it's just a demo project and I am just
+directly giving a screenshot to claude
+code here. So, it went ahead and did
+that and there were errors for Swift UI
+as well. So I came back and decided I
+wanted to generate hooks for Swift UI 2.
+This one in particular, the
+accessibility audit was pretty
+interesting. So I thought I'd show you
+this as well. I also asked Claude Code
+to implement the set of rules and it
+went ahead and did that too. It ran
+these tests and there were accessibility
+failures in the audit at first.
+Initially it wasn't successful but then
+Claude Code went ahead and started
+fixing those issues as well and in the
+end we got our app right here fully
+updated. Now how do you implement the
+hooks? Let me walk you through this step
+by step. It all started with this GitHub
+repository called clawed code rule to
+hook. What this repository does is
+pretty amazing. It transforms your
+natural language rules into clawed code
+hooks automatically. So instead of
+writing complex code, you can just say
+something like this should be run after
+this and it converts that into proper
+hooks that can run programmatically.
+Here's how it works. You write your
+rules as plain text either directly or
+from a file. The magic happens through a
+slash command. For example, when I type
+the slash command, the system takes
+those natural language rules and
+converts them into proper hooks. The
+file contains the full implementation
+details of how hooks work, what tools
+claude code has available, and using all
+that information, it generates the exact
+hooks you need. Let me give you a simple
+example to make this clearer. Say you
+want to format Python files with black
+after editing them. Black is like swift
+format but for Python files. You would
+just write the rule and give that to the
+slash command. It would then generate
+the claude code hook automatically
+because it understands the context and
+knows exactly what needs to be done. The
+hook would be written specifically for
+Python files. So whenever Claude code
+edits or modifies a Python file, the
+formatting happens automatically. Now I
+ran into a problem when I first tried
+this. The implementation was a bit
+outdated. It was using hooks.json, which
+I believe was the old format. Claude
+Code now looks for hooks in
+settings.json. So I had to update that.
+There were also some key tools missing
+from the original implementation, so I
+went ahead and added those as well. The
+updated file will be available in my
+resources for you to use. But there's
+another important file you'll need
+called tools.md. This file explains all
+the claude code tools and their
+execution points. Why is this important?
+Well, let's say I want to generate rules
+for a Swift UI project to ensure the
+code is clean and properly tested. I
+need to provide this file to chat GPT
+when I'm generating the rules. Not
+everyone knows the specific rules and
+best practices for each language and
+framework. So instead of researching
+them manually, you can just ask Chad GPT
+to generate them. But Cad GPT needs to
+know about the tools and the natural
+breakpoints where Claude code can run
+commands. So here's what I did. I gave
+Chad GPT the tools.m MD file and asked
+it to generate rules for my Swift UI
+project. It came back with several tools
+I could use, including Swift format and
+Swift Lint. I then went back to Claude
+Code with the file chatgpt had
+generated. I ran the slash command and
+placed all the rules chatgpt generated
+into a rules.mmd file. Having all the
+rules in one place made it easy for
+claude code to read them. I also told it
+to perform a web search to find the
+accurate commands it needed to run.
+Next, I instructed it to implement the
+hooks in the project settings.json file.
+Here you can also specify what not to
+implement. For instance, chatgpt also
+suggested commands for proper git
+tracking, automatically committing code
+and running CI/CD pipelines. I didn't
+need those for this project, so I simply
+excluded them. Claude Code then went
+ahead and implemented just the hooks I
+wanted. And that's really all there is
+to it. It's surprisingly simple once you
+understand the process. Whatever
+framework you're using, whether it's
+Python, JavaScript, or in my case, Swift
+and Swift UI, you can use these two
+files that I'll provide in my resources,
+the tools file and the rule to hook
+file. With these, you can create your
+own hooks for any framework you're
+working with. I really encourage you to
+try this approach. It ensures that the
+code being written is consistently clean
+and that your project is properly tested
+at all the right points. It's a gamecher
+for maintaining code quality with AI
+coding tools. That brings us to the end
+of this video. If you'd like to support
+the channel and help us keep making
+videos like this, you can do so by using
+the super thanks button below. And as
+always, thank you for watching and I'll
+see you in the next one.

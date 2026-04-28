@@ -1,0 +1,479 @@
+Title: wtf is Harness Engineer & why is it important
+Uploader: AI Jason
+URL: https://www.youtube.com/watch?v=kJPvfoLtFFY
+Video ID: kJPvfoLtFFY
+Upload date: 20260305
+Duration (s): 916
+Caption language: en-orig
+Source: kJPvfoLtFFY.en-orig.vtt
+
+============================================================
+
+Thanks to HubSpot for sponsoring this
+video. So, something really big actually
+happened December 2025 and most of
+people didn't even realize that. Entry
+Cupsy tweet about this last week. It's
+very hard to communicate how much
+programming has changed due to AI in the
+last two months, specifically since last
+December. And Greg from OpenAI also
+talked about this. Since December,
+there's step function improvements in
+what model and tools are capable of. and
+a few engineers had told him that their
+job has fundamentally changed since
+December 2025. So what actually happened
+in December 2025? In short words, the
+latest model introduced in is finally
+ready for fully autonomous longrunning
+tasks. So with AI, the ultimate dream is
+always that while we are sleeping, AI
+can just work on task fully autonomously
+24/7. Even back 2023, the most popular
+project if you remember is called
+AutoGBT. It is first time those 40
+autonomous agentic system was introduced
+and they have fairly basic and simple
+architecture that using GP4 as a model
+to autonomously break down a list of
+tasks based on users go and has simple
+memory storage to store the result and
+people were doing some pretty crazy
+stuff like just give a go make a
+$100,000 and let it loop through task
+infinitely until completed. Back then
+the system just break and fail miserably
+because the model is simply not ready.
+But since December last year this really
+changed. The models have significantly
+higher quality long-term coherence and
+they can parse through much larger and
+longer tasks and we saw all sort of
+different experimentation came out from
+industry. Firstly from January we got
+this super hot concept called rough loop
+and most of basic and simple agent
+iteration loop to force model work
+longer so that it can take more complex
+tasks. They just for loop the model with
+some simple condition checks. But
+already we start seeing the difference.
+And one week later, cursor also released
+their experimentation where they use GPD
+5.2 to autonomously build a browser from
+scratch with 3 million lines of code.
+And entropic also released this
+experimentation they had where they get
+a team of cloud codes to autonomously
+working on a s compiler from scratch for
+two weeks and in the end it delivered a
+functional version with zero manual
+coding. It can even run doom inside this
+compiler as well. And same time open
+claw start getting attention and had
+this explosive growth that we never seen
+before. And it was very difficult to
+understand what was going on with open
+claw cuz from outside it's very easy to
+categorize open claw just be another
+menace but live inside your own computer
+and can also access from telegram like
+why this so popular and only later after
+I use deep player I realized that the
+real difference is that open claw
+represent this type of always on
+longunning fully autonomous agents that
+is very different from all the other
+agentic system we used before where
+human is main driver to prompt for the
+next action. Open claw is always on and
+it is peractive. And this autonomous
+feeding is created by a fairly simple
+architecture where it has memory context
+layer with a trigger and chron job to
+autonomously take actions and have the
+full computer access which is powerful
+environment it can operates in. And I
+believe open claw is the first project
+that really open up the biggest paradigm
+shift in 2026 that we are moving from a
+co-pilot simple task based agent system
+to those long running fully autonomous
+agent. Something that's always on always
+ready autonomously delivering super
+complex coordinated work. This is a
+critical shift you have to understand.
+The model today is actually much more
+powerful than you think as long as you
+design right assist system to unlock it.
+And this is the crux of what I want to
+talk about today. the harness engineer
+to reable long running autonomous
+systems. If it's the first time you hear
+about harness engineer, this is like
+evolution from what we've been
+previously talked about which is context
+engineer or prompt engineer. So
+previously we really focus on how do you
+optimize the prompts within the
+effective context window to get a model
+have the best performance for a single
+agent loop session. But harness engineer
+is really focused on those long
+runninging tasks which means how do you
+design a system that can works across
+different sessions and multiple
+different agents and how do you design
+the right workflow to making sure the
+relevant context will be retrieved for
+each session and right set of toolings
+to extract most out of models. This is a
+fairly new concept but the good thing is
+that industry already converged on some
+best practice that you can use from
+entropic versel lanching and many others
+more goes through each one of them one
+by one so you can see the patterns but
+before we dive into this with this
+paradigm shift fully atoms agents one of
+the biggest opportunity for the next six
+12 months is build open cloth for a
+certain verticals which means you deeply
+investigate and understand the
+end-to-end workflow of a certain
+vertical and build a Tom's agent with
+the correct environment and tooling to
+enable the end toend process that's why
+I want to introduce you to this awesome
+research HubSpot did on the AI adoption
+in email marketing report. It is
+fascinating report for you to understand
+for a vertical like email marketing
+where people actually use AI today and
+what has gaps because this report
+showcase clear workflow and opportunity
+in email marketing that you can
+potentially automate. They survey
+hundreds of email marketers from top
+companies to understand exactly how AI
+is reshaping their workflows. They talk
+about why marketers are still doing a
+lot of heavy editing. What were the cost
+to it as well as the biggest challenge
+they are facing today when implementing
+AI in the email marketings and each of
+them is a big opportunity for you to
+build a fully autonomous agents. They
+even dive into the specific KPI that
+they care more about and AI has showed
+proven results as well as what exactly
+things email marketers are really want
+from AI. So if you're a builder who are
+thinking about the next bit agent
+product to build, I highly recommend you
+go check out this awesome resource. I
+put a link in the description below for
+you to download for free and thanks
+HubSpot for sponsoring this video. Now
+let's get back to harness engineer for
+long running agent systems and at high
+level there are three learnings I took
+away from those. One is that for long
+running task agents the critical part of
+system design is creating this legible
+environment where each sub agent or
+sessions can actually understand where
+things are at and most likely there are
+some workflows that can be done to
+enforce legibility of the environment
+and I'll expand a bit more on that. The
+second is verification is critical. You
+can improve system output significantly
+by allowing it to verify its work
+effectively with faster feedback loop.
+And third is that we need to trust the
+model more. Instead of building
+specialized tooling that wrap a lot of
+reasoning and logic prematurely, we
+should give model max context with
+generic tooling that they natively
+understand and let it just explore like
+human. And I'll unpack those three
+things one by one as we go through each
+block here. Firstly, this entropics
+effective harness for long running
+agents blocks. So they've experimented
+using cloud code SDK to build a
+specialized agent for super long running
+tasks like build a clone of claw.ai
+website and the very first failures they
+observe is that firstly agent tend to do
+too much at once. Essentially it will
+always try to oneshot the whole app and
+this led to the model running out of
+context in the middle of its
+implementation and leaving the next
+session to start with the feature half
+implemented or documented. Then the
+agent would have to guess what actually
+happened and spend substantial time
+trying to get the basic app working
+again. And second failure they observe
+is that agent tend to declare job
+complete prematurely. You probably
+experienced this a few times yourself as
+well. The cloud code or cursor will just
+claim the pure or feature is completed
+but once you test it it actually didn't
+work. So their approach to solve those
+default model failure behavior is that
+first they set up initial environment
+that lays the foundation for all the
+features that given prompt requires
+which set up the agent to work step by
+step and feature by feature. So this is
+kind of similar to the plan or PRD
+approach that we normally took and
+second is that it start prompt each
+agent to make incremental progress
+towards its goal while also leaving the
+environment in clean state at the end of
+each session. What they did is starting
+designed this two-part solution. First
+they will have this initializer agent
+that use a specialized prompt to ask
+model to set up initial environment with
+a insh script which will set up dev
+server for example so that next model
+don't need to worry about those things
+and also a claw progress.txt txt file
+that keeps logs on what agent have done
+as well as initial get commit that shows
+what file has been added. Then a coding
+agent for each subsequent session to ask
+a model to make incremental progress
+then leave structured updates and all
+those efforts are really try to serve
+one purpose is how can they define an
+environment where agents can quickly
+understand the state of work when
+starting with a fresh context window. So
+the workflow is that the initializer
+agent would firstly try to set up a
+environment or you can call it
+documentation system to track and
+maintain overall plan and environment
+they design here is firstly they will
+have a feature list documents to prevent
+agent oneshotting the whole app or
+prematurely considering the project
+complete. Instead they will get
+initializer agent to break down the
+project into over 200 features and lock
+them in a local JSON file looks
+something like this where each task has
+detailed spec as well as pass or fail
+state. At default all task will be
+marked as fail. So force model to always
+look at overall project goal and the
+progress pick up highest priority task
+and do the next thing. But to make this
+workflow works they also need a way to
+force a model leave the environment in a
+clean state after making the code
+change. In their experiment they found
+the best way is to ask a model to commit
+its progress to git with descriptive
+commit message and write a summary of
+its progress in progress file. But with
+just documentation and context
+environment itself is not enough because
+mono at default has this tendency to
+mark something as completed without
+proper testing. And at the beginning
+they were just prompting cloud code to
+always do the test after the code change
+by doing unit test or API test for the
+dev server. But all those things were
+often failed to recognize that a feature
+is not working end to end. But things
+really start changing when they give
+model proper tooling to do the end to
+end test by itself like puppeteer mcp or
+chrome dev tool where agent was able to
+identify and fix bug that were not
+directly obvious from the code itself.
+So basically they are setting up the
+structure where they have the
+initialized agent to break down the
+user's goal into a list of features
+alongside insh to be able to run the dev
+server and progress files. So next
+coding agent can just read the feature
+list to get understanding about the
+overall project plan and pick up high
+priority task and progress file and get
+log to understand where things are at.
+Then run in.sh to start dev server
+immediately and do end to end test to
+verify the environment is clean so that
+it can get a full picture faster
+feedback loop while each new session and
+context window happen. In open AI's blog
+they talk about very similar thing. You
+have to making sure your application
+environment is legible. make the whole
+repository knowledge the system or
+record. Initially they put a gigantic
+agents.mmd file and fail in predictable
+ways because it's just too much context
+for any agent to manage and maintain. So
+what they did is design a proper dock
+environment structure and treated
+agents.md file as a table of contents.
+So they set up this documentation system
+from architectures the design docs the
+execution plan DB schema product specs
+and design front end plan security and
+many more and put this table of content
+into agents.mmd file so the agent can
+actually retrieve back relevant
+information when needed and this enables
+progressive disclosure and open actually
+do it even further they will try to push
+not only the code knowledge but also
+Google doc slack message all those other
+fragmented information feed data into
+the repository as a repository local
+version artifacts. So the agent can also
+retrieve because from the agent point of
+view if anything can't be accessed in
+the environment then effectively it
+didn't exist. But again documentation
+itself didn't really keep a fully agent
+generated codebase coherent. They also
+introduce certain programmatic workflow
+to enforce invariance. For example, they
+layer domain architecture with explicit
+crosscutting boundaries which allow them
+to enforce those rules with custom
+checks, llinters and structural tests
+which can be automatically triggered and
+injected by every git pre-commit and
+those type architecture usually you will
+postpone until you have hundreds of
+engineer in traditional software
+company. But with coding agent is an
+early prerequisite. Within those
+boundaries, you allow teams and agent to
+significant freedom in how solutions are
+expressed without micromanaging and
+worry the architecture going to drift.
+Meanwhile, they also improve the
+codebase a lot. For example, they made
+the app bootable per g work tree. So, so
+codex can just launch and drive many
+different instance and they also wire
+chrome dev to protocol into the agent
+runtime so that the agent can reproduce
+bugs valid fix by DOM snapshots,
+screenshots and navigation. And with all
+environment and workflow set up, the
+repository finally cross a minimum
+threshold where codecs can end to end
+drive a new feature. So every time when
+codex receive a single prompt, the agent
+will start validate the current state of
+codebase, reproduce a reported bug,
+record a video demonstrate the failure,
+implement a fix, validate fix by driving
+the application, record a second video
+demonstrating the resolution and
+eventually merge the change. So those
+two blocks jook is very good learnings
+and necessary harness system you need to
+put in place for fully autonomous
+system. Meanwhile, there also third
+learnings. Quite often when we build
+agents, especially vertical specific
+agents, our tendencies to build
+specialized tooling to do domain
+specific task. The learning god is that
+large learning model almost always work
+better with generic tool that they
+natively understand. Versel released
+this awesome article about how they
+redesign their test to SQL agent. So
+they spent months building sophisticated
+internal text to SQL agent DZ with
+specialized to heavy prompt engineering
+and careful context management. But as
+many of us experienced before those type
+of system kind of work but it's very
+fragile slow and require constant
+maintenance because every new edge cases
+happen you need to inject new prompt to
+the agent but later they tried one thing
+that totally changed the trajectory they
+deleted most of the specialized tool
+from the agent down to a single batch
+command tool and with this much simpler
+architecture the agent actually
+performed 3.5 times faster with 37%
+fewer tokens and success rate increased
+from 80% to 100%. Similar learning has
+been shared from entropy team as well
+where they talk about instead of having
+specialized search linked execute tools
+they just have one batch tool where you
+can run grip t npm npm run linked and
+fundamentally I think it's because all
+those large model is much more familiar
+with those code native tools that has
+billions of training tokens versus
+bespoke tool calling JSON that it need
+to generate and I've talked about this
+in programmatic tool calling video that
+I released last week and I believe it is
+similar fundamental principles here but
+the foundation of those simple
+architecture is again the good context
+and documentation environment where
+model can use generic tools to retrieve
+context progressively and it is same
+case with open claw. One reason open
+claw is so interesting is that they have
+a surprisingly simple but effective
+context environment. They have list of
+documentations to store core information
+with this foundation. They only have the
+most basic tooling like read, write,
+edit files, run batch commands and send
+messages. All the risk is coming from
+giving agent environment to retrieve
+relevant contexts plus a big skill
+libraries to expand capabilities. So
+those are three practical learnings
+about how to do harness engineer for
+long running complex agents by setting
+up a legible context environment to
+enable each session to grab context
+effectively and write workflow and
+tooling so that model can verify it work
+effectively drive faster feedback loop
+and trust agent with generic tools that
+it natively understands. If you're
+interested, I'm going to share more in
+depth about how do I take this learnings
+and transform into a development life
+cycle process in AI builder club. We
+have courses and work through about VIP
+coding and building production agents.
+And every week myself and industry
+experts share the latest practical
+learnings. So if you're interested in
+learning what I'm learning every day,
+you can click on the link below to join
+the community. I hope you enjoy this
+video. Thank you and I see you next

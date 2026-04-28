@@ -1,0 +1,376 @@
+Title: Auto Claude: AI Coding on Steroids! Claude Code Running Autonomous For Hours!
+Uploader: WorldofAI
+URL: https://www.youtube.com/watch?v=eaNA2oOXoUg
+Video ID: eaNA2oOXoUg
+Upload date: 20260105
+Duration (s): 799
+Caption language: en-orig
+Source: eaNA2oOXoUg.en-orig.vtt
+
+============================================================
+
+Recently, while working on my Claude
+code update video where I was covering
+sub agents, Claude ultra mode and LSPs,
+I briefly mentioned a new framework that
+turns Claude into a fully autonomous
+coding system. Shortly after, the
+creator actually reached out to me to
+thank me for sharing some light on the
+project, which pushed me to do some
+deeper dive into the project itself and
+doubling down on my research. And after
+spending some more time on it, I can
+confidently say that this project is
+truly remarkable. And this framework
+that I'm talking about is called
+AutoCloud. AutoCloud is an autonomous
+multi- aent coding framework that can
+plan, build, and validate software end
+to end with minimal human intervention.
+But what really sets it apart is that it
+doesn't just work well. It looks
+incredible. AutoCloud comes with a
+sleek, modern, and intuitive UI, which
+makes the entire autonomous development
+process transparent and easy to follow
+when Claud's actually working [music]
+with multiple sub agents. Think of
+AutoCloud as Claude Code, but on
+steroids with additional agent
+orchestration, [music]
+planning layers, validation loops, and
+powerful tooling that pushes it far
+beyond a standard coding assistant. And
+the best part is is that AutoCloud is
+completely free and open-source.
+AutoCloud has many features where it
+obviously works autonomously and unlike
+Ralph loop this is a framework that is
+going to basically tackle your task
+after describing the prompt. It is going
+to handle every component of it but it
+won't work at the same extent as Ralph
+loop which works in a persistent loop to
+get your task done regardless of how
+many tokens it uses. In this case it
+will autonomously handle the same steps
+as it would with Ralph loop but it won't
+go over and beyond. But regardless, you
+still have many other features like
+running multiple cloud code sessions
+directly within the Cananban board,
+which is a user interface that you can
+access with AutoCloud. And it's awesome
+because you can run multiple sessions
+within this template. Now, you also have
+other features like the isolated
+workspace, self- validating QA, AI
+powered mergers, memory layer, as well
+as a GitHub and Git Live integration,
+and a couple of other things. There's a
+lot more to this, so let's dive straight
+in. So, to get started, there's a couple
+of prerequisites. You're going to need
+to make sure that you have a Cloud
+account, and you have two options. You
+can use the pro plan, where you're going
+to be able to use their subscriptions
+tier directly within AutoCloud, or you
+can simply just use a free Cloud account
+and just link up your own billing
+account where you just pay for the API.
+This is the method that I'm going to be
+using, but there are more efficient
+methods with the Max Plan. if you are a
+daily and active user of cloud code. But
+regardless, just make sure you have
+this. Next is making sure that you have
+cloud code installed within your
+terminal. And if you do not, it is super
+simple. You can use the npm install
+command which is listed within the
+repository and you can install cloud
+code. Then you just need to make sure
+that you have git installed as well as
+python 3.12 or above. Once the
+prerequisites are installed, you can
+easily get this started with two
+options. You have the ability to install
+it using the standalone app or you can
+simply install this using the CLI and
+this is with a CLI usage only without
+any sort of UI. I'm personally going to
+be using this with the application. So
+I'm going to go ahead and actually
+install the beta release which may have
+more bugs but I want to have more
+features a part of this. Before we get
+started I just want to mention that you
+should definitely go ahead and subscribe
+to the World of AI newsletter. I'm
+constantly posting different newsletters
+on a weekly basis. So, this is where you
+can easily get up-to-date knowledge
+about what is happening in the AI space.
+So, definitely go ahead and subscribe as
+this is completely for free. After
+installing, you're going to be greeted
+with this main dashboard which will
+welcome you to open up a new project or
+you can simply open up a previous
+project. I'm going to be starting off
+with a new project and we're going to go
+ahead and create a new folder. And this
+is why you need git because you're going
+to need to initialize your project. And
+once you have it initialized, you can
+either connect it with GitHub or GitLab.
+And you can simply do so by having it
+connected with the CLI. After
+authenticating GitHub as well as your
+own repository that you want to work
+within, you have the ability to
+customize a couple of things. Now, you
+can tweak around with the memory, which
+is where you can have that additional
+memory layer when you're working within
+AutoCloud, which I would highly
+recommend that you do. And you can set
+this up with Graphites's MCP server as
+well. And this is something where you
+can even use an embedding provider
+locally with O Lama. So, if you have
+that locally installed, you can do so,
+or you can use Open AI, which I believe
+is the best. Then after saving these
+settings, you can then head back into
+the linear settings and if you want to
+integrate these different connections,
+you can simply enable it. You can even
+add in the cloud o if needed. And
+there's general settings that you can
+tweak like the agent configuration,
+which model it is going to use. And one
+great thing about autocloud is that
+since cloud usually has a problem with
+various sorts of limits, it is something
+that can backfall to another model like
+the sonet 4.5 directly within autocloud.
+And it's intelligently going to do that
+by having it set multiple agents with
+different models so that once the limit
+has been hit, it will transition to the
+next model. And what I mean by that is
+if you head over to the agent settings,
+you have the ability to tweak the agent
+profile. I'm going to keep it on
+optimized with the auto mode. But you
+can change this up for your own
+preferences. You want a model to just
+specify on planning, you can set that
+with a specific model. And I believe the
+creator of this project is going to be
+integrating other models in the future,
+which will be a gamecher cuz this will
+be a great tool that can help you out in
+so many ways. But now, this is
+AutoCloud's main dashboard. This panel
+is where you're going to be able to work
+and have it complete multiple tasks for
+you. Now, what we're going to do is
+start off by adding in a new task, and
+that is by clicking on this button. And
+we can request it to accomplish this
+task with the OP Opus 4.5. So, let's go
+ahead and send in a prompt. This is
+where I can be as descriptive as
+possible and tell it that I want to
+build a modern finance signaling app and
+it will aggregate market signals to you
+like the momentum, sentiment and
+volatility with live APIs and AI
+generated daily market briefs. Once you
+have specified the description, you can
+then select the agent profile that I had
+mentioned and then the phase
+configuration is where it will have it
+so that it will use that spec driven
+development system. So this essentially
+has everything built within autocloud.
+It will use the best frameworks to get
+your generations outputed in the best
+manner and with spec driven generations
+like we all seen with openspec BMAD and
+so many others it gets the best quality
+outputed. So in this case it will use
+the Opus 4.5 for creating all the specs.
+It will code it out using the Opus 4.5
+and you can obviously change this around
+and customize it with other models like
+the Sonic 4.5 or Haiku. I'm going to
+leave it for Opus 4.5 as I believe this
+would be the best. And now we're going
+to go ahead and create the task itself.
+You have get options as well you can
+tweak but that is something that I can
+leave for another day. Now within the
+planning phase you'll see that it is
+going to now start creating multiple
+plans for sub agents to tackle. And you
+can click on the start button which will
+execute the planning process which you
+can see is in progress. And currently it
+is incomplete cuz I believe I need to
+actually set my API key. Now this is
+something that I had a problem with. But
+if you are to provide a name and if you
+are to authenticate any sort of cloud
+account, it is going to request you to
+either subscribe to a max account or a
+pro account with claude. And if you do
+not have that and if you want to use
+your own API, what you can do is click
+on this dropdown and you can paste your
+manual API key from claude that's linked
+to a billing account so that you can use
+the Opus 4.5 within AutoCloud or this on
+it. And afterwards, you'll see that it's
+authenticated. Another thing, make sure
+you set it as active. Then click save
+settings. And what's nice is that you
+have the ability to also access Cloud
+Code within the agent terminals. And you
+can get a live preview of all of the
+agents working over here. You can
+actually run 12 cloud code agents
+simultaneously, which is incredible cuz
+you can just simply add in multiple
+terminals that you can run
+asynchronously. But going back into the
+canban board, you're going to be able to
+see the progress and within the current
+steps, it is going to work on planning
+each and every step as to how it's going
+to build out your specd driven workflow
+for the agents to handle. But right now,
+it is using multiple tools to get
+everything ready for this. And then at
+the end, it is going to condense and
+create that plan. And then it will also
+showcase the code and the validation
+steps once it finishes this. And what it
+can also do is it can create multiple
+agents, multiple sub agents of cloud
+code that you can then deploy and have
+it tackle autonomously without you even
+doing anything. You can also set it so
+that you have human review so that you
+can visualize each and every change that
+it's making. What's also nice is that
+autocloud will be able to use your MCPS
+like context 7 in this case to get you
+the most relevant uh libraries for this
+particular use case of building the
+modern finance dashboard. You also have
+the ability to use ideation to generate
+ideas about code improvements, UI or UX
+security and it will actually list out
+all of these things in the bottom
+section over here once it finishes
+generating it. So it looks like it has
+finished generating ideas as well as
+validating if there is any security risk
+and you can see that there's actually a
+critical one. So it will list out all of
+the ideas and in this case if it's code
+related you can categorize it UX or UI
+docs security and performance and you
+can actually click on one where it says
+that my API is actually exposed and in
+this case what I can do is I can convert
+to auto to actually tackle that task. So
+I can tell it to autob build this task
+for me and it is going to then deploy it
+to the cananban board and then I can
+simply click on start and have it
+execute that task for me. You can also
+ask questions about your codebase so
+that you can get a better understanding
+of it as well. What's also cool is that
+you can generate a road map as well,
+which is incredible. And the road map
+that it creates is pretty interesting
+because it is something that has a lot
+of phases that you can tackle the
+features and the priority of what it
+should focus on. But just take a look at
+what it had created. And I got to say
+this is probably one of the best
+generations I saw Opus output of a
+financial dashboard. Not only did it
+create the dashboard, but it created a
+fullon exchange where I can actually
+trade as well as execute different
+orders. And you can see there's a live
+preview of the price with the order book
+as well. You have the ability to
+generate different sorts of AI
+intelligence off of that stock or that
+uh cryptocurrency. So in this case, you
+can see that it provides me an AI
+analysis on Nvidia. This is fake
+analysis. Don't take this uh literally
+cuz this is not the price of Nvidia. But
+you can see that it tells you that uh
+the momentum right now is deeding. So
+you can go ahead and sell this right
+now. But you also have a dashboard that
+it generated where you can get a deep
+analysis on each individual uh stock or
+asset. And this is where it'll give you
+a good idea of the momentum, sentiment,
+and volatility. So overall, it did a
+great job with the UI and the
+functionality of this overall platform.
+So I'm really happy to see that
+AutoCloud did this autonomously. If you
+like this video and would love to
+support the channel, you can consider
+donating to my channel through the super
+thanks option below. Or you can consider
+joining our private Discord where you
+can access multiple subscriptions to
+different AI tools for free on a monthly
+basis, plus daily AI news and exclusive
+content, plus a lot more. But that's
+basically it guys for today's video on
+AutoCloud. This is a remarkable
+autonomous multi- aent coding agent that
+uses cloud code and extends its
+capabilities even further. And the fact
+that we get this beautiful interface
+that lets us visualize and deploy
+multiple sub agents is incredible
+because not only can you visualize these
+agents working on your task
+autonomously, but you have other
+features like the ability to ideiation,
+you have the ability to chat to the
+agents and so much more like creating
+road maps. But that is basically it
+guys. I'll leave all these links in the
+description below so that you can easily
+get started. Make sure you go ahead and
+subscribe to the second channel if you
+haven't already. Join the newsletter.
+Join the Discord, follow me on Twitter,
+and lastly, make sure you guys
+subscribe, turn on notification bell,
+like this video, and please take a look
+at our previous videos because there is
+a lot of content that you'll truly
+benefit from. But with that thought,
+guys, have an amazing day, spread
+positivity, and I'll see you guys fairly
+shortly. He suffers.

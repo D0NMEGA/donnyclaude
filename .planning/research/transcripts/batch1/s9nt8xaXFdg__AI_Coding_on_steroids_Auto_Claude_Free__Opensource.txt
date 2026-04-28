@@ -1,0 +1,536 @@
+Title: AI Coding on steroids! Auto Claude (Free & Opensource)
+Uploader: André Mikalsen
+URL: https://www.youtube.com/watch?v=s9nt8xaXFdg
+Video ID: s9nt8xaXFdg
+Upload date: 20251217
+Duration (s): 1168
+Caption language: en
+Source: s9nt8xaXFdg.en.vtt
+
+============================================================
+
+Ready for AI coding on steroids today
+we're showcasing Auto Claude where you
+can get 10 times the work done on your
+projects with the planning and the
+quality coding and testing that you
+should demand from your AI coding system.
+Now Auto Claude is designed to
+work for all skill levels from
+Vibe coders without any coding
+experience to senior developers.
+Hi, my name is Andre Mi-kal-sen
+and I use AI to code production
+level applications every day.
+And today I'm showcasing Auto
+Claude, a open source and free
+project for using your claude code
+subscription to get more work done.
+So when you're opening Auto Claude
+and want to connect it to a existing
+project or create a new one, you just
+come to the top left corner here,
+add project open existing folder.
+When you open it, it gonna prompt
+you to initialize Auto Claude.
+That's gonna create a.auto Claude folder.
+Inside your project, you just
+initialize and then the project
+is ready for you to use.
+And we're gonna start with showcasing
+the Kanban board here, which is
+the system for long running agents
+that just runs in the background.
+Now how it works is
+that you start engaging.
+The system by just creating a task.
+And we're gonna start with one simple
+task where I found a little bug here
+in the actual inside of Auto Claude,
+where we have a double cross here.
+So we're just gonna take a screenshot
+of that and just paste it into the
+description and we see it gets added
+as a reference image to the task.
+And we're just gonna say
+here and I'll use dictation.
+Please see the image in
+terms of the double cross for
+closing out the project files.
+That's overlapping with the model
+for closing the create task modal.
+So you can see now when we have
+some options here for selecting
+the model and the thinking level.
+If you want more control, if you
+don't want any, do any manual things.
+We have tried to keep
+things at a good level.
+We are gonna do a little bit of a
+work here where the system itself
+figures out what model and what
+thinking level it's gonna use.
+But as you can see now, we also have
+this section for requiring a human review
+before coding if you want to work on more
+complex tasks where you want more control,
+but the system will work autonomously.
+And also we can drag and drop hard
+project files here into the description.
+Right now it's not working correctly.
+So we're gonna create a second
+task for showcasing how the system
+actually identifies how a task is
+either simple or it's a medium sized
+task, or it's a very complex task.
+So you can see now it's
+written the task title itself.
+We don't have to do that if
+we don't want, and we can now.
+Just start this task and it'll go into
+a planning phase where it starts to
+identify all the context it needs.
+It finds out what it needs to
+create as subtasks, and also the
+complexity level of the task itself.
+So while that has started, we
+can start to see some logs.
+We will also create a new
+task care for the issue that
+we can't drag and drop files.
+When using the project files
+view, we cannot drag and drop
+the file into the description.
+There's only the section for reference
+files further down in the task section,
+but I think we should just mention
+below the description that the user
+can both paste screenshots and drag
+and drop files from the project.
+File Explorer.
+So now in many cases, this is a
+description that like we could give
+a lot more context into the task in
+order for it to be a much better task.
+And the system we're trying
+to, like Auto Claude, is gonna
+try and identify everything and
+also have a self review process.
+So it's gonna create a plan.
+We'll go here and see
+the logs have started.
+You can see now it's in planning
+phase and it has 27 entries, and if
+you want to review and understand
+what the AI is actually doing, you
+can see the logs here with all the
+tools, all the writings and everything.
+It has identified here we can
+see the complexity level for the
+fixing overlapping close buttons.
+It has identified as a simple task
+with a confidence of 90%, and that
+dictates how everything is gonna work.
+It's just gonna go and have a
+quick spec and create a simple
+test for fixing or checking that
+it's actually fixed once it's done.
+So it's not gonna produce
+a lot of unnecessary tests.
+A lot of different coding, just so
+it saves upon the context itself
+here, so we don't have to pay more
+for a simple task integration.
+And if you're wondering, we are working on
+the same files here and the sales systems,
+but how Auto Claude is working is that if
+we have a full overview over all the work
+trees that are for this project itself.
+So that means a work tree is basically
+a sandbox or an environment where.
+The coding is happening in one place,
+and it won't touch any of the other
+files, so you can safely work on the
+same as, for instance, in this case,
+we're working on the same files on two
+different tasks, and then if you're
+a developer, you're gonna be like,
+Hey, we're gonna have merge conflicts.
+But inside Auto Claude we have this
+merge conflict AI layer, which is doing
+a little bit of programmatic things,
+but also having an AI that does the
+refactoring and handling merge conflicts.
+If there's.
+In these two tasks.
+So we're gonna see, once it's done,
+we're gonna see that it's actually
+a merge conflict, and we can just
+quickly, with one button solve it
+and everything gets done correctly.
+So as this is working, you can
+already see that the simple task is
+already going over to an AI review.
+So the AI is gonna re review its own
+work, and that's the power of Auto
+Claude, that you can just have this
+running in the background and it's only
+ready for you once the AI has deemed
+it ready for you to actually test and
+utilize straight into the project.
+So we also have this agents terminal,
+and this is a place where you can
+spawn up to 12 terminals and easily
+invoke Claude in all of the instances.
+And there's also some smart
+functionalities we're working on
+because myself, I like to have
+this type of terminal overview that
+I can name, rename terminals to
+what they're, what they are about.
+So I can.
+Hold my my thoughts when I navigate
+around, especially when you start
+to get more terminals, like when you
+start to get six and nine and even 12.
+Depends how much like
+multitasking you want to do.
+But for me when doing like tasks,
+I want to rename the terminals.
+And also there's a smart functionality
+here in terms of that you can add
+tasks just straight from the terminal
+view and you can also reference them.
+Basically like this, and it'll rename
+the terminal into the task description,
+and it'll also give the description
+straight into the claude code terminal.
+So you quickly can start new tasks
+if you have planned out things, but
+want to not utilize the AI system
+with everything happening in the
+background, you want to be more hands on.
+This is the system that
+allows you to do that.
+We also have some session restoring
+so that you can close down the
+application and spawn it up again,
+it will save the session so you
+can continue if anything happens.
+And we'll continue to iterate on this
+based upon how many people use the
+agent terminals in their day-to-day.
+We also have insights, which is basically.
+a chat with history, which is
+a Claude called instance that
+have access to your project and
+you can spawn chat history here.
+Myself, I like to use
+this for more like just.
+Investigating things that I'm
+wondering about, maybe having a
+sparring partner, something like that.
+It's nice to have.
+And also the roadmap functionality is
+a very good thing, for you actually
+getting good traction with your project.
+So here you can see we have different
+views for creating a roadmap, and we
+are also gonna be integrating third
+party software like canny in order to
+get feedback from users, from their
+softwares, and just incorporating it
+straight into the Auto Claude system.
+So here you can see the AI has tried
+to identify your target audience, and
+then it's breaking down features that
+you should implement into your project.
+This is just gonna become better and
+better as the more you use it because
+Auto Claude has its own memory layer.
+So we can go here to context and the first
+thing you'll see is the project index.
+So it's basically what we can
+programmatically figure out
+what the project is about.
+It has identified, we are in the Auto
+Claude repo here and it is identified
+the electron front end and the python
+backend with the API routes and the
+dependencies, just so that things like
+this, the actual project infrastructure,
+is quickly given as context to the user.
+And something we're working very
+heavily on is the memory system.
+It's a, graph memory system also
+incorporated with Semantic Rag.
+If you don't know what that
+means, it's basically that we
+have different methods for letting
+the AI know about your project.
+And as you're doing and you're working
+with tasks here, the more you use
+it, the smarter the system becomes.
+And for people who has a
+little bit more knowledge about
+context, windows and token usage.
+The more you use Auto Claude, the
+smarter it becomes at actually retrieving
+context at a smaller token usage.
+So it'll become cheaper to actually
+use Auto Claude over claude
+code when you use it over time.
+So the roadmap functionality, definitely
+something to check out and see what
+it, suggests that you should do
+for your project, but also we have
+the ideation tab here where we just
+can get some quick tasks if you are
+not sure about what you should do.
+And also if you have something like,
+I just want to see, for instance,
+security and code improvements at a
+general step, you can generate that.
+And Auto Claude will figure out based
+upon your project, investigate where,
+how do we have some security issues?
+We also have performance, so we can do
+performance enhancement, but also like
+code improvements is generally, it's
+trying to locate like low hanging fruits
+and quick wins where we can quickly
+incorporate something that has good
+value for the users of the project.
+So we'll go, just go back here and see.
+You can see now that the two tasks that
+we have, done is done with AI review.
+We can see here it hasn't identified
+actually that there is any
+merge conflicts ready for this.
+Let's just recheck it.
+These tasks, you can go in and see
+the subtasks, what it has done.
+You can also check the full
+logs in terms of what it did for
+validation, what it did for coding.
+So you have full overview
+over what the AI system has
+actually done for each of these.
+We're just gonna let this run
+because it finds five different
+things with it each category.
+And while we do that, we'll
+talk about the change log
+functionality inside Auto Claude.
+And it's something I really like.
+It has the possibility to create change
+logs, and also it's integrated with
+GitHub, so you can create a change
+log based upon either all the tasks
+you have done inside Auto Claude, but
+what we use most is the GIT history.
+Because I like to work with both
+the Task Kanban board, but also
+like I showcased more manually.
+So I'm manually doing commits to GitHub
+and I'm manually doing work with ai.
+And that makes it so that when you
+go into GI History here, you can
+for instance, say since last version
+and we are version, 2.1 right now.
+And it will actually load all the commits
+that's happening since that version.
+And you can just continue.
+And we will say 2.0 version, and
+this is a GitHub release and we want
+some emojis, and it's just like that.
+It's gonna generate a change log.
+And it's quite quick.
+we don't use Opus for this
+functionality right now.
+And you'll see it identifies the
+new features, improvements, bug
+fixes, and also all the changes.
+So we can quickly just save
+this to the change log.
+And once it does that, we can
+just click create release, and
+that goes straight up until Gith.
+So that's a very fast way to get
+good change logs and do GitHub
+releases if you want, something
+like that for your project.
+I do recommend using the change
+log for actually keeping track of
+what's happening inside your project
+just so you have control over time.
+So we talked about the context as well.
+It's something we really are
+working hard on and there's
+integrations with GitHub issues.
+So GitHub issues will come straight into
+Auto Claude and you can create tasks and
+it can start to identify what's wrong and
+fix it automatically in the background.
+There's a lot of other
+things that's coming.
+There's a lot of good
+things in the settings.
+For instance, if you are a very
+heavy power user like me you can
+utilize the integrations tab.
+Here we have multiple Claude
+accounts because what.
+Auto Claude actually allows you to do
+is to create a lot of tasks and just run
+them in the background, so you get a lot
+of features done quickly, but that also
+implies that you're getting things done.
+Not only quicker, but for instance, I
+get a lot of tasks done while I sleep.
+So basically all my claude
+code usage has doubled.
+So I need two claude code max
+plans and we have created a system
+that you can incorporate both of
+them, into the Auto Claude system
+and easily swap between them.
+And we will incorporate some type of like
+auto switching so it knows about what
+the rate limits for one account and it
+swaps when you need to swap basically
+so now we can go ahead and just
+get the task into our project.
+We open the task, which is ready now
+for human review, and we just press
+stage changes and that makes it so
+that if there's any merge conflicts,
+it's gonna solve that by itself.
+And we can go here into the IDE
+now and we see that the changes
+have come into our repo and we can
+repeat, uh, review them if we want.
+And we now also can just go into
+the, um, you can see here the
+changes staged successfully.
+So if there is any merge conflicts, and
+this is a very good, which I appreciate,
+which is the merge conflict AI layer
+that fixes merge conflicts automatically
+so you can work on a lot of tasks and
+also work manually in other branches.
+The system will follow along as
+files evolve, but we can now go
+and see if this is successful.
+This was the fixed overlapping
+buttons and that was that.
+If we go here and we see
+it, browse the uh files.
+You can see now the task was successful,
+it implemented it, and we can go ahead
+and merge this with our main branch.
+So what's coming next?
+We have a great focus on the framework
+itself that runs behind the hood.
+We also have the Python CLI that you
+can utilize if you don't want to use
+the frontend electron application.
+Now we're also working on incorporating
+the BMAD method for context
+engineering, AI coding validation.
+And we're just gonna put it on steroids
+by putting it inside Auto Claude where
+we get like the long running agents, QA,
+looping, rag memory system, and much more.
+We also welcome everybody to
+our free Discord community.
+The link is in the description to talk
+about features, bugs, and you can also
+network with like-minded AI enthusiasts,
+developers, entrepreneurs, marketers.
+There's a lot of people there,
+and then generally a nice
+community to feel at home.
+So stay tuned for big
+productivity updates.
+So I just wanted to showcase
+how you can install Auto Cloud.
+If you're wondering about how to do
+that, we have a very descriptive,
+quick install description if
+you want to follow along that.
+If not, here's how you do it quickly.
+You download the zip file here on GitHub,
+and the link is down in the description.
+Then you go and.
+You create either a new folder or you
+unzip the auto cloud folder, which is, uh,
+which you downloaded, and you just go to
+your favorite IDE here we use in Cursor
+just because it's, uh, simple to use
+with ai, especially if you're a beginner.
+And we just open up the
+folder that we just unzipped.
+Now we have the Auto Cloud project open
+here, and the first thing you're gonna do.
+Is that if you, is that, if you
+haven't installed the uh, node, JJS,
+Python and Docker desktop, just follow
+the instructions or just, what you
+also can do is basically just copy
+and paste this into something like.
+Cursor and just say, help me install this.
+And it will help you do that,
+uh, uh, based upon your system.
+And that's actually a very quick
+way for you to get started.
+Once everything is installed,
+you're just gonna do the first
+step here, which is to do these
+commands inside the terminal here.
+So if you don't have uv, you can basically
+just tell Opus to, or, or the agent
+you have inside Cursor or any other, a
+AI agent to just help me use, uh, uv,
+which is basically just for managing
+the packages here in a environment.
+Or you can use this, you can
+try this also, if you're, um.
+If the first command here is failing,
+that will basically spin up a, uh, virtual
+environment and install everything.
+So now it's ready to be used.
+The next step is to actually start
+the memory layer, and here we need
+Docker compose in order to do that.
+So you will just go and do this
+command in its own database.
+Uh, it'll create the database and spin up
+what's necessary for the memory to work.
+And the last thing is to actually just
+install and launch the application.
+So we are gonna do p and PM
+install that installs everything,
+and then just command, copy this
+command once it's done here.
+So now it'll just build everything
+and it'll start the application as
+soon as it's done, and it's taking
+quite a short amount of time.
+Now we can see we're getting a
+new application up and going here.
+So there you have it.
+It's up and going.
+And if you have any questions, I highly
+suggest you join our Discord community.
+I will be very interactive
+there in terms of helping you
+if you have any issues or bugs.
+And if you have liked the video,
+be sure to subscribe and like it.
+And.
+Help other people find this amazing
+system that we are working on so we can
+get going with our projects at lightning
+speed while keep, keep still keeping that
+quality that we want from our AI coding.

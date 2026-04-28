@@ -1,0 +1,739 @@
+Title: Stop Using Claude Code the Normal Way
+Uploader: Leon van Zyl
+URL: https://www.youtube.com/watch?v=lGWFlpffWk4
+Video ID: lGWFlpffWk4
+Upload date: 20260105
+Duration (s): 1698
+Caption language: en-orig
+Source: lGWFlpffWk4.en-orig.vtt
+
+============================================================
+
+Welcome back and a happy new year. Now,
+I'm convinced that longunning agents are
+the future of Agentic Coding and Vibe
+Coding. And in this video, I'll prove
+that to you. I'm going to show you two
+projects that have three things in
+common. They were both built using
+Clawed Code. I sent them each the exact
+same prompt. And finally, I didn't
+interfere at any point. I simply let the
+agent run on autopilot. And as you'll
+see in a second, the results are
+drastically different. And later on in
+this video, I'll show you how you can
+use this longunning agent yourself. And
+it's really easy. First, let's have a
+look at the prompt that I passed to each
+of these agents. And this is a really
+detailed prompt. It gives a basic
+overview of the app that we're trying to
+build. And by the way, this is an
+application that can assist content
+creators with coming up with hooks and
+titles and thumbnail ideas. I also
+referenced some technical documentation
+that it can use to understand the
+different frameworks involved. Then
+we've got some prerequisites like we're
+starting off with the next.js project.
+We've got our problem statement and a
+lot lot more. So a few things to note is
+with the thumbnail generation. I
+actually want to use the nano banana
+model to generate different thumbnail
+ideas. And then we also have this
+built-in AI assistant that's able to
+manipulate the results, generate more
+results, and come up with additional
+ideas. So this really is a massive
+project. So for the first project, all I
+did was go through the normal workflow
+using Claude Code CLI. So I went into
+planning mode. I then passed in that
+entire prompt into Claude code and
+Claude then created an implementation
+plan and afterwards I just told Claude
+to go ahead and implement it. And this
+was the result. So this is a really
+simple user interface. There's no light
+or dark mode. Although I did specify
+light and dark mode in the actual
+prompt. And for reference, I did use
+Opus 4.5 in thinking mode for this
+project. So I've already created a few
+sample projects here. But something to
+note is there's actually no option to
+delete any of these projects. Let's
+create a new project. Let's create N
+beginner tutorial. And now we can
+provide the topic that this video is
+about. So we can say this is a
+comprehensive beginner tutorial on
+getting started with N8N from basic
+installation to building a Gentic
+workflows. Now what we can do is
+generate the different hooks and this
+simply takes us to the hook page where
+we have to click on generate. All right.
+So the agent generated these different
+hook ideas. So, we can see these cards
+on the screen and we also have this chat
+interface where we can have a
+conversation with our AI assistant. But
+I'm really not a fan of this response.
+Either way, one of the requirements in
+the prompt file was that the assistant
+should have the ability to edit any of
+these cards. So, it should be able to
+add cards, remove them, or change the
+cards. As an example, let's change this
+one. So instead of saying stop paying
+for sapier, let's change it to make.com.
+Okay. So it's responded saying that the
+hook was changed and in this array we
+can see that it's now saying make.com.
+But if I have a look at the cart, it's
+still showing Zapier. Let's try to
+refresh this page and this still wasn't
+changed. Look, it's impressive that some
+of the stuff just works as a oneshot
+prompt, but it's clear that some of the
+more advanced features were missed, like
+the ability for this agent to actually
+manipulate the cards on the screen.
+Another thing that's missing is the
+ability to edit the system prompts for
+any of these agents. Like, what if I
+don't like the style of these hooks and
+I actually wanted to train the agent
+that generate hooks that meet my
+preferences? I don't see any way to edit
+the system bronze. And to be clear, this
+was a requirement in the prompt file as
+well. Either way, let's select one of
+these hooks and let's continue to
+intros. Let's generate it. All right. So
+now we have our different intros. Again,
+we can see the array in the conversation
+window. Let's try to remove a card.
+Please remove item five. Right. So in
+the chat window, it says the item was
+removed. But looking at the UI, card
+five is still there. even after
+refreshing the UI. Either way, let's
+just select any of these intros and
+let's continue to the titles. Let's
+generate the titles and we get our title
+ideas. Let's actually test this
+regenerate function to see if it works.
+And that does seem to work. So, let's
+select this one. Let's continue to
+thumbnails. Let's generate the
+thumbnails. And this simply gives us a
+description of the thumbnail and not the
+image itself. And as a reminder, we
+specifically said in the prompt that we
+want to use Gemini 3 Pro, so Nano Banana
+to generate thumbnails. And I don't see
+any option on the screen to generate
+those thumbnails. So let's simply go
+with this one. And let's complete the
+project. And that actually takes us back
+to the home screen without any summary
+or anything else. And unfortunately,
+this is the reality of trying to build a
+massive project like this in a single
+context window. As the agent was trying
+to implement all of these features, it
+exceeded the context window size. So, it
+kept compacting the conversation which
+actually lost a lot of important
+context. And then this is the final
+result. Now there are frameworks out
+there that try to solve this issue by
+splitting this massive requirement up
+into smaller features and then
+implementing these features one by one.
+You might be familiar with spec kit or
+BMAD or if you've ever used my Aenti
+coding starter kit. That is exactly what
+the spec feature does. It looks at this
+massive prompt and then it actually
+creates a separate implementation plan
+that's split up into phases and
+actionable tasks. Now the limitation
+with that approach is that you still
+have to coordinate everything. So you
+need to tell the agent to go and
+implement phase one and once that's done
+you have to intervene by clearing the
+context window and asking the agent to
+start with the next phase. And this does
+introduce other issues. This is like
+having developers work in shifts where
+one developer would do a piece of work
+and they would then leave the office and
+the next developer comes in having no
+context on what the previous developer
+did. So they just kind of take on the
+next piece of work, implement it and
+they could introduce duplicate code.
+They could even introduce bugs that
+break whatever the previous developer
+did. And besides for large projects like
+this, I don't think any of us actually
+want to sit around and babysit the agent
+whil it's going through 20 or 50 phases.
+So the solution to this is to implement
+a longunning agent harness. This harness
+will allow the agent to run for a very
+long time. This could be hours or even
+days to implement everything. And this
+also includes regression testing. So
+let's have a look at the second project.
+Again, I used the exact same prompt. I
+also used Opus 4.5 in thinking mode. A
+lot of this will look familiar. It's the
+same project that we're trying to build
+after all, but you'll already see a lot
+of small differences. The first being is
+we've got access to light and dark mode.
+We also have this settings button where
+we can edit the different prompts. So
+indeed we can edit the system prompt for
+the hooks agent, the intros agent,
+titles and thumbnails. Then from the
+main screen, we can actually filter
+projects by different statuses. This
+isn't even something I asked for, but
+the longunning agent decided that these
+features would make sense. When I hover
+over these cards, we have the option to
+delete the project, edit it. We can even
+duplicate the project, and of course,
+open it. Let's try to delete this
+project. And that works. Let's then try
+to create a new project. So let's give
+it a name. Let's provide the topic. We
+can also provide the target audience. So
+I'll just say no coders and automation
+experts. And for the content style,
+let's do educational. Then let's create
+this project. Then let's open it. And
+this already looks way better. We can
+see exactly where we are in the process.
+We have a summary of the topic. And on
+the right hand side, we've got access to
+our AI assistant. Let's just say hello
+to see if this actually works. And it
+does. Keep in mind this was all done
+through a single prompt. The same with
+the first project, but I just think this
+just feels way more polished. Let's go
+to generate hooks. And now we've got our
+different hooks. We can actually copy
+the text. We can even edit the hooks,
+which is really helpful. I didn't see
+that in the first project. And of
+course, we can select the hook that we
+want. We also have the option to
+regenerate these hooks or we can add
+more hooks. But let's see if our AI
+assistant can actually edit any of
+these. So let's have a look at this one.
+Most people spend 10 hours a week on
+repetitive tasks. I spend 10 minutes.
+Let's actually change this text. So,
+let's say please change card three from
+this to I spent 5 minutes. Let's see
+what this does. We'll just let the agent
+cook. And that's it. It actually changed
+this card. And we can see this little
+edited badge as well. That's awesome.
+Another thing that just popped up is
+this history button. So, if I click on
+this, I can actually see the previous
+version of this card. This is insane.
+Let's try removing a card. Please remove
+card five. So, this guy over here. And
+done. That card is now gone. This is
+insane. This is really, really cool. All
+with a single prompt. Let's continue to
+intros. I'm just going to generate
+whatever. This is probably a small
+thing, but I do appreciate that the AI
+assistant gives you these little buttons
+to tell you what you can use this
+assistant for. This isn't something I
+asked for, but it's really cool that
+it's there. Okay, so we've got our
+different intros. Let's select this one.
+Let's continue to titles. And we've got
+our different title ideas. Let's simply
+grab this one. Let's move on to
+thumbnails. So, during the planning
+phase, the agent asked me if I would
+like to have the ability to send
+reference images to Nano Banana. So, if
+you're unfamiliar with how Nano Banana
+works, it's really good at generating
+new images, but also really good at
+editing images, which also means you can
+provide a reference image. So, maybe a
+photo of myself along [snorts] with
+maybe any important logos that could be
+used in the design. So, that agent
+actually did that research. It looked at
+the capabilities of Nano Banana and
+said, "Hey, would you like the ability
+to provide reference images?" So, one
+thing I did was in the project files, if
+I go to public thumbnails and template,
+I simply uploaded this thumbnail
+template that I use in a lot of my
+videos. So, in the planning phase, I
+just said that's a great idea. I would
+love to use reference images. So, I just
+uploaded this template of myself into
+the public folder. You can use that as a
+reference. But now, I can see in the
+implementation, it's actually taken it a
+step further. So, it also allows me to
+upload things like logos. So, for this,
+let's actually select the N8N logo. And
+that should be it. Let's go ahead and
+create these thumbnails. And just to be
+clear, for the first project, the
+planning agent never asked me if I
+wanted to use reference images with Nano
+Banana. It just kind of skipped that all
+together. Now, I do realize this is
+non-deterministic, and chances are if I
+had to run that process again, it might
+have considered this to be an option.
+And here we go. We actually have our
+thumbnails coming in from Nano Banana.
+This is awesome. I actually like this
+first one. So, what we can do is view
+this in full screen, which looks great.
+We can also view the prompt that was
+sent to Nano Banana. We can also upscale
+the image. So, I guess if this is the
+one that we want to use, we can simply
+upscale it to 4K. We can also refine the
+image. So, let's click on that. And
+let's change the text. Let's say please
+replace game changer with beginner
+tutorial. All right, let's click on
+regenerate and let's see if this
+actually works. All right, it seems to
+be done. And dude, look at that. We have
+our thumbnail with the text beginner
+tutorial. And when we click on history,
+we can see the different revisions of
+this thumbnail. This is just stupidly
+impressive. And keep in mind this was a
+single prompt that simply ran on
+autopilot and this is pretty much a
+usable application. I'm actually going
+to make one more refinement. Let's say
+please change the yellow shirt and glow
+into color that complements the N8 pink
+on the color wheel. Let's just see what
+we get back. And there we go. This looks
+way way better. And finally, I guess we
+can simply upscale this image to use it
+on the actual video. And cool. The image
+was upscaled to 4K and we're able to
+download it as well. Man, this is just
+so impressive. Just to think this was a
+single prompt. And finally, on the
+complete screen, we actually get a
+summary. Now, I just wanted to see if we
+can actually go back to the different
+steps. So, if I click on hooks, it says
+that yes, you can go back to hooks. Your
+progress in later stages will be
+preserved. Oh, cool. So, let's go back
+to hooks. Here I can see the hook that I
+selected. And if we go back to
+thumbnails, we can see the thumbnail
+that was selected. So all of this is
+persisted even if I refresh this page.
+Now let me show you how I built this and
+how you can use this longunning agent
+yourself. A few weeks ago, I created
+this video that shows you how you can
+let Claude code run for hours or days to
+implement complex solutions. That
+solution was based on this effective
+harness for longunning agents by
+Anthropic. This is a brilliant article,
+so I definitely recommend giving it a
+read. They also give you this quick
+start guide which is an example project
+that you can play with. Now, this is a
+really cool project and it's actually
+quite simple. The entire process starts
+with you providing an app spec file.
+This is a really simple document that
+contains all of the prerequisites and
+text stack and core features of your
+application. You can simply use cloth or
+chatgpt to populate the file for you.
+Now when you execute this application so
+the longunning agent harness it will
+start off by running this initializer
+agent. This agent will have a look at
+your app spec file and it will actually
+do a couple of things. It will set up
+the basic project structure but more
+importantly it will also produce this
+feature list. Now this is really the
+magic of having these long running
+agents. This feature list could have
+tens to hundreds to even thousands of
+features. Each and every aspect of your
+application becomes a feature. For
+example, having a light and dark toggle
+that becomes a feature and that feature
+needs to be implemented by a coding
+agent and tested thoroughly. And once
+the initializer agent completes its
+work, the framework kicks off coding
+agents. So this coding agent will have a
+look at the feature list to find the
+next feature that needs to be
+implemented. This coding agent also has
+a second task and that is to perform
+regression testing. So it needs to
+retrieve the next feature that should be
+implemented but it should also pick
+three features at random that have
+already been implemented and then do
+regression testing on those features. So
+this agent will perform its regression
+testing and implement the next feature.
+And once it exceeds its context window
+or gets close to filling up its context
+window, it will close the session,
+update the statuses of the features and
+then move on to the next coding agent.
+And each of these coding agents have
+their own context windows ensuring that
+the context stays lean and focused on
+very specific tasks. So that is
+basically how this anthropic framework
+works. But of course, this all runs in
+the terminal. It's very technical to set
+up, and it's not really meant for
+everyone. So, there's been this drive to
+build UIs and applications that use this
+theory behind the scenes, but it's way
+easier for pretty much anyone to use,
+whether you are an experienced developer
+or a VI coder. An example of such a
+project is Automaker from another
+YouTuber called Webdev Cody. Cody and
+his Discord community have been putting
+a lot of work into this application. It
+uses all the theory that we just
+discussed where you start off with an
+app spec and the initializer agent will
+then create a feature list based on your
+requirements. And now you can visually
+see the coding agents implementing all
+of these features using a canban board.
+Now this is really a complex and fully
+featured application and I do want to
+create a dedicated video on this. Now,
+tools like Automaker and even AutoC
+Clawude do a lot more than just this
+anthropic harness. They're trying to be
+fully featured applications that pretty
+much replace your coding editor to an
+extent. You can do stuff like branching
+and work trees and run terminal sessions
+within those applications. So, for this
+video, I decided to really simplify
+things. This takes the anthropic harness
+and simply slaps a UI on top of it. And
+it's really easy to use and free, by the
+way. So, all you have to do is go to
+this repository, which I'll link to in
+the description of this video. Then,
+what you have to do is click on code and
+click on download zip. Then, you can
+simply extract the contents of that file
+anywhere on your machine. It really
+doesn't matter. Then depending on your
+operating system, you can double click
+on start UI for Windows or start UI.sh
+for Mac or Linux. So because I'm using
+Windows, I'll just click on start UI.
+Then let's run this. And this will set
+up the Python environment for you and
+install all of the dependencies. And
+afterwards, you'll get this URL. And if
+you open this, you will have access to
+this UI. you just won't have any project
+set up yet. Now, this is using your
+Claude code account behind the scenes.
+So, you do have to have Claude code set
+up. So, it means you have to install the
+Claude code CLI tool and authenticate
+yourself in Claude Code. Now, if you're
+watching this video, I do assume that
+you already have Claude Code set up. But
+if you have no idea what I'm talking
+about, you can simply go to my GitHub
+repository and simply follow these
+prerequisites. So you just have to
+install claude code and then
+authenticate yourself by running this
+command in the terminal. You need to
+either have a claude subscription or you
+can use an anthropic API key. So this
+uses the exact same harness from
+anthropic with a few very important
+changes. And I simply made these changes
+for performance sake but everything else
+remains the same. To create a new
+project we can simply click on this
+dropdown. Let's go to new project and
+let's just give this a name like YouTube
+demo. Let's click on next. Then let's
+click on select this folder. And now you
+have two options with the anthropic
+example. So the vanilla project you have
+to change the appspec file yourself. So
+you have to use cloth code or chat gbt
+or just manually manipulate that file.
+But what I added to this application is
+the ability to use Claude to generate
+that file for you. So let's actually
+test that feature. Claude will now ask
+you a few basic questions like what do
+you want to call this project and in
+your own words what are we building? Who
+will use it? So it's just really really
+simple. I'm actually just going to copy
+this prompt and paste it into the chat.
+Now this is really meant for everyone.
+So if you have no idea how to use a text
+stack or how to define what you want,
+simply have a natural conversation with
+the agent and it will guide you through
+everything. In fact, even passing in all
+of this context, the agent is giving us
+two routes. We can select quick mode and
+this is where the agent will make
+decisions on your behalf. For instance,
+the tech stack or if you really want to
+get involved in the architecture, you
+can go into detailed mode. And this is
+where you can tell the agent exactly
+what you want to use in terms of the
+database conventions related to database
+schemas, etc. For this, let's simply go
+with quick mode, right? It's asking us a
+few more questions. I'm just going to
+say you choose. And the agent is asking
+us a few more questions. Now, this is
+something I really like. And this is
+where the agent asked me if I wanted to
+use reference images for generating
+thumbnails. Something Claude Co didn't
+do in the vanilla planning phase. I'll
+just say you choose again and then let's
+just say sounds good. Obviously when
+you're using this you don't want to rush
+through this. Really go through all the
+questions and just have this
+conversation with the agent. And now the
+agent is giving us a breakdown of all of
+the features in our application. So if
+you want to add anything or remove
+anything or change anything, this is the
+time to do it. In total, we're looking
+at 174 unique features for this
+application. I'm just going to say it
+looks good. And now the agent is
+creating two files. It's creating that
+app spec file and it's also updating the
+initializer prompt with the amount of
+features that need to be implemented.
+And I do want to warn you, this step can
+take a few minutes to complete. And one
+thing I forgot to mention is you can
+attach files to this conversation as
+well. So maybe you've got an image of a
+design that you really like. You can
+definitely upload that image as well.
+And by the way, if you were curious,
+this is what the project currently looks
+like. So the agent wrote this app spec
+file. This gives us the project name and
+an overview. It contains the text stack,
+the prerequisites, the amount of
+features that need to be implemented,
+and all the core features. And then the
+initializer prompt was simply updated to
+contain the amount of features as well.
+And now we can see the agent completed
+its work. And we now have this button to
+continue to the project. So now that we
+have our spec file, the initializer
+agent will run to set up the entire
+project structure. And it will also
+produce this feature list. So if we have
+a look at this app, the initializer
+agent is currently running. And you can
+also see exactly what the agent is
+currently doing. If you want more
+information, what you can do is simply
+click on debug. You can also press D on
+the keyboard to bring up or hide this
+debug window. And in here, you can see
+exactly what the agent is busy with. All
+right. So, we can see the agent already
+created the first 20 features and
+they're showing up in the spending
+column. So, these features are sorted by
+priority. So, the ones at the top will
+be implemented first. I also want to
+mention that you can manually add new
+features as well. So for existing
+projects really all you have to do is go
+to add feature and here you can tell the
+agent exactly what feature you want to
+implement and you can simply run the
+workflow and the agent will
+automatically pick up that feature and
+implement it. Another small quality of
+lifely feature is the chat window. So
+when you click on this you can ask
+questions about your project or the code
+base in this chat window. The
+initializer agent created 190 features.
+That is more than the amount of features
+that we agreed on in the conversation.
+So sometimes it might create more
+features than you expected, but that is
+just because it identified certain gaps
+and it's trying to create complete test
+coverage. It's also setting up the
+project structure and installing all of
+the dependencies. Let me show you some
+of the improvements I made to the
+original harness. The anthropic harness
+writes all of the features to a massive
+feature list file. Now, if you have
+hundreds of features, this file can get
+massive. That feature list file by
+itself can exceed the context window of
+the agent. So, instead of having this
+massive JSON file, I instructed the
+agent to add features to a SQLite
+database instead. So, in this database,
+we can see all of the features with
+their priorities, with their steps, and
+whether this feature passed or not. Now,
+in order for the agent to add features
+and update features in this database, I
+created a dedicated features MCP server
+with tools for updating and working with
+this database. So, there's a tool for
+retrieving the next feature to
+implement. There's a separate tool for
+retrieving three features, two
+regression, test, etc. I found that this
+approach reduces token usage and it
+actually improves performance. Perfect.
+The initializer agent is now done. the
+coding agents will now start
+implementing these features. So if I
+have a look at this debug window, you
+can see the agent is using these MCP
+tools. So there's a tool for retrieving
+the stats. This will simply tell the
+agent how many features have been
+implemented. There's a tool for
+retrieving the next feature to
+implement. And if there were any
+completed features, the agent would use
+the MCP tool to retrieve three random
+features to regression test. Great. So
+the coding agent just pulled in a
+feature and it's busy implementing this
+feature over here and it's already
+implemented that feature. Well, that's
+cool. So it's now retrieving the next
+feature to implement which is this guy
+over here. And in my opinion, this
+really is the secret source. This agent
+will actually open up a browser window
+and test the application in real time.
+So as you can see, it's actually open up
+this browser window. This allows the
+agent to actually see the application.
+So it can identify any UI related bugs
+or styling issues as well. This is
+really relying on testdriven
+development. So it will test a feature,
+realize, oh, it actually doesn't work
+because there's a bug or the feature is
+totally missing. It will then implement
+the feature and try again. So as I've
+been speaking, you can actually see the
+page changing as the agent is testing
+this functionality. And it's this
+workflow of implementing a feature and
+testing it using the UI that really
+makes a massive difference. The agent is
+not simply implementing this blindly.
+It's testing the application to make
+sure everything works and everything is
+there. Yes, this takes a long time to
+complete and it uses a lot of tokens.
+And if it's quality you're after, this
+is really the approach you need to take.
+And if you're on a smaller plan with
+Anthropic, like the $20 plan, you will
+reach your usage limit relatively
+quickly. But honestly, it doesn't
+matter. Your usage resets after a
+certain period of time. And this agent
+will simply auto continue the moment
+your usage has been reset. So you can
+run this while you're sleeping or over
+weekends or when you're away. Now, if
+you want to just run through the stuff
+as quickly as possible without testing,
+you can do that as well. Simply stop the
+server. Then select YOLO mode, this
+yellow button over here, and click on
+start agent in YOLO mode. So this will
+simply grab the next feature, implement
+it blindly. It will do lint and type
+checks though. So it will look for any
+syntax errors, but it's not going to
+test these features at all. It's just
+going to assume that everything works
+and move on to the next feature. So if
+you really just want to go with speed,
+then just use YOLO mode. But if you want
+to build something that's actually
+robust and production ready, then let
+the agent test. If you've got any
+questions, please leave a comment below.
+Or if you get stuck or have any issues,
+you can join my school community and
+either myself or one of the community
+members will assist you. And also
+remember to hit the like button and
+subscribe to my channel for more Claude
+Code and the Gentic Coding tutorials.
+I'll see you in the next one. Bye-bye.

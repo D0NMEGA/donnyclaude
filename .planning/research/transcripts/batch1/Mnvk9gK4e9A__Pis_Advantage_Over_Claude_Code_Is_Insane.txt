@@ -1,0 +1,430 @@
+Title: Pi's Advantage Over Claude Code Is Insane
+Uploader: Eric Michaud
+URL: https://www.youtube.com/watch?v=Mnvk9gK4e9A
+Video ID: Mnvk9gK4e9A
+Upload date: 20260409
+Duration (s): 784
+Caption language: en-orig
+Source: Mnvk9gK4e9A.en-orig.vtt
+
+============================================================
+
+In this video, we're going to be taking
+our very first steps towards
+independence from platforms like Claude
+Code, Anti-Gravity, and the like by
+building out our own custom agent in Pi.
+I'm going to tell you exactly what Pi
+is, why it's worth consideration, and
+how to get it set up. This is less a
+tutorial because I haven't done it yet
+myself. We're going to be doing that
+together. More about why this is so
+important and why it goes along with
+what we've been talking about on the
+channel for a little while. Let's dig
+in. Okay, so here we are on pi.dev and I
+think the most important place to start
+would be what the heck is Pi? And Pi is
+an agent harness, right? Much like
+Claude Code or Codex or whatever, but
+this is more like a toolkit for agent
+integrations. This is actually powering
+some of the most popular projects on the
+planet right now, most notably Open
+Claw. The entire Open Claw ecosystem and
+all that stuff is built on top of Pi.
+So, very much unlike Claude Code and
+Open Claw, Pi is designed to be minimal.
+The idea being that you can customize
+this to match your use case
+specifically, rather than all the extra
+you would get from downloading Open Claw
+or Claude Code. You get just what you
+need and nothing else. And it's tailored
+specifically for the way that you work
+with AI agents. So much so that out of
+the box, they only have four tools:
+read, write, edit, and bash. So, it can
+read the contents of a file, it can
+write file contents, it can edit or
+replace exact text in a file, and it can
+run bash commands in a terminal. Cuz
+they figure, as it turns out, that's
+really all you need for an effective
+coding agent. So, why build more tools
+on top of that if you don't actually
+need them. Any of the models you bring
+in already know how to use bash. They've
+also been trained on read, write, and
+edit tools with the same sort of input
+schemas. And they're arguing, you
+compare this to Claude Code's tool
+definitions, and it's just all
+unnecessary bloat. The amazing part
+about this is Pi's system prompt and
+tool definitions for a working coding
+assistant together are below 1,000
+tokens. Compared to Claude Code or Open
+Claw's sometimes 12 to 16,000 input
+tokens, this is incredibly efficient,
+which is perk number one. While this is
+super great for efficiency and keeping
+things absolutely to their leanest,
+there are a few things that you may take
+for granted from more off-the-shelf
+harnesses like Claude Code. The idea is
+that it's extensible. They give you the
+chassis and you just put in the pieces
+that you want. So, out of the box, no
+MCP, but again, extensible. No sub
+agents, no plan mode, no built-in
+to-do's, no background bash. All that
+stuff you can add with extensions or
+skills or build out your own sort of
+integrations like that. But the one I do
+want to talk about is no permissions.
+This is always running in like the go
+dangerously or yellow mode, whatever you
+want to call it. It's yellow by default.
+So, Pi runs in full-on admin, so it
+doesn't, you know how when you're
+running in Claude Code, you have to
+click yes if like you want to edit a
+file, you have to give it permissions.
+This doesn't do that. So, I guess this
+is kind of a disclaimer because there's
+a lot of folks that used Open Claw in
+the early days and they put themselves
+in a wreck because of this specific
+feature. It has unrestricted access to
+your file system and can execute any
+command without permission checks or
+safety rails. No permission prompts, no
+pre-checking of bash commands for
+malicious content, full file system
+access access and can execute any
+command with your user privileges. So,
+it's seriously like you sitting down at
+the desk doing things yourself. The good
+thing here though is, unlike Open Claw
+that had all of these pre-built
+connections and a lot of different bloat
+and instructions, this is specifically
+what you tell it to do. So, at least you
+know exactly what its capabilities are
+because you're building it from the
+ground up. That said, I'm comfortable
+moving forward with Pi, but even in
+their own documentation, it says, "If
+you're uncomfortable with full access,
+run Pi inside a container or don't
+bother."
+Anyway, that's the disclaimer side of
+things out of the way. Okay-dokey, so
+that answers the first question, what
+the heck is Pi? It's a agent toolkit
+that gives you the keys, right? And that
+leads directly into why would you
+consider Pi instead of something like
+Open Claw or Claude Code that's already
+built out? So, like we alluded to
+before, all of those other like
+pre-built packages, like the Claude
+Codes of the world, Open Claw in
+particular, comes with a massive product
+overhead. Not just in system prompts and
+tools and stuff, but there's a lot of
+connections here that you absolutely
+don't need, but you're still paying for
+in terms of token and compute. Like,
+check it out. Okay, so you got like
+WhatsApp, Telegram. You got all these
+different things. It says like 50 plus
+integrations, right? How many of us use
+all of these? But we're still paying for
+every single one. Like I was saying,
+same thing with Claude Code. There's a
+lot of different tool definitions and
+all sorts of stuff that you might never
+actually use, but they're still part of
+your agent. This is the raw toolkit that
+you can build out absolutely anything
+you want tailored to work the way that
+you want. Just like Peter Steinberger
+did with Open Claw, you can start with
+Pi and build out absolutely anything you
+want on top of it to work exactly the
+way that you need it to. You have
+absolute full control and transparency.
+The git's right here. You can build
+anything you want on top of it. And I
+think that is insanely important. The
+most viewed videos on my channel have a
+lot to do with how terms of use changes
+are affecting the average person. And
+I've got like a couple hundred comments
+on each of those. I've talked to like a
+thousand people that have experienced
+the same frustration where the model
+isn't working the same as it used to, or
+they can't even get through a whole week
+with the same subscription anymore. So,
+I think it is more important as time
+goes on to move away from reliance on
+these larger tech companies and AI
+providers and just build your own custom
+solution. Which is what we've been
+saying on this channel for a little
+while now. Not just with the Obsidian
+Vault and all that stuff, but like going
+back to my days of the AI personal
+assistants, if you're one of the OGs,
+you'll know that I was against Open Claw
+because you're taking someone else's
+personal agent and applying it to your
+use case, which probably doesn't match
+up, right? You want to make sure that
+you have the keys. They're yours. Okay,
+so we got what is Pi, we got why is Pi,
+let's do how is Pi? So, it's just So,
+it's the same as you would with any of
+these other little packages. We're going
+to go to bash and just copy that. npm
+install. Here we go.
+Okay, so I'm going to go check the
+version now just to make sure that it's
+installed. All right, so Pi's installed.
+I got ham fingers and I uh
+&gt;&gt; [laughter]
+&gt;&gt; gave it an error. I'm going to move this
+down here. I'm going to go like this so
+you can see. Okay, so it downloaded a
+bunch of different dependencies and
+stuff that it needed. Read the blog
+post. Fantastic. I'm in here. It says
+auto 400,000 token context. But the
+question I have is it is
+saying it's running on GPT-5.1 Codex and
+I'm curious
+where it's charging. Like if it's taking
+my Codex
+install here and using that. Okay, so
+the cool thing is it's is it's already
+found my agents.md, but the question I
+have is if it's using my Open AI
+subscription or like how I'm connected
+at the moment.
+So, I'm going to ask just straight away.
+We're connected through the Pi coding
+agent environment you launched from
+running inside that harness.
+Found it. Okay, so it is actually
+pulling from my Open Router API key
+automatically
+in my OS environment variables, which is
+sick. I'm going to double-check that
+actually right now. So, that is really
+interesting. I've got Open Router API
+key in my environment variables and Pi
+picked up on that immediately.
+Um that's awesome because I don't have
+to like run that config. Just to catch
+you up, okay? Because that was kind of
+cool. Open Router is a service that has
+access to every AI model all under one
+API key, right? There's some free ones,
+there's uh you have access to like Opus
+4.6, like literally everything. Very
+first step, if you want to get this set
+up just like I did, is go to
+openrouter.ai
+and then get an API key. Sign up, go to
+the main page, and just click get API
+key. You're going to get your API key
+and then you're going to put it in your
+system environment variable like so so
+that you never ever ever
+Boop. It'll look like this on Windows.
+There's another way to do it with Mac.
+It's also very easy. But you never have
+to have them in a file that could be
+shared on GitHub. Or let's say you're
+making YouTube videos and it
+accidentally sneaks in there and you
+have to like, you know, rotate your
+entire Right? So, you go to boop.
+You go to create and you type it in. Be
+like, like and subscribe.
+Which would really help me out. If you
+look at my analytics, it says that only
+5% of you guys are actually subscribed
+to the channel. So, if you take a second
+right now to like and subscribe the
+video, that super helps me out. It also
+gives you an opportunity to see more of
+the content that I put out like this and
+you can learn some more. Anyway, so
+we're going to go create. Boop boop
+boop. And then I'm going to go and take
+this key and save it just like I said.
+I'm going to delete this for the time
+being so that nobody steals my
+Boop. There you go. Okay, so that's how
+you get your Open Router API keys. I'm
+probably going to end up using the Pi
+agent to build the Pi agent. But the
+cool thing here is that you can you can
+do that. Essentially, that's uh that's
+my favorite part. Yeah, so what I'm
+going to try and do is I'm going to try
+and log in with my
+OAuth provider, which is Codex at this
+point, Anthropic, GPT plus. Browser
+window should open. Where?
+&gt;&gt; [laughter]
+&gt;&gt; Copy this and go check this out. Oh,
+okay. So, that worked. I couldn't do
+through my duckduckgo browser because of
+probably pop-up blockers or something
+like that. So lame. I had to use my
+default web browser, but it um here we
+are. So, now I'm using my Codex Codex
+subscription instead of my Open Router,
+which is sick. But I should be able to
+swap models.
+There you go. So, I can use any of
+these. Okay, that's sweet. It goes
+through Codex and Open Router. Amazing.
+Wow, okay. So, here we are set up.
+Bare-bones tools. It's just reading my
+agents.md. So, it does know how to
+behave. Now, we really want to get this
+customized though, right? Let's like
+build this out to make it like awesome.
+I think what I want to do is see how it
+loads off of a cold start. What are we
+going with?
+Codex.
+Open AI Codex GPT-5.4. Okay, let's just
+see what happens. I'm going to go like
+this and check if we have anything from
+GPT-5.4.
+Negative. Okay, so this is on my Open AI
+subscription, which is dope. So,
+essentially, this is Codex working in
+Pi. Okay, man. Honestly, this is kind of
+unreal how the fastest part of this
+entire thing was the actual install of
+this agent. So, the nice thing is we can
+use Pi to help it build out our agent.
+We can use Pi to help build Pi. One of
+the things people are talking about
+that's really cool with the Pi agent is
+you'll be able to like reskin it, which
+you can't do with Claude Code and Codex
+and whatnot. I'm not sure how that'll
+work in my Obsidian Vault and like just
+the extension here. But I'm going to
+say, "Create a pixel art western theme
+set up for Pi. I want 16-bit Super
+Nintendo style graphics. Use your
+imagination."
+Bad instructions. But anyway, I want
+include a slash command to toggle this
+on and off. Let's just give this a go.
+See what we come up with. Off. Exploring
+Pi themes. I need to create a Pi themed
+extension.
+Building this out. Reading the dot Hey,
+there you go.
+So, logging in to GitHub. Seeing what we
+can do. While that was going, I'm just
+going to build out a convention for the
+slash commands that I already had
+established, right? Can you build out
+slash commands for all the workflows in
+our workflows folder? Copy that path.
+Follow the convention used in the Claude
+commands, though for those only in the
+workflows directory.
+Go. Let's see where we're at. Created.
+All right. So, how to use
+slash western
+on. Okay. So, slash reload.
+Woah. Gross.
+Sness western. Sunset bites cactus. I'm
+not sure what that is, but it did it.
+There you go. All right. Delete all
+things western mode.
+Saloon prompts. There you go. Done. I
+added the missing slash commands and for
+every
+created Claude commands content writer.
+Now you misunderstood. I need this to
+work in Pi the way it had in Claude
+code. For Pi, these needs to be prompt
+template. It's not commands. I've now
+built them in prompts.
+One prompt template per workflow and 39
+workflows.
+39 Pi slash commands. Okay, great. All
+available as workflow name
+arguments. So, let's go slash reload.
+Oh, dude. Check it out. Okay. So, it
+actually turned all of these into
+sick project prompts, which are skills.
+Okay. So, add captions.
+All that stuff. So, let's go slash add
+captions. Dude. It it Okay. So, it
+brought in
+all of my skills as slash commands with
+Pi. All right. So, the state of affairs
+right now is I'm going to spend a lot of
+time building this out and whatever. But
+as it is, this is one agent hub for my
+Codex subscription and my open router
+config with all of my slash commands and
+hooks and stuff brought into the same
+place, which is dope. So, I'm going to
+build this out and take a look at some
+of the packages that are available. I'm
+really interested in changing the UI so
+that I can maybe like dig into sub
+agents and have like different writing
+modes and content creation and that kind
+of thing. But that is a different video.
+Like I said, I'm doing this live with
+you guys. I haven't explored this too
+too much, but I have an idea what I
+would like to build out. Kind of loving
+the idea of cutting back on all the
+different commands I have to do. I just
+go Pi and now I've got everything in the
+one place. I'm going to definitely have
+more videos on this. If you're
+interested in the Obsidian vault that
+we're building out here, I've got a
+couple videos on it. You can check them
+out on my channel. Or you can get the
+whole thing for yourself in my school
+community. You just go to tools and
+agents and everything will be built out
+in there. I'm going to leave this setup
+prompts for just getting Pi off the
+ground in like a GitHub gist like I have
+been in the past. But as I build out
+this custom harness, I'm going to make
+sure that that is in here as well. If
+you made it this far in the video and
+you're not already part of the school
+community, I think you're going to be a
+great fit. It's free to try. We're
+already almost at a thousand members and
+everybody in there is super helpful and
+we're all working towards the same goal
+of building cool stuff and making some
+money online. Anyway, thanks for hanging
+out. Let me know how you're going to use
+this sort of technology in the comments
+and we'll catch you in the next one.

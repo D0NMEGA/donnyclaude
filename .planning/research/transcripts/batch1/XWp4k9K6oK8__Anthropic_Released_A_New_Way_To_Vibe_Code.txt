@@ -1,0 +1,152 @@
+Title: Anthropic Released A New Way To "Vibe Code"
+Uploader: AI LABS
+URL: https://www.youtube.com/watch?v=XWp4k9K6oK8
+Video ID: XWp4k9K6oK8
+Upload date: 20251205
+Duration (s): 280
+Caption language: en-orig
+Source: XWp4k9K6oK8.en-orig.vtt
+
+============================================================
+
+The main problem with AI agents is the
+limited context window which restricts
+what they remember from previous
+actions. When we give Claude code a
+larger task, it compacts multiple times
+while attempting a single feature,
+forgetting the main task it was asked to
+implement, making it less effective for
+long running tasks. Anthropic just
+released a solution that is based on how
+real teams work in an actual engineering
+environment. They identified two key
+reasons for why it fails on long tasks.
+Many of us have tried to oneshot entire
+applications or some big features and
+doing too much causes the model to run
+out of its context. After repeated
+compaction, the context window is
+refreshed with the feature only half
+implemented with no memory of the
+features progress and it leads to
+incomplete implementation. The second
+issue is that due to less testing
+capabilities, Claude marks untested
+features as completed. It assumes the
+feature is complete even if it doesn't
+actually work properly. Their solution
+was using an initializing agent and
+coding agent in harmony. Inspired by how
+real software teams work, this workflow
+is originally meant for agents you build
+yourself, but I realized it could apply
+to claude code instances as well. The
+first agent focuses on properly
+initializing your coding agent, and you
+have to be patient here because it takes
+a little time. I have an empty nex.js
+project, and I want to build an online
+Python compiler. Before starting, create
+a claw.md file using the init command.
+This file is a document for your
+codebase and is at the root of your
+project containing an overview and all
+important information. Next, generate
+the feature list JSON in the project
+route. It should list all features and
+their corresponding testing steps as
+well with all tests marked as initially
+failing. So, Claude is forced to test
+them. We use JSON instead of markdown
+because JSON files are easier to manage
+in the context. Since Claude can only
+test the code, not the interface we see
+on the browser, I connected Puppeteer
+for browser testing. After that, create
+an init script to guide starting the dev
+server and a progress tracking file so
+the system is able to keep track of the
+project completion status. For
+guidelines, Claude needs to update
+progress.md after each run and test each
+feature after implementation. The most
+important practice is committing to git.
+We underestimate how crucial it is to
+commit in a mergeable state. Git commits
+with clear logs show what's completed
+and let you revert if implementation
+fails. Finally, Claude should not change
+the features list beyond marking
+features as implemented. With the
+environment ready, we move to the coding
+part. The idea was to implement each
+feature one by one from the features
+JSON. Claude also made descriptive
+commit messages after each tested
+feature and also launched the browser
+when needed. Once it verified the app
+was working, it updated the JSON fields
+from false to true and updated
+progress.md with what had been completed
+so far. Finally, it committed the
+changes and verified the commit was
+successful. The advantage of this
+incremental approach is that even if the
+session terminates, you can resume
+exactly where you left off. Everything
+is tracked in the git logs, so you don't
+have to worry about breaking code.
+Claude can understand the project from
+the git logs and progress file, not from
+the code itself, so you can resume the
+session easily. Your next prompt is
+simply to implement the next feature
+marked not done. This approach also
+reduces Claude's tendency to mark
+features complete without proper
+testing. Each iteration ensures the app
+is built end to end with real testing,
+helping identify bugs that are not
+obvious from code alone. We repeat this
+cycle until all features are marked
+true. You might think this is similar to
+the BMAD method. It shares similarities,
+but I think Claude's workflow is better
+in some ways. It was easier since you
+didn't call agents separately, and
+context utilization was better, too.
+After implementing so many features, it
+only used 84% of context where BMAD
+would have already hit compact twice
+because of the large stories that it
+makes. That said, BMAD is still an out
+ofthe-box full system. While this is
+still an idea that needs to be
+implemented, but BMAD could use some
+things from this, such as the Git
+system. After teaching millions of
+people how to build with AI, we started
+implementing these workflows ourselves.
+We discovered we could build better
+products faster than ever before. We
+help bring your ideas to life, whether
+it's apps or websites. Maybe you've
+watched our videos thinking, "I have a
+great idea, but I don't have a tech team
+to build it." That's exactly where we
+come in. Think of us as your technical
+co-pilot. We apply the same workflows
+we've taught millions directly to your
+project. Turning concepts into real
+working solutions without the headaches
+of hiring or managing a dev team. Ready
+to accelerate your idea into reality?
+Reach out at hello@automator.dev.
+That brings us to the end of this video.
+If you'd like to support the channel and
+help us keep making videos like this,
+you can do so by using the super thanks
+button below. As always, thank you for
+watching and I'll see you in the next
+one.
