@@ -3,3 +3,12 @@ node_modules/
 *.log
 .env
 .env.local
+
+# AHOL runtime artifacts (regenerable; not source)
+.ahol/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+logs/
+packages/ahol/__pycache__/
+packages/ahol/runner/__pycache__/
+ahol-claude-dry-run.ahol-claude-dry-run.json
