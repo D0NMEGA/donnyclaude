@@ -260,6 +260,90 @@ def parse_session_jsonl(path: Path) -> dict[str, int]:
     }
 
 
+# Track 4: auth/quota failure detection.
+#
+# When the Max subscription quota is exhausted or claude is logged out, the
+# `claude --print` invocation returns a banner string in stdout instead of a
+# real response. The first such banner observed in the wild is the canonical
+# match for auth_quota_exhausted; the others are general auth failures.
+#
+# These are matched as substrings (case-sensitive) against the captured stdout
+# of the claude subprocess. Matched needles are short and specific enough that
+# false positives in legitimate task outputs are unlikely; if one ever shows up
+# (e.g. claude returns a code suggestion that contains "Please run /login" as a
+# string literal), the round will halt one task too early — which is recoverable
+# (re-run after verifying quota) — vs missing a real exhaustion which costs
+# ~50 minutes of wall-clock per the BLOCKED comparison-V0-vs-V4-x5-20260428-1457.
+_AUTH_FAILURE_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("out of extra usage", "auth_quota_exhausted"),
+    ("Not logged in", "auth_not_logged_in"),
+    ("Please run /login", "auth_not_logged_in"),
+)
+
+
+def _detect_auth_failure(stdout: str) -> Optional[str]:
+    """Return halt-reason string if claude stdout contains a known auth/quota
+    failure banner, else None.
+
+    Mapping:
+      "out of extra usage" -> "auth_quota_exhausted"
+      "Not logged in"      -> "auth_not_logged_in"
+      "Please run /login"  -> "auth_not_logged_in"
+
+    Used by run_task (Track 4 in-flight detection) and probe_quota_headroom
+    (Track 5 pre-flight). On match, run_task calls shutdown.set("auth_failure:
+    <reason>") so the round halts at the next task boundary; probe_quota_
+    headroom returns (False, reason) so calibration_check can fail-fast before
+    any task work.
+    """
+    if not stdout:
+        return None
+    for needle, reason in _AUTH_FAILURE_PATTERNS:
+        if needle in stdout:
+            return reason
+    return None
+
+
+def probe_quota_headroom(timeout: int = 30) -> tuple[bool, Optional[str]]:
+    """Pre-flight check (Track 5): invoke a minimal `claude` call and inspect
+    its stdout for known auth/quota failure banners.
+
+    Returns:
+      (True, None)  -> probe succeeded; no banner detected; quota appears OK.
+      (False, reason) -> probe rejected; reason is one of the values returned
+        by _detect_auth_failure, or "probe_timeout" / "probe_error: ..." for
+        local probe-execution failures.
+
+    Implementation notes:
+      - cwd=/tmp ensures no project CLAUDE.md or skills get loaded.
+      - --print + --max-turns 1 keeps the call to a single round-trip.
+      - --model opus matches the model AHOL rounds run against, since
+        Anthropic quota limits are model-specific. A quota that's healthy on
+        haiku may already be exhausted on opus.
+
+    The probe is a *guard* not a guarantee: it inspects current quota state
+    only. A round projected to fit can still hit cap mid-flight if other
+    Claude sessions burn quota concurrently. Track 4's in-flight detection
+    is the safety net for that case.
+    """
+    try:
+        proc = subprocess.run(
+            ["claude", "--print", "--max-turns", "1", "--model", "opus",
+             "Echo 'quota-probe' and stop."],
+            cwd="/tmp", capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "probe_timeout"
+    except FileNotFoundError:
+        return False, "probe_error: claude binary not found"
+    except OSError as exc:
+        return False, f"probe_error: {type(exc).__name__}: {exc}"
+    auth_reason = _detect_auth_failure(proc.stdout)
+    if auth_reason is not None:
+        return False, auth_reason
+    return True, None
+
+
 def extract_metrics(
     before: dict[Path, float], t_start: float, t_end: float,
     scope_dirs: Optional[set[Path]] = None,
@@ -774,6 +858,24 @@ def run_task(
                 logger.error("pipeline crash %s/%s: %s", variant_id, task.id, exc)
             t_end = time.monotonic()
             ts_end_epoch = time.time()
+            # Track 4: auth/quota failure detection. The Apr 28 BLOCKED
+            # comparison-V0-vs-V4-x5-20260428-1457 round ran 50 min through
+            # 130 dead invocations because AHOL had no defensive halt when
+            # claude stdout returned the "out of extra usage" banner. Detect
+            # those signatures here and trigger shutdown so subsequent
+            # variants in this round break at the next task boundary.
+            auth_reason = _detect_auth_failure(stdout)
+            if auth_reason is not None:
+                summary = f"auth_failure: {auth_reason}"
+                logger.error(
+                    "auth/quota failure detected in %s/%s stdout (%s); "
+                    "halting round at next task boundary",
+                    variant_id, task.id, auth_reason,
+                )
+                shutdown.set(summary)
+                error_summary = error_summary or summary
+                if exit_code is None or exit_code == 0:
+                    exit_code = 1
             # Scope extract_metrics to the project dirs this task CREATED. Without
             # this scope under concurrency>=2, V0 and V4 running overlapping
             # windows both aggregate over BOTH variants' JSONL files and produce
@@ -1052,9 +1154,36 @@ def run_round(
         return summary
 
 
+def _self_test_auth_detect() -> None:
+    """In-process unit test for Track 4's _detect_auth_failure pattern mapping.
+
+    Runs as part of self_test(); raises AssertionError on regression. Cases
+    mirror the canonical claude stdout banners observed in the wild
+    (comparison-V0-vs-V4-x5-20260428-1457 BLOCKED round) plus negative cases
+    that should NOT match.
+    """
+    cases: list[tuple[str, Optional[str]]] = [
+        ("", None),
+        ("Patch applied.\n", None),
+        ("legitimate output mentioning the word login forms in passing", None),
+        ("You're out of extra usage * resets 7:40pm (America/Chicago)",
+         "auth_quota_exhausted"),
+        ("prefix\nout of extra usage\nsuffix", "auth_quota_exhausted"),
+        ("Not logged in * Please run /login", "auth_not_logged_in"),
+        ("Please run /login to authenticate.", "auth_not_logged_in"),
+    ]
+    for stdout, expected in cases:
+        actual = _detect_auth_failure(stdout)
+        assert actual == expected, (
+            f"_detect_auth_failure({stdout!r}) returned {actual!r}, "
+            f"expected {expected!r}"
+        )
+
+
 def self_test() -> int:
     """ahol.py --self-test runs a 2-variant 2-task mock cycle; verifies SQLite + traces + schemas."""
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    _self_test_auth_detect()
     global DEFAULT_AHOL_HOME
     original_home = DEFAULT_AHOL_HOME
     try:
@@ -1175,7 +1304,11 @@ def integration_test_single() -> int:
     return 0
 
 
-def calibration_check(benchmark: str = "ahol-proxy-15", task_limit: int = 2) -> int:
+def calibration_check(
+    benchmark: str = "ahol-proxy-15",
+    task_limit: int = 2,
+    skip_quota_probe: bool = False,
+) -> int:
     """Regression gate for variant differentiation (discovery-based).
 
     Runs the first `task_limit` tasks of `benchmark` through both V0 and V4
@@ -1210,6 +1343,15 @@ def calibration_check(benchmark: str = "ahol-proxy-15", task_limit: int = 2) -> 
         select_variant_markers, verify_variant_discovery,
     )
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    # Track 5: pre-flight quota probe. Reject calibration before any task work
+    # if claude stdout indicates the Max subscription quota is exhausted or
+    # auth is broken. Skippable via --skip-quota-probe for debugging.
+    if not skip_quota_probe:
+        ok, reason = probe_quota_headroom()
+        if not ok:
+            print(f"calibration-check FAIL: pre-flight quota probe rejected ({reason})")
+            return 1
+        print("calibration-check: pre-flight quota probe OK")
     fixtures = CONTRACTS_DIR / "variant-fixtures"
     v0_manifest = fixtures / "V0.json"
     v4_manifest = fixtures / "V4.json"
@@ -1323,6 +1465,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--calibration-check", action="store_true",
         help="Regression gate: run 2 tasks through V0 and V4 and assert that V4 discovered its project-level skills on every task via session-JSONL inspection (V0 is bypassed). Discovery-based gate replaces the cache-token-ratio approach; see discovery.py and HEISENBUG-AUDIT.md for background.",
     )
+    p.add_argument(
+        "--skip-quota-probe", action="store_true",
+        help=(
+            "Skip the Track 5 pre-flight quota probe in --calibration-check. "
+            "The probe runs `claude --print --model opus 'Echo ...'` from /tmp "
+            "and rejects calibration if claude stdout contains a known auth/"
+            "quota failure banner (out of extra usage / Not logged in / "
+            "Please run /login). Use only when you have manually verified "
+            "quota headroom (e.g. the probe call itself would consume tokens "
+            "you would rather save during debugging)."
+        ),
+    )
     p.add_argument("--manifest", type=Path, help="Path to variant manifest JSON")
     p.add_argument("--benchmark", type=str, default="ahol-proxy-30", help="Benchmark name")
     p.add_argument("--round-id", type=str, help="Round ID (ISO-8601 UTC recommended)")
@@ -1369,7 +1523,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.integration_test_single:
         return integration_test_single()
     if args.calibration_check:
-        return calibration_check(benchmark=args.benchmark, task_limit=args.task_limit or 2)
+        return calibration_check(
+            benchmark=args.benchmark,
+            task_limit=args.task_limit or 2,
+            skip_quota_probe=args.skip_quota_probe,
+        )
     if not args.manifest or not args.round_id:
         p.error("--manifest and --round-id required unless --self-test is set")
     ahol_home = DEFAULT_AHOL_HOME
@@ -1400,6 +1558,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         summary.round_id, summary.champion_variant_id, summary.champion_score,
         summary.total_tokens,
     )
+    if shutdown.reason and shutdown.reason.startswith("auth_failure"):
+        return 3
     if shutdown.reason == "budget_exceeded":
         return 2
     return 130 if shutdown.requested else 0

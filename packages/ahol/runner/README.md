@@ -113,6 +113,68 @@ cd packages && PYTHONPATH=. python3 -m mypy --strict ahol/runner/ahol.py ahol/ru
 
 Expected: `Success: no issues found in 3 source files`.
 
+## Pre-flight quota probe and in-flight auth detection (Tracks 4+5)
+
+After the Apr 28 BLOCKED `comparison-V0-vs-V4-x5-20260428-1457` round burned
+50 minutes of wall-clock through 130 dead invocations because the Max
+subscription quota was exhausted mid-round, AHOL got two layers of defense
+against that failure mode.
+
+### Track 4: in-flight detection in `run_task`
+
+After every `_run_real_pipeline` call returns, `run_task` inspects the
+captured claude stdout for known auth/quota failure banners via
+`_detect_auth_failure`. Patterns mapped:
+
+| Pattern (substring, case-sensitive) | halt reason |
+|---|---|
+| `out of extra usage` | `auth_quota_exhausted` |
+| `Not logged in` | `auth_not_logged_in` |
+| `Please run /login` | `auth_not_logged_in` |
+
+On match, `shutdown.set("auth_failure: <reason>")` is called so every
+concurrent variant breaks at the next task boundary, and the failing task is
+recorded with its error_summary set to the halt reason. CLI exits with code
+**3** (distinct from clean=0, crash=1, budget-cap halt=2, signal=130).
+
+### Track 5: pre-flight quota probe
+
+Before `--calibration-check` runs any task work, `probe_quota_headroom()`
+invokes a minimal claude call and inspects its stdout for the same banners:
+
+```
+claude --print --max-turns 1 --model opus "Echo 'quota-probe' and stop."
+  (cwd=/tmp, timeout=30s)
+```
+
+`/tmp` cwd ensures no project CLAUDE.md or skills are loaded; `--model opus`
+matches the model AHOL rounds run against (quota limits are model-specific).
+On match, calibration is rejected with a non-zero exit before any task work.
+`--skip-quota-probe` bypasses the probe (use only when you have manually
+verified quota; the probe call itself consumes ~5K opus tokens).
+
+### Assumption: the probe checks current state, not burn-rate
+
+The probe is a *guard*, not a guarantee. It inspects the quota state at probe
+time only. A round projected to fit within the cumulative budget can still
+hit cap mid-flight if:
+
+- Other Claude sessions burn quota concurrently while the round runs.
+- The remaining headroom at probe time is less than the round's actual burn.
+- Anthropic adjusts limits during the run.
+
+Track 4 is the in-flight safety net for these cases; Track 5 prevents the
+most common failure mode (launching into already-exhausted quota) before any
+wall-clock is spent. **Use both layers; neither replaces the other.**
+
+### Test coverage
+
+`_self_test_auth_detect()` runs as part of `--self-test` and asserts the
+pattern -> halt-reason mapping for both positive and negative cases. Add
+new failure-banner signatures to `_AUTH_FAILURE_PATTERNS` and update the
+self-test cases together; the assertions catch regressions on every
+self-test invocation.
+
 ## Task execution pipeline (Task C5)
 
 `run_task` runs each benchmark task through a 9-step pipeline that ports the
