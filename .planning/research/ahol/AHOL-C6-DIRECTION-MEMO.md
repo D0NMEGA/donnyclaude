@@ -154,3 +154,101 @@ scrap-vs-salvage on donnyclaude as an AHOL substrate.
 the django-13128 ablation per "Next experiment authorized" above. Do not
 re-litigate the DECOMPOSE verdict; do not re-measure V0; do not migrate to
 a new substrate without first running the ablation.*
+
+---
+
+## Post-ablation revision (2026-05-05, HEAD `397dd7d`)
+
+The single-component ablation authorized above was executed
+(`ablation-django-13128-20260505-0402`, 6 variants × 5 reps; full report at
+`.planning/research/ahol/ABLATION-DJANGO-13128.md`). It produced a result
+that **inverts the premise** of the experiment and forces a substrate-level
+reconsideration that this memo previously deferred.
+
+### What the ablation actually found
+
+- V4 hit **5/5 resolved** on `django__django-13128`. V0 hit **4/5**.
+- Apr 30 V4 patches re-scored in today's swebench gave the same 5/5 unresolved
+  verdict, so the swebench environment did not drift between rounds.
+- The four pre-specified verdict types ("culprit identified", "interference",
+  "structural regression", "frame invalidated by V0 failing") all expected V4
+  to reproduce its 0/5. None did. The hypothesized regression simply did not
+  reproduce; the ablation contrast is therefore uninformative as a causality
+  diagnostic.
+
+### What we cannot conclude from this data
+
+The earlier read on this page — "session-level model variance, not a real
+regression" — is one explanation, but it is **not falsifiable from a single
+1-task n=5 round**. Multiple alternative explanations are equally consistent
+with the observed pass-rate inversion:
+
+1. **Per-session model-output variance on a hard task** — same harness
+   install, model lands in different output basins on different days.
+2. **Apr 30 Docker daemon corruption affecting V4 specifically** — V4's
+   larger preamble may have stressed Docker Desktop differently than V0's;
+   our daemon-health visibility on Apr 30 was zero.
+3. **Anthropic-side model weight or routing updates** between Apr 30 and
+   May 5 that shifted patch generation behavior.
+4. **Claude Code system-prompt or default-behavior drift** — Claude Code
+   itself ships updates and the variant worktrees pick up whatever the host
+   CLI exposes at run time.
+5. Some interaction of (1)–(4) with an interaction term we have no
+   instrumentation to detect.
+
+n=5 reps × 1 task does not separate (1) from (2)–(5). The earlier deep-
+research artifact in this memo flagged this exact failure mode under
+"AHOL-Proxy-15 cannot generate decision-grade evidence about donnyclaude":
+single-session, single-task drilldowns do not have the statistical power to
+attribute pass-rate movements to harness components.
+
+### What this means for direction
+
+The 150M-token multi-session AHOL-Proxy-15 re-baseline that the ablation
+report recommended is **rejected**. More measurement on a substrate that has
+demonstrably failed to produce decision-grade evidence does not produce
+decision-grade evidence; it just costs more tokens and more wall-clock.
+
+The substrate question dominates the harness-optimization question. We
+cannot do credible harness research until we have a measurement substrate
+where pass-rate deltas are interpretable. AHOL on AHOL-Proxy-15 is not that
+substrate.
+
+### Decision: migrate to mini-SWE-agent
+
+- **Substrate migration to mini-SWE-agent is authorized as the next cycle of
+  work.** Goal: stand up mini-SWE-agent as a parallel measurement substrate,
+  run a baseline (~50 tasks minimum) on a real benchmark, confirm we
+  reproduce published variance estimates within reason. This is foundation
+  work: we need a credible measuring stick before any harness optimization
+  research can inform downstream applications (including the eventual EEG
+  pipeline-discovery work).
+- **All donnyclaude harness research is deferred** until the new substrate
+  is operational and validated against published numbers.
+- **AHOL-Proxy-15 is preserved as a smoke-test bench** — useful for "did I
+  break the loop infrastructure" sanity checks, not for harness verdicts.
+- **Prior verdicts (DECOMPOSE; CUT-MODE-overstated) remain documented but
+  are not actionable.** They were reached on a substrate now known to be
+  too noisy at the scale we used it. Re-litigating them requires the new
+  substrate to be in place first.
+- **Ablation-infra commit (`891e50e`) is retained.** The `exclude` param on
+  `install_full_donnyclaude` and the `django-13128-only` benchmark are
+  cheap, narrow additions that don't lock us into the current substrate;
+  they remain available if a future need arises.
+- **Track 6 (Docker daemon health probe) is deferred indefinitely.** It is
+  a real gap, but fixing it would only marginally improve a substrate we
+  are leaving behind.
+
+### What the next session does
+
+Survey mini-SWE-agent integration cost (API-key billing vs Max subscription
+question is the dominant unknown) and published baselines. Do NOT run any
+AHOL benchmarks. Do NOT touch donnyclaude harness infra. The decision point
+after the survey is: commit to mini-SWE-agent migration, consider an
+alternative substrate, or defer all harness work and pivot to domain work
+on the EEG side.
+
+---
+
+*Revised 2026-05-05 post-ablation at HEAD `397dd7d` (after report commit).
+Closes the ablation-then-decide loop opened earlier in this memo.*
