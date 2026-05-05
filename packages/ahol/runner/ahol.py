@@ -504,6 +504,7 @@ def load_tasks(benchmark_name: str, limit: Optional[int] = None) -> list[Task]:
         ]
     from ahol.runner.benchmarks import (  # noqa: PLC0415 (lazy to avoid import cycle)
         load_ahol_proxy_30, load_swe_bench_lite, load_swe_bench_live,
+        load_swe_bench_verified,
     )
     if benchmark_name == "swe-bench-lite":
         return load_swe_bench_lite(limit=limit)
@@ -511,7 +512,12 @@ def load_tasks(benchmark_name: str, limit: Optional[int] = None) -> list[Task]:
         return load_swe_bench_live(limit=limit)
     if benchmark_name in ("ahol-proxy-30", "ahol-proxy-15"):
         return load_ahol_proxy_30(limit=limit)
-    valid = "self-test, swe-bench-lite, swe-bench-live, ahol-proxy-30, ahol-proxy-15"
+    if benchmark_name == "django-13128-only":
+        return load_swe_bench_verified(instance_ids=["django__django-13128"])
+    valid = (
+        "self-test, swe-bench-lite, swe-bench-live, ahol-proxy-30, ahol-proxy-15, "
+        "django-13128-only"
+    )
     raise ValueError(f"unknown benchmark {benchmark_name!r}; valid: {valid}")
 
 

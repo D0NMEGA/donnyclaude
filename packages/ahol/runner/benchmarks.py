@@ -110,6 +110,31 @@ def load_swe_bench_lite(
     return tasks
 
 
+def load_swe_bench_verified(
+    instance_ids: Optional[list[str]] = None, limit: Optional[int] = None,
+) -> list[Task]:
+    """load_swe_bench_verified(instance_ids=['django__django-13128']) returns matching Task objects from princeton-nlp/SWE-bench_Verified test split.
+
+    Mirrors load_swe_bench_lite but for the Verified split. Used by the
+    'django-13128-only' single-task ablation benchmark and by any future
+    targeted Verified-task runs.
+    """
+    ds = _hf_load(SWE_BENCH_VERIFIED_DATASET, split="test")
+    id_filter = set(instance_ids) if instance_ids else None
+    tasks: list[Task] = []
+    for row in ds:
+        if id_filter and str(row["instance_id"]) not in id_filter:
+            continue
+        tasks.append(_row_to_task_swe(dict(row), SWE_BENCH_VERIFIED_DATASET))
+    tasks.sort(key=lambda t: t.id)
+    if limit is not None:
+        tasks = tasks[: max(0, limit)]
+    for t in tasks:
+        validate_task(t)
+    logger.info("load_swe_bench_verified returned %d tasks", len(tasks))
+    return tasks
+
+
 def load_swe_bench_live(
     date_window: Optional[str] = None, limit: Optional[int] = None,
 ) -> list[Task]:

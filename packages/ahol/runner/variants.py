@@ -286,14 +286,43 @@ def _handle_modify_reasoning_effort(
     settings.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+_V4_COMPONENT_NAMES: frozenset[str] = frozenset({"hooks", "skills", "agents", "rules", "commands"})
+
+
+def _coerce_exclude(params: dict[str, Any]) -> set[str]:
+    raw = params.get("exclude") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not all(isinstance(s, str) for s in raw):
+        raise ValueError(f"install_full_donnyclaude params.exclude must be a list of strings; got {raw!r}")
+    excl = set(raw)
+    bad = excl - _V4_COMPONENT_NAMES
+    if bad:
+        raise ValueError(
+            f"install_full_donnyclaude params.exclude has unknown components {sorted(bad)}; "
+            f"valid: {sorted(_V4_COMPONENT_NAMES)}"
+        )
+    return excl
+
+
 def _handle_install_full_donnyclaude(
     params: dict[str, Any], target: Path, repo_root: Path,
 ) -> None:
-    """V4 composite: copy donnyclaude packages tree (hooks, skills, agents, rules, commands) into worktree."""
+    """V4 composite: copy donnyclaude packages tree (hooks, skills, agents, rules, commands) into worktree.
+
+    Optional params.exclude=[<component>,...] skips the named V4 component dirs.
+    Component names match the directory basenames: hooks, skills, agents, rules, commands.
+    Used by V4-no-<component> ablation fixtures to construct partial-V4 variants.
+    """
+    exclude = _coerce_exclude(params)
     claude_dir = target / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
     installed: list[str] = []
     for src_rel, dst_rel in V4_INSTALL_MAP:
+        src_name = Path(src_rel).name
+        if src_name in exclude:
+            logger.info("install_full_donnyclaude: excluding %s per params.exclude", src_name)
+            continue
         src = repo_root / src_rel
         if not src.is_dir():
             logger.warning("install_full_donnyclaude: source missing, skipping %s", src)
@@ -364,7 +393,19 @@ def validate_variant_worktree(
                 if not (worktree / ".claude" / "rules" / s).exists():
                     return False, f"add_rule_file marker missing: .claude/rules/{s}"
         elif mt == "install_full_donnyclaude":
+            try:
+                exclude = _coerce_exclude(params)
+            except ValueError as exc:
+                return False, f"install_full_donnyclaude params.exclude invalid: {exc}"
             for src_rel, dst_rel in V4_INSTALL_MAP:
+                src_name = Path(src_rel).name
+                if src_name in exclude:
+                    if (worktree / dst_rel).exists():
+                        return False, (
+                            f"install_full_donnyclaude excluded marker present: "
+                            f"{dst_rel} should be absent (exclude={sorted(exclude)})"
+                        )
+                    continue
                 if not (REPO_ROOT_DEFAULT / src_rel).is_dir():
                     continue
                 if not (worktree / dst_rel).is_dir():

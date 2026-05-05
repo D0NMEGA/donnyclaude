@@ -1,0 +1,18 @@
+{
+  "variants": [
+    {
+      "name": "variant-v4-no-skills",
+      "description": "V4 ablation: full donnyclaude install except .claude/skills/ is excluded. Used by ablation-django-13128 round to test whether the skills directory (105 SKILL.md files) is responsible for the V4 regression on django__django-13128. Uses install_full_donnyclaude composite mutation with params.exclude=['skills'].",
+      "mutation_bundle_json": {
+        "mutations": [
+          {
+            "mutation_type": "install_full_donnyclaude",
+            "params": {
+              "exclude": ["skills"]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
