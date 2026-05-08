@@ -32,19 +32,21 @@ Zero to autonomous, multi-phase AI-assisted development in one command — witho
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
+**donnyclaude is in maintenance mode as of 2026-05-08.** Active substrate-research work moved to the separate `harness-lab` repo as milestone `harness-pivot-v1`. See `.planning/research/ahol/MILESTONE-PLAN-harness-pivot-v1.md` for the full plan and `.planning/research/ahol/AHOL-POSTMORTEM.md` for the methodology errors that motivated the migration.
 
-**Milestone v1.2 — Harness Optimization** (six core fixes, ordered by dependency):
+No active scope on donnyclaude itself this cycle. The former v1.2 "Harness Optimization" milestone closed without shipping its full scope; its work has been preserved as v1.3 backlog (see below).
 
-- [ ] **SKILLS-01 (partial, cruft-only scope)**: donnyclaude ships 105 skills after removing 2 cruft items (configure-ecc + continuous-learning loser) in v1.2. *The broader training-duplicate prune scoped to 75-85 skills was attempted during Phase 1 execution and deferred to v1.3 after the calibration pre-flight surfaced that the rubric's clause (c) cannot distinguish training-duplicate skills from catalog cross-links in the current codebase. See `.planning/phases/01-skill-audit-prune-rc-gate/01-CONTEXT.md#Corrections` (2026-04-13) for the full analysis and `.planning/research/v1.3-seeds/` for the preserved audit artifacts.* Gated as v1.2.0-rc1; one-week feedback-plus-cooling-off window before proceeding.
-- [ ] **SKILLS-02**: `npx donnyclaude` install writes `~/.claude/.donnyclaude-manifest.json` with file list, checksums, and version
-- [ ] **SKILLS-03**: install builds a description-indexed skill registry enabling progressive disclosure (avoid the ~100-tool degradation cliff)
-- [ ] **SKILLS-04**: user can enable/disable individual skills via `settings.json` (`skills.enabled[]` / `skills.disabled[]`)
-- [ ] **AGENTS-01**: domain subagents (architect, planner, code-reviewer, tdd-guide, refactor-cleaner, ~29 total) return only structured summaries, not full context
-- [ ] **HOOKS-01**: SessionStart hook is a real testable script (not an inline 300-char shell one-liner) that injects `git branch`, `git diff --stat`, env discovery, and most-recent backup path
-- [ ] **HOOKS-02**: PreCompact hook backs up state, file paths, and test status to `.claude/backups/{timestamp}/` before context summarization
-- [ ] **HOOKS-03**: SessionStart hook restores the most-recent backup when one exists
-- [ ] **HOOKS-04**: Stop hook spawns a verification subagent that gates session close, blocking premature task-complete declarations
+### v1.3 Backlog (paused; resumes when donnyclaude maintenance window opens)
+
+Former v1.2 phases renumbered as donnyclaude maintenance backlog. Full detail in `.planning/v1.3-BACKLOG.md`. Summary:
+
+- Skill audit + prune rubric redesign (Phase 1)
+- Install manifest + progressive disclosure (Phase 2)
+- Subagent return contracts (Phase 3)
+- Hook backup/restore subsystem (Phase 4)
+- Stop verification subagent (Phase 5)
+
+Not gated on `harness-pivot-v1` succeeding or failing. Resumes whenever the user opens a donnyclaude maintenance window.
 
 ### Out of Scope
 
@@ -55,13 +57,13 @@ Zero to autonomous, multi-phase AI-assisted development in one command — witho
 - **Adding new languages beyond the existing 13** — current rule coverage is sufficient; bandwidth goes to optimization, not breadth.
 - **Cloud / SaaS components** — the project is pure local install. No telemetry server, no cloud sync, no subscription tier.
 
-**Deferred from v1.2 to a future milestone (v1.3+):**
+**Moved to v1.3 backlog on 2026-05-08:**
 
-- **Skill prune rubric redesign + aggressive prune** *(added 2026-04-13 after Phase 1 calibration gate fired)* — The v1.2 Phase 1 training-duplicate rubric was attempted and its clause (c) was surfaced as unable to distinguish training-duplicate skills from catalog cross-links in the current codebase. Every calibration skill (python-patterns, golang-patterns, tdd-workflow, e2e-testing, eval-harness) has the same bare-pointer referrer pattern — the rubric as written keeps them all, and any refinement that excludes bare pointers would prune the D-14 "confirmed KEEP" anchors too. v1.3 needs a research pass answering "what does 'semantic dependency' mean in a catalog-linked distribution?" Possible angles: runtime load signals (once progressive disclosure ships via SKILLS-02/03/04), agent system-prompt content embedding vs cross-reference pointers, direct training-data overlap measurement rather than referrer counting, category-level decisions rather than per-skill rubric. Seeds for this research: `.planning/research/v1.3-seeds/README.md` + `PRUNE-VERDICT-partial-v1.json` (5-skill calibration evidence with per-referrer type classification). **Blocker for v1.3 aggressive prune.**
-- **PostToolUse verification hook on Write/Edit** *(stretch #7 in research)* — Most-cited recommendation in DEEP-RESEARCH.md, but needs project-aware linter/test detection (Python vs Node vs Rust vs mixed), a strategy for handling 2-30s test runs without injecting them into every edit, and a kill-switch for known-broken states. Bolting it onto v1.2 means shipping a hook that runs eslint on Python repos. Its own milestone.
-- **Reasoning sandwich for long-running subagents** *(stretch #8)* — Depends on AGENTS-01 (return-contract enforcement) being solid first. Tuning per-agent reasoning effort before contracts are stable means you can't isolate which knob caused quality changes. Sequencing: ship contracts in v1.2, observe for a milestone, then add effort routing in v1.3.
-- **Proactive 60% compaction override** *(stretch #9)* — Looks like a two-line config change but is contingent on HOOKS-02 (active PreCompact backup) actually working end-to-end first. Shipping both in v1.2 means a backup-hook bug compounds with more-frequent compaction → more-frequent state loss. Ship HOOKS-02, run for a week, then tighten the threshold.
-- **Migrate top 10-15 highest-frequency rules from rule files to hooks** *(stretch #10)* — "Highest-frequency" assumes telemetry that doesn't exist yet. The honest version requires either the architectural-tier trace-based improvement loop or a 15-25h manual audit pass that's its own scope. Either way, not v1.2.
+All deferred-from-v1.2 items, plus the originally-active v1.2 scope, have been consolidated into `.planning/v1.3-BACKLOG.md` as donnyclaude maintenance backlog. v1.2 closed without shipping its full scope; the work itself remains valuable but is renumbered as donnyclaude maintenance, not as research milestone scope.
+
+**Architectural decisions that remain out of scope indefinitely:**
+
+- **Forking Claude Code's agent loop, tool plumbing, or sampling layer from inside donnyclaude.** donnyclaude is a configuration distribution. Substrate-level harness research happens in the separate `harness-lab` repo (see `harness-pivot-v1`).
 
 ## Context
 
@@ -119,5 +121,14 @@ This document evolves at phase transitions and milestone boundaries.
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
+## Active Substrate Research
+
+**`harness-pivot-v1`** — substrate migration to mini-SWE-agent for real harness optimization. Lives in the separate `harness-lab` repo (created in Phase 2 of that milestone). donnyclaude itself is paused for the duration.
+
+- **Plan of record:** `.planning/research/ahol/MILESTONE-PLAN-harness-pivot-v1.md` (27-phase roadmap with bets, exit criteria, dependencies)
+- **Deep research backing:** `.planning/research/ahol/HARNESS-RESEARCH-2026-05-08.md` (20-layer harness taxonomy, frontier architecture survey, model landscape, 4-week plan)
+- **Why this is happening:** `.planning/research/ahol/AHOL-POSTMORTEM.md` (methodology errors that retired the AHOL approach)
+- **GSD planning home:** harness-lab repo, NOT donnyclaude. Run `/gsd-new-milestone` inside harness-lab once Phase 2 creates that repo.
+
 ---
-*Last updated: 2026-04-13 after Phase 1 rubric-deferral pivot to cruft-only scope (107→105 for v1.2; aggressive prune deferred to v1.3)*
+*Last updated: 2026-05-08 — v1.2 closed without full scope; renumbered to v1.3 backlog. donnyclaude paused; substrate research migrated to harness-lab as `harness-pivot-v1`.*

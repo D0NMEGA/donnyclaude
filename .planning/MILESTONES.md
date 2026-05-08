@@ -34,13 +34,26 @@
 
 **How it shipped:** Direct commits without GSD phase tracking.
 
-## v1.2 — Harness Optimization (defining)
+## v1.2 — Harness Optimization (CLOSED without shipping full scope)
 
-**Status:** Currently being scoped via `/gsd-new-milestone`.
+**Status:** Closed 2026-05-08 at HEAD `bf6dd7a` without shipping the originally-scoped phases. Renumbered to v1.3 backlog (paused donnyclaude maintenance).
 
-**Source of truth:** See `.planning/PROJECT.md` Current Milestone section once defined, plus:
-- `.planning/research/DEEP-RESEARCH.md` — Claude Web Deep Research on coding-agent harnesses (state-of-the-art 2024-2026)
-- `.planning/research/INVENTORY.md` — Code-level sweep of current donnyclaude structure
-- `.planning/research/SUMMARY.md` — Synthesis pointing to the above with top priorities
+**What actually shipped under the v1.2 banner:** None of the planned scope. Phase 01 reached "EXECUTING" with a restructured cruft-only plan (107→105 skill prune as v1.2.0-rc1) but never landed. Pre-execution scoping correction commit `7ff02a0` (43→41 candidate count fix) was the only durable artifact.
 
-**Driving thesis:** donnyclaude is one of the largest harness configurations deployed on Claude Code. Measured evidence (SWE-bench Pro, Terminal Bench 2.0, BFCL v3, RAG-MCP) shows the 107-skills-always-loaded posture sits past the tool-count degradation cliff. Six high-leverage incremental fixes (progressive disclosure, verification hooks, active PreCompact, skill prune, return-contract enforcement, refactored SessionStart) plus deferred architectural work (multi-candidate patch pipeline, sandboxed execution, trace-based improvement loop) form the candidate scope.
+**Why it closed:** During the AHOL (Autonomous Harness Optimization Loop) work tracked in parallel in `.planning/research/ahol/`, a methodology post-mortem revealed that the v1.2 phases — skill prune, install manifest, progressive disclosure, subagent return contracts, hook backup/restore subsystem, stop verification — are donnyclaude-package maintenance, not harness optimization in the rigorous methodology sense. The "Harness Optimization" label was wrong. See `.planning/research/ahol/AHOL-POSTMORTEM.md` for the full account.
+
+**Where the work went:**
+- v1.2 phases preserved verbatim as donnyclaude maintenance backlog in `.planning/v1.3-BACKLOG.md`. Resumes whenever a donnyclaude maintenance window opens.
+- Substrate-level harness research moved to a separate `harness-lab` repo (created in Phase 2 of `harness-pivot-v1`). Plan of record: `.planning/research/ahol/MILESTONE-PLAN-harness-pivot-v1.md`. Deep research backing: `.planning/research/ahol/HARNESS-RESEARCH-2026-05-08.md`.
+
+**v1.2 research bundle preserved:** `.planning/research/{DEEP-RESEARCH,INVENTORY,SUMMARY,v1.3-seeds}` retained as donnyclaude maintenance reference. Not reused for `harness-pivot-v1` (which has its own deep research artifact).
+
+---
+
+## v2.0 — Substrate migration (in `harness-lab`, not in donnyclaude)
+
+**Status:** Active as `harness-pivot-v1` in the separate `harness-lab` repo. Phase 1 (AHOL post-mortem) shipped from donnyclaude on 2026-05-08; Phases 2-27 execute in harness-lab once Phase 2 creates that repo.
+
+**Tracked separately:** GSD planning for v2.0 lives in `harness-lab/.planning/`, NOT in this MILESTONES.md. This entry exists only to point at the harness-lab repo for cross-reference. donnyclaude itself does not version-track v2.0.
+
+**Pointer:** Run `/gsd-new-milestone` inside harness-lab once Phase 2 creates it. Use the three staged artifacts in donnyclaude's `.planning/research/ahol/` (post-mortem, milestone plan, deep research) as input.
