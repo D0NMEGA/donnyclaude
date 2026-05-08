@@ -15,6 +15,14 @@ DonnyClaude is an opinionated, all-in-one power-user setup for [Claude Code](htt
 
 ---
 
+> **Project status (2026-05-08): paused, not abandoned.** v1.2 closed without shipping its full scope after the AHOL (Autonomous Harness Optimization Loop) post-mortem revealed that the work labeled "Harness Optimization" was donnyclaude-package maintenance, not substrate-level harness research. The substrate research moved to a separate sister project, **harness-lab**, which forks mini-SWE-agent and runs ablations on the agent loop, tool catalog, sampling, and context-management layers that donnyclaude (sitting on top of Claude Code) cannot reach.
+>
+> donnyclaude itself remains usable and shipped — `npx donnyclaude` continues to work as documented. The v1.2 phases (skill prune, install manifest, progressive disclosure, subagent return contracts, hook backup/restore subsystem) are preserved as v1.3 backlog and resume whenever a maintenance window opens. AHOL's final state is tagged as `ahol-v1-final`.
+>
+> See `.planning/research/ahol/AHOL-POSTMORTEM.md` for the methodology errors, `.planning/research/ahol/MILESTONE-PLAN-harness-pivot-v1.md` for the next-cycle plan, and `.planning/research/ahol/HARNESS-RESEARCH-2026-05-08.md` for the deep research backing the migration. The harness-lab repo (sibling to this one) is where `harness-pivot-v1` executes.
+
+---
+
 ## Quick Start
 
 ```bash
