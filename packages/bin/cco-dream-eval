@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+# cco-tool-version: 1
+# AUTO-01 — the /dream keep/discard + metric-parse + bounded-termination DECISION BRAIN (Wave 1).
+# The 08-02 runner SOURCES this: it pipes one state JSON on stdin and reads one decision JSON on
+# stdout. This file is the part most likely to be subtly wrong (a flipped direction keeps a
+# regression; a missing bound makes the loop open-ended — the runaway failure mode the research
+# DB-deletion tale warns of), so it is a PURE, unit-tested function set off the critical path of the
+# multi-hour runner.
+#
+# CONTRACT (D-05, the heart): KEEP an iteration iff metric_improved(direction) AND green===true; else
+# DISCARD. A red bar, a tie/regression, or an unscoreable metric is NEVER kept. green is supplied by
+# the runner (08-02 drives the live green bar inline as a child process — see the GREEN-BAR INLINE
+# boundary in the plan); THIS helper is green-AGNOSTIC and only consumes the boolean. green absent
+# implies false (green-before-keep is a hard precondition).
+#
+# CONTRACT (D-06, NEVER open-ended): CONTINUE iff (target not reached) AND (iter < max_iters) AND
+# (total_spent < total_ceiling) AND (iter_spent <= per_iter_budget). STOP on ANY bound, reporting
+# WHICH. Missing/invalid caps fall back to conservative built-in defaults (max_iters=6,
+# total_ceiling=200000, per_iter_budget=50000, target=null) — there is NO code path yielding
+# continue-forever: if every numeric cap were stripped, max_iters still defaults to 6.
+#
+# CONTRACT (fail-closed metric): parse_metric extracts the LAST numeric token; empty / non-numeric /
+# non-finite -> None -> DISCARD-this-iteration (a non-scoring attempt is never kept), never a crash.
+#
+# CONTRACT (fail-safe CLI, T-08-05): ANY internal error -> {"decision":"discard","loop":"stop",
+# "why":"eval-error: ..."} and exit 0. A broken brain STOPS the loop (safe), never wedges it.
+#
+# PURE: no writes, no subprocess, no network, no LLM, no third-party import. stdlib only. Pure
+# functions live up top (test_cco_dream_eval.py imports them — keep signatures STABLE); the CLI
+# (argparse + stdin JSON) is below under if __name__ == "__main__". Mirrors the cco-ledger spine.
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import re
+import sys
+from typing import Any
+
+TOOL_VERSION = 1
+
+# Conservative, bounded built-in defaults (D-06). These guarantee the loop is ALWAYS bounded even
+# when the operator supplies no caps — there is no unbounded fallback anywhere.
+DEFAULT_MAX_ITERS = 6
+DEFAULT_TOTAL_CEILING = 200000  # ~the runner --budget; bounds total output-token cost
+DEFAULT_PER_ITER_BUDGET = 50000  # output tokens per attempt
+
+# The metric token: an optional leading sign, integers or simple decimals. The operator metric
+# command is contracted to emit ONE clean number; we take the LAST such token, tolerant of
+# surrounding text/units ("passed: 42" -> 42.0, "score=0.83 (ok)" -> 0.83). No eval, no shell.
+_METRIC_RX = re.compile(r"(-?\d+(?:\.\d+)?)")
+
+
+# ---------------------------------------------------------------------------
+# Pure functions (unit-tested by test_cco_dream_eval.py — keep signatures stable)
+# ---------------------------------------------------------------------------
+def parse_metric(stdout: str | None) -> float | None:
+    """Extract the LAST numeric token from metric-command stdout, FAIL CLOSED.
+
+    Returns a float for the last match of (-?\\d+(?:\\.\\d+)?); returns None for empty stdout, no
+    numeric token, or a non-finite result. A None return maps to DISCARD upstream (a non-scoring
+    attempt is never kept) — never a crash, never a silently-treated improvement.
+    """
+    if not stdout:
+        return None
+    matches = _METRIC_RX.findall(stdout)
+    if not matches:
+        return None
+    try:
+        value = float(matches[-1])
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
+def improved(best: float | None, new: float | None, direction: str) -> bool:
+    """True iff `new` strictly improves on `best` in the declared direction.
+
+    - new is None (unscoreable) -> False (never an improvement).
+    - best is None (first iteration) + a finite new -> True (establishes the baseline).
+    - direction "higher": new > best (strictly). "lower": new < best (strictly). A tie is NOT an
+      improvement (no churn on no-progress).
+    """
+    if new is None:
+        return False
+    if best is None:
+        return True
+    if direction == "lower":
+        return new < best
+    # default / "higher": bigger is better
+    return new > best
+
+
+def coerce_cap(value: Any, default: int) -> int:
+    """Coerce a cap to a positive base-10 int, falling back to `default` for anything invalid.
+
+    None / negative / NaN / non-numeric -> default. This GUARANTEES every bound exists (D-06): a
+    stripped or hostile cap can never disable a bound, only revert it to the conservative default.
+    """
+    if value is None:
+        return default
+    try:
+        if isinstance(value, bool):  # bool is an int subclass; reject to avoid True->1 surprises
+            return default
+        if isinstance(value, str):
+            num = int(value, 10)
+        else:
+            f = float(value)
+            if not math.isfinite(f):
+                return default
+            num = int(f)
+    except (TypeError, ValueError):
+        return default
+    if num < 0:
+        return default
+    return num
+
+
+def target_reached(best: float | None, target: float | None, direction: str) -> bool:
+    """True iff the running-best metric is at-or-past the target in the declared direction.
+
+    target None -> False (no target => termination is by the other bounds, never absent). best None
+    (no scored attempt yet) -> False. higher: best >= target. lower: best <= target.
+    """
+    if target is None or best is None:
+        return False
+    try:
+        if direction == "lower":
+            return best <= target
+        return best >= target
+    except TypeError:
+        return False
+
+
+def decide(state: dict[str, Any]) -> dict[str, Any]:
+    """The orchestrator: given the loop state, return the keep/discard + continue/stop decision.
+
+    Input keys: best, new_raw, new_metric, direction, green, iter, max_iters, total_spent,
+    total_ceiling, iter_spent, per_iter_budget, target. (new_metric wins over new_raw; if both
+    absent/None and new_raw unparseable, new_metric is None -> discard. green absent implies false.)
+
+    Output: {decision: keep|discard, loop: continue|stop, new_metric, improved, stop_reason, why}.
+    KEEP only when (improved AND green is True), D-05.
+    """
+    direction = state.get("direction") or "higher"
+    best = state.get("best")
+
+    # --- metric: explicit new_metric wins; else parse new_raw; fail-closed to None ---
+    new_metric = state.get("new_metric")
+    if new_metric is None:
+        new_metric = parse_metric(state.get("new_raw"))
+    else:
+        # A supplied new_metric must still be a finite number, else fail closed.
+        try:
+            nm = float(new_metric)
+            new_metric = nm if math.isfinite(nm) else None
+        except (TypeError, ValueError):
+            new_metric = None
+
+    # --- D-05 keep/discard: improved-in-direction AND green ---
+    did_improve = improved(best, new_metric, direction)
+    green = state.get("green") is True  # absent / non-True implies false (green-before-keep)
+    keep = did_improve and green
+
+    # The "best so far" used for the target bound: if we keep, the new metric becomes best.
+    effective_best = new_metric if keep else best
+
+    # --- D-06 bounded termination: STOP on ANY exhausted bound; CONTINUE only with headroom on all ---
+    max_iters = coerce_cap(state.get("max_iters"), DEFAULT_MAX_ITERS)
+    total_ceiling = coerce_cap(state.get("total_ceiling"), DEFAULT_TOTAL_CEILING)
+    per_iter_budget = coerce_cap(state.get("per_iter_budget"), DEFAULT_PER_ITER_BUDGET)
+    target = state.get("target")  # optional; coerced only for the comparison below
+    iter_n = coerce_cap(state.get("iter"), 0)
+    total_spent = _as_number(state.get("total_spent"), 0.0)
+    iter_spent = _as_number(state.get("iter_spent"), 0.0)
+
+    stop_reason: str | None = None
+    if target_reached(effective_best, target, direction):
+        stop_reason = "target"
+    elif iter_n >= max_iters:
+        stop_reason = "max-iters"
+    elif total_spent >= total_ceiling:
+        stop_reason = "total-budget"
+    elif iter_spent > per_iter_budget:
+        stop_reason = "per-iter-budget"
+
+    loop = "stop" if stop_reason else "continue"
+
+    why = _explain(keep, did_improve, green, new_metric, stop_reason)
+    return {
+        "decision": "keep" if keep else "discard",
+        "loop": loop,
+        "new_metric": new_metric,
+        "improved": did_improve,
+        "stop_reason": stop_reason,
+        "why": why,
+    }
+
+
+def _as_number(value: Any, default: float) -> float:
+    """Best-effort numeric coercion for spend counters (never raises; non-numeric -> default)."""
+    if value is None:
+        return default
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return default
+    return f if math.isfinite(f) else default
+
+
+def _explain(
+    keep: bool, did_improve: bool, green: bool, new_metric: float | None, stop_reason: str | None
+) -> str:
+    """A SHORT human reason string (metadata only — no payloads)."""
+    if keep:
+        verdict = f"keep: improved to {new_metric} and green"
+    elif new_metric is None:
+        verdict = "discard: metric unscoreable (fail-closed)"
+    elif not did_improve:
+        verdict = "discard: no improvement (regression/tie)"
+    elif not green:
+        verdict = "discard: green bar red (green-before-keep)"
+    else:
+        verdict = "discard"
+    if stop_reason:
+        return f"{verdict}; stop: {stop_reason} bound reached"
+    return f"{verdict}; continue"
+
+
+# ===========================================================================
+# CLI — reads ONE JSON object on stdin, emits ONE decision JSON on stdout, exit 0. The entire body
+# is wrapped FAIL-SAFE: any error -> discard+stop+exit 0 (T-08-05). PURE — no writes/subprocess/
+# network. Mirrors the cco-ledger CLI shape (tested pure functions above; glue below).
+# ===========================================================================
+def _fail_safe(err: Exception) -> dict[str, Any]:
+    """The fail-safe decision: a broken brain STOPS the loop (safe), never wedges it."""
+    return {
+        "decision": "discard",
+        "loop": "stop",
+        "new_metric": None,
+        "improved": False,
+        "stop_reason": None,
+        "why": f"eval-error: {type(err).__name__}: {err}",
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="cco-dream-eval",
+        description=(
+            "AUTO-01 /dream decision brain. Reads a state JSON on stdin "
+            "{best,new_raw,new_metric,direction,green,iter,max_iters,total_spent,total_ceiling,"
+            "iter_spent,per_iter_budget,target} and writes a decision JSON on stdout "
+            "{decision:keep|discard, loop:continue|stop, new_metric, improved, stop_reason, why}. "
+            "KEEP iff improved-in-direction AND green===true (D-05); termination is bounded four "
+            "ways (D-06). Pure decision logic: no side effects, stdlib only."
+        ),
+    )
+    parser.parse_args(argv)  # only --help; the payload is stdin JSON
+
+    try:
+        raw = sys.stdin.read()
+        state = json.loads(raw)
+        if not isinstance(state, dict):
+            raise ValueError("stdin JSON must be an object")
+        result = decide(state)
+    except Exception as err:  # noqa: BLE001 — fail-safe is the whole point (T-08-05)
+        sys.stdout.write(json.dumps(_fail_safe(err)) + "\n")
+        return 0
+
+    sys.stdout.write(json.dumps(result) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None

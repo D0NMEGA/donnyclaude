@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "cco-tool-version": 1,
+    "source": "litellm-live",
+    "fetched_from_litellm": true,
+    "litellm_url": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+    "note": "Units are $/token. 1h-cache = 2x input, 5m-cache = 1.25x input, cache-read = 0.1x input. NO >200K long-context surcharge (Anthropic dropped it in 2026). Refresh via `cco-ledger --refresh-prices`."
+  },
+  "claude-opus-4-8": {
+    "in": 5e-06,
+    "out": 2.5e-05,
+    "cache_5m": 6.25e-06,
+    "cache_1h": 1e-05,
+    "cache_read": 5e-07
+  }
+}

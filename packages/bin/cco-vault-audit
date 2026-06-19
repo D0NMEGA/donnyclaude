@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""cco-vault-audit — agent-runnable Obsidian vault hygiene report.
+
+Detects the four classes of vault rot from Practices/Vault-Audit.md
+(orphans, broken links, frontmatter drift, stale notes) WITHOUT the Obsidian
+GUI plugins (Find Orphaned Files / Linter / Tag Wrangler) — so any Claude Code
+session can run it on the filesystem. Read-only: it reports, it never edits.
+
+Three note classes, judged differently (this is the thing that makes the verdict
+trustworthy instead of crying wolf):
+  * CURATED  (Projects/ Practices/ Reference/ + curated root): full 7-field
+    frontmatter schema; a leaf/orphan here is real rot. These drive the verdict.
+  * JOURNAL  (Sessions/ _private/): an append-only log. A leaf note with no
+    inbound link is EXPECTED, and confidence/related/updated don't apply — so it
+    is held only to a light schema and reported informationally, never escalated.
+  * MACHINE  (cerebrum.md): machine-written memory store, not a curated note —
+    excluded from rot checks entirely.
+
+Correctness points (learned the hard way):
+  * path-aware link resolution — `[[Projects/Backend]]` resolves like `[[Backend]]`
+    (Obsidian basename-or-relpath), so path-style links are NOT false "broken" hits.
+  * code-fence + inline-code stripping — shell `[[ $- == *i* ]]` test syntax and
+    `[[wikilink]]` doc examples inside ``` blocks are NOT counted as links.
+
+Usage:
+    cco-vault-audit [VAULT_DIR] [--json] [--stale-days N]
+Env:
+    VAULT   default vault path (fallback: ~/vault)
+Exit: 0 healthy · 1 escalation threshold tripped · 2 no vault found.
+"""
+from __future__ import annotations
+import os, re, sys, json, time, argparse
+from collections import defaultdict
+
+CURATED_REQUIRED = ["type", "status", "confidence", "created", "updated", "tags", "related"]
+JOURNAL_REQUIRED = ["type", "tags"]
+SKIP_DIRS = {".git", ".obsidian", ".trash", "node_modules", ".smart-env"}
+JOURNAL_FOLDERS = {"Sessions", "_private"}
+SKELETON_FOLDERS = {"Templates"}            # schema skeletons; informational only
+MACHINE_NOTES = {"cerebrum.md"}             # machine-written, excluded from rot checks
+
+WL = re.compile(r"\[\[([^\]\|#\^]+)(?:[#\^\|][^\]]*)?\]\]")
+FM = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+FENCE = re.compile(r"```.*?```", re.DOTALL)
+INLINE = re.compile(r"`[^`]*`")
+PLACEHOLDER = re.compile(r"[*<>$=~]|\.\.\.")   # example/placeholder targets, not real links
+
+
+def norm(s: str) -> str:
+    return s.strip().lower().replace("\\", "/")
+
+
+def fold(vault: str, p: str) -> str:
+    rel = os.path.relpath(p, vault)
+    return rel.split(os.sep)[0] if os.sep in rel else "(root)"
+
+
+def klass(vault: str, p: str) -> str:
+    if os.path.relpath(p, vault) in MACHINE_NOTES:
+        return "machine"
+    f = fold(vault, p)
+    if f in JOURNAL_FOLDERS:
+        return "journal"
+    if f in SKELETON_FOLDERS:
+        return "skeleton"
+    return "curated"
+
+
+def audit(vault: str, stale_days: int) -> dict:
+    mds = []
+    for root, dirs, files in os.walk(vault):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fn in files:
+            if fn.endswith(".md"):
+                mds.append(os.path.join(root, fn))
+
+    bybase: dict[str, list[str]] = defaultdict(list)
+    bypath: dict[str, str] = {}
+    for p in mds:
+        rel = os.path.relpath(p, vault)[:-3]
+        bypath[norm(rel)] = p
+        bybase[norm(os.path.basename(p)[:-3])].append(p)
+
+    def resolve(t: str):
+        t = norm(t)
+        if t.endswith(".md"):
+            t = t[:-4]
+        if t in bypath:
+            return bypath[t]
+        b = t.split("/")[-1]
+        return bybase[b][0] if bybase.get(b) else None
+
+    out: dict[str, set] = defaultdict(set)
+    inn: dict[str, set] = defaultdict(set)
+    broken: dict[str, set] = defaultdict(set)
+    no_fm: list[str] = []
+    missing: dict[str, list] = {}
+    mtime: dict[str, float] = {}
+
+    for p in mds:
+        cls = klass(vault, p)
+        txt = open(p, encoding="utf-8", errors="replace").read()
+        try:
+            mtime[p] = os.path.getmtime(p)
+        except OSError:
+            mtime[p] = 0.0
+        m = FM.match(txt)
+        body = txt
+        present: set = set()
+        type_val = ""
+        if m:
+            fmt, body = m.group(1), txt[m.end():]
+            present = {
+                mm.group(1).lower()
+                for line in fmt.splitlines()
+                if (mm := re.match(r"^([\w-]+)\s*:", line))
+            }
+            tm = re.search(r"^type\s*:\s*(.+)$", fmt, re.MULTILINE)
+            if tm:
+                type_val = tm.group(1).strip().strip("\"'").lower()
+            for rl in WL.findall(fmt):
+                if not PLACEHOLDER.search(rl):
+                    out[p].add(rl)
+        elif cls != "machine":
+            no_fm.append(p)
+        if cls in ("curated", "journal", "skeleton"):
+            req = JOURNAL_REQUIRED if cls == "journal" else CURATED_REQUIRED
+            if type_val == "moc":  # a Map-of-Content IS its links; don't demand a `related:` field
+                req = [r for r in req if r != "related"]
+            miss = [r for r in req if r not in present]
+            if miss:
+                missing[p] = miss
+        clean = INLINE.sub("", FENCE.sub("", body))
+        for w in WL.findall(clean):
+            if not PLACEHOLDER.search(w):
+                out[p].add(w)
+
+    for p, ts in out.items():
+        for t in ts:
+            tp = resolve(t)
+            if tp and tp != p:
+                inn[tp].add(p)
+            elif not tp:
+                broken[p].add(t)
+
+    rel = lambda p: os.path.relpath(p, vault)
+    is_rotcheck = lambda p: klass(vault, p) in ("curated", "journal", "skeleton")
+
+    orphans = [p for p in mds if is_rotcheck(p) and not inn.get(p) and not out.get(p)]
+    curated_orphans = [p for p in orphans if klass(vault, p) == "curated"]
+    no_in = [p for p in mds if is_rotcheck(p) and not inn.get(p)]
+    broken_real = {p: v for p, v in broken.items() if v}
+
+    curated_missing = {p: m for p, m in missing.items() if klass(vault, p) == "curated"}
+    journal_missing = {p: m for p, m in missing.items() if klass(vault, p) == "journal"}
+    n_curated = sum(1 for p in mds if klass(vault, p) == "curated")
+    n_journal = sum(1 for p in mds if klass(vault, p) == "journal")
+
+    now = time.time()
+    stale = [p for p in mds if klass(vault, p) == "curated"
+             and (now - mtime[p]) / 86400 > stale_days]
+
+    return {
+        "vault": vault,
+        "total": len(mds),
+        "by_folder": {k: sum(1 for p in mds if fold(vault, p) == k)
+                      for k in sorted({fold(vault, p) for p in mds})},
+        "n_curated": n_curated,
+        "n_journal": n_journal,
+        "machine_notes": sorted(rel(p) for p in mds if klass(vault, p) == "machine"),
+        "missing_frontmatter": sorted(rel(p) for p in no_fm),
+        "curated_missing": {rel(p): m for p, m in sorted(curated_missing.items())},
+        "journal_missing_count": len(journal_missing),
+        "curated_field_gaps": {
+            f: sum(1 for m in curated_missing.values() if f in m) for f in CURATED_REQUIRED},
+        "curated_orphans": sorted(rel(p) for p in curated_orphans),
+        "journal_leaf_orphans": len(orphans) - len(curated_orphans),
+        "no_inbound_total": len(no_in),
+        "broken_links": {rel(p): sorted(v) for p, v in sorted(broken_real.items())},
+        "stale_curated": sorted(rel(p) for p in stale),
+    }
+
+
+def thresholds(r: dict) -> list[str]:
+    """Escalation thresholds from Practices/Vault-Audit.md — curated layer only."""
+    flags = []
+    nbroken = sum(len(v) for v in r["broken_links"].values())
+    if nbroken > 5:
+        flags.append(f"{nbroken} broken links (>5)")
+    if len(r["curated_orphans"]) > 10:
+        flags.append(f"{len(r['curated_orphans'])} curated orphans (>10)")
+    if r["n_curated"] and len(r["curated_missing"]) > 0.20 * r["n_curated"]:
+        flags.append(
+            f"{len(r['curated_missing'])}/{r['n_curated']} curated notes missing frontmatter (>20%)")
+    return flags
+
+
+def render(r: dict) -> str:
+    L = [f"VAULT AUDIT — {r['vault']}  ({r['total']} notes: "
+         f"{r['n_curated']} curated · {r['n_journal']} journal · {len(r['machine_notes'])} machine)"]
+    L.append("  folders: " + ", ".join(f"{k}={v}" for k, v in r["by_folder"].items()))
+    L.append("\nFRONTMATTER (curated layer drives the verdict)")
+    L.append(f"  curated missing >=1 field : {len(r['curated_missing'])}/{r['n_curated']} "
+             f"({100*len(r['curated_missing'])//max(r['n_curated'],1)}%)")
+    gaps = ", ".join(f"{k}={v}" for k, v in r["curated_field_gaps"].items() if v)
+    if gaps:
+        L.append(f"  curated field gaps        : {gaps}")
+    L.append(f"  journal notes (light schema, informational): {r['journal_missing_count']} incomplete")
+    if r["missing_frontmatter"]:
+        L.append(f"  NO frontmatter at all     : {len(r['missing_frontmatter'])}")
+    L.append("\nLINK GRAPH")
+    L.append(f"  curated orphans           : {len(r['curated_orphans'])}")
+    L.append(f"  journal leaf-orphans (ok) : {r['journal_leaf_orphans']}")
+    L.append(f"  notes with no inbound     : {r['no_inbound_total']}")
+    nbroken = sum(len(v) for v in r["broken_links"].values())
+    L.append(f"  broken links              : {nbroken} across {len(r['broken_links'])} notes")
+    if r["curated_orphans"]:
+        L.append("\n  CURATED ORPHANS (link in, or delete):")
+        L += [f"    - {p}" for p in r["curated_orphans"]]
+    if r["curated_missing"]:
+        L.append("\n  CURATED notes missing frontmatter fields:")
+        L += [f"    - {p}  →  {', '.join(m)}" for p, m in r["curated_missing"].items()]
+    if r["broken_links"]:
+        L.append("\n  BROKEN LINKS:")
+        L += [f"    - {p}: {', '.join('[['+t+']]' for t in ts)}" for p, ts in r["broken_links"].items()]
+    if r["missing_frontmatter"]:
+        L.append("\n  NO FRONTMATTER:")
+        L += [f"    - {p}" for p in r["missing_frontmatter"]]
+    if r["stale_curated"]:
+        L.append(f"\n  STALE curated (no edit >{ '180' }d): {len(r['stale_curated'])}")
+    flags = thresholds(r)
+    L.append("\nVERDICT: " + ("NEEDS ATTENTION — " + "; ".join(flags)
+                              if flags else "HEALTHY (curated layer clean; no escalation threshold tripped)"))
+    return "\n".join(L)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Agent-runnable Obsidian vault hygiene report.")
+    ap.add_argument("vault", nargs="?",
+                    default=os.environ.get("VAULT", os.path.expanduser("~/vault")))
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--stale-days", type=int, default=180)
+    a = ap.parse_args()
+    vault = os.path.abspath(os.path.expanduser(a.vault))
+    if not os.path.isdir(vault):
+        print(f"cco-vault-audit: no vault at {vault}", file=sys.stderr)
+        return 2
+    r = audit(vault, a.stale_days)
+    print(json.dumps(r, indent=2) if a.json else render(r))
+    return 1 if thresholds(r) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,291 @@
+#!/usr/bin/env node
+// cco-tool-version: 1
+// cco-anatomy-scan — CLEAN-ROOM directory walker that builds an anatomy file-index (CTX-01).
+//
+// Walks a root dir, skips excluded dirs / secrets / binaries / >1MB files, extracts a one-line
+// description per kept file, estimates its token size (chars/ratio), groups entries by parent dir,
+// and writes the EXACT anatomy.md entry format the cco-file-index hook parses:
+//
+//     ## <reldir>
+//     - `<basename>` — <description> (~<N> tok)
+//
+// This is the EXPLICIT index builder (the operator / a SessionStart pass runs it). It is NOT a hook
+// and is NOT wired into one here. Unlike the global-fire cco-file-index hook (which only no-ops when
+// the store is absent), this tool CREATES ~/.claude/cco-memory/ if needed — it is the deliberate
+// builder, run on purpose.
+//
+// CLEAN-ROOM: the MECHANISM is ported from OpenWolf (cytostack/openwolf, AGPL-3.0) — the exclude
+// list, ALWAYS_EXCLUDE secret skips, binary/size skips, the 3.5/4.0/3.75 token ratios, and a SMALL
+// description-extractor subset (markdown heading / python docstring / leading comment). NO OpenWolf
+// source is copied; this is fresh code implementing the same ideas.
+//
+// Usage:
+//   cco-anatomy-scan [<root>] [--out <path>] [--root <dir>]
+//     <root>          directory to scan (default: process.cwd()); --root <dir> is an alias
+//     --out <path>    output file (default: ~/.claude/cco-memory/anatomy.md)
+//   cco-anatomy-scan --help | -h
+"use strict";
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+// ---- config (clean-room port of OpenWolf's exclude/skip mechanism) ------------------------------
+
+// Directories never descended into. Tuned for this config harness: adds .claude/projects (huge
+// jsonl), downloads, and the usual build/vendor/cache dirs.
+const EXCLUDE_DIRS = new Set([
+  "node_modules", ".git", "dist", "build", ".next", ".nuxt", "coverage",
+  "__pycache__", ".cache", "target", ".vscode", ".idea", ".turbo",
+  ".vercel", ".netlify", ".output", "downloads",
+]);
+
+// Files ALWAYS skipped regardless of any config — SECURITY: never index secrets.
+// Matches `.env` and any `.env.*` (e.g. .env.local, .env.production).
+const isAlwaysExcluded = (name) => name === ".env" || /^\.env(\..+)?$/.test(name);
+
+// Binary / non-source extensions skipped (images, fonts, archives, executables, media, db, wasm,
+// lockfiles). Stored lowercase, compared lowercase.
+const BINARY_EXTS = new Set([
+  // images
+  ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".tiff", ".svg", ".avif", ".heic",
+  // fonts
+  ".ttf", ".otf", ".woff", ".woff2", ".eot",
+  // archives
+  ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar",
+  // executables / objects
+  ".exe", ".dll", ".so", ".dylib", ".bin", ".o", ".a", ".class", ".node",
+  // media
+  ".mp3", ".mp4", ".mov", ".avi", ".mkv", ".wav", ".flac", ".webm", ".ogg",
+  // data / db / misc binary
+  ".sqlite", ".sqlite3", ".db", ".wasm", ".lock", ".pdf", ".pyc",
+]);
+
+const MAX_BYTES = 1024 * 1024; // 1MB — skip anything larger
+const READ_BYTES = 12 * 1024; // read only the first 12KB for the description
+const DESC_MAX = 120; // cap a description at ~120 chars
+
+// Token estimate (clean-room — trivial; ratios borrowed from OpenWolf's measured 3.5/4.0/3.75).
+const RATIO = { code: 3.5, prose: 4.0, mixed: 3.75 };
+const estimateTokens = (text, type = "mixed") => Math.ceil(text.length / RATIO[(type in RATIO) ? type : "mixed"]);
+
+const CODE_EXTS = new Set([
+  ".ts", ".js", ".tsx", ".jsx", ".py", ".rs", ".go", ".java", ".c", ".cpp",
+  ".h", ".css", ".scss", ".sql", ".sh", ".yaml", ".yml", ".json", ".toml", ".xml",
+]);
+const PROSE_EXTS = new Set([".md", ".txt", ".rst", ".adoc"]);
+const tokenType = (ext) => (CODE_EXTS.has(ext) ? "code" : PROSE_EXTS.has(ext) ? "prose" : "mixed");
+
+// ---- description extraction (clean-room SMALL subset) --------------------------------------------
+
+// A leading line-comment is noise if it's boilerplate (license / copyright / annotations / lint /
+// codegen markers). Skip those and keep looking for a real description line.
+const isNoiseComment = (line) =>
+  /^(copyright|license|spdx|all rights reserved)\b/i.test(line) ||
+  /^@/.test(line) ||
+  /^eslint-/i.test(line) ||
+  /generated/i.test(line) ||
+  /^!/.test(line) || // shebang remnants like `!/usr/bin/env`
+  line === "";
+
+const cleanDesc = (s) => {
+  if (!s) return "";
+  let d = s.replace(/\s+/g, " ").trim();
+  if (d.length > DESC_MAX) d = d.slice(0, DESC_MAX - 1).trimEnd() + "…"; // ellipsis
+  return d;
+};
+
+// Extract a ONE-LINE description from the first 12KB, language-aware by extension. Returns "" if
+// nothing suitable is found.
+function extractDescription(text, ext) {
+  const lines = text.split(/\r?\n/);
+
+  // Markdown / prose: first `# heading` (any level), else first non-empty prose line.
+  if (PROSE_EXTS.has(ext)) {
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      const h = line.match(/^#{1,6}\s+(.+?)\s*#*$/);
+      if (h) return cleanDesc(h[1]);
+      // a non-heading, non-html-comment first line of prose
+      if (!line.startsWith("<!--") && !line.startsWith(">")) return cleanDesc(line);
+    }
+    return "";
+  }
+
+  // Python: module docstring """...""" / '''...''' (possibly the first statement).
+  if (ext === ".py") {
+    const m = text.match(/^\s*(?:#![^\n]*\n)?(?:#[^\n]*\n|\s*\n)*\s*(?:[rRbBuU]{0,2})("""|''')([\s\S]*?)\1/);
+    if (m && m[2]) {
+      const first = m[2].split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0);
+      if (first) return cleanDesc(first);
+    }
+    // else fall through to leading-comment handling
+  }
+
+  // Generic: first meaningful leading comment line (// or #), skipping boilerplate.
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line === "") continue;
+    let body = null;
+    if (line.startsWith("//")) body = line.replace(/^\/+/, "").trim();
+    else if (line.startsWith("#") && ext !== ".md") body = line.replace(/^#+/, "").trim();
+    else if (line.startsWith("/*")) body = line.replace(/^\/\*+/, "").replace(/\*+\/\s*$/, "").trim();
+    else if (line.startsWith("*")) body = line.replace(/^\*+/, "").trim();
+    else break; // first non-comment, non-empty line -> stop (don't index code bodies)
+    if (body == null) break;
+    if (isNoiseComment(body)) continue;
+    if (body.length > 0) return cleanDesc(body);
+  }
+  return "";
+}
+
+// ---- walk ----------------------------------------------------------------------------------------
+
+function walk(root) {
+  const entries = []; // { reldir, base, desc, tokens }
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    let dirents;
+    try {
+      dirents = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (e) {
+      continue; // unreadable dir — skip, never throw
+    }
+    for (const d of dirents) {
+      const name = d.name;
+      const full = path.join(dir, name);
+      if (d.isDirectory()) {
+        if (EXCLUDE_DIRS.has(name)) continue;
+        if (name === "projects" && path.basename(dir) === ".claude") continue; // .claude/projects
+        if (name.startsWith(".") && name !== "." && name !== "..") {
+          // descend into a few useful dotdirs (.claude, .planning, .github) but skip the rest
+          if (![".claude", ".planning", ".github", ".agents"].includes(name)) continue;
+        }
+        stack.push(full);
+        continue;
+      }
+      if (!d.isFile()) continue; // symlinks / sockets / fifos — skip
+      if (isAlwaysExcluded(name)) continue; // SECURITY: never index .env*
+      const ext = path.extname(name).toLowerCase();
+      if (BINARY_EXTS.has(ext)) continue;
+      if (/\.min\.(js|css)$/i.test(name)) continue;
+      if (ext === ".jsonl") continue; // huge logs
+      let stat;
+      try {
+        stat = fs.statSync(full);
+      } catch (e) {
+        continue;
+      }
+      if (!stat.isFile() || stat.size > MAX_BYTES) continue; // >1MB size skip
+      let buf = "";
+      try {
+        const fd = fs.openSync(full, "r");
+        try {
+          const tmp = Buffer.alloc(Math.min(READ_BYTES, stat.size));
+          const n = fs.readSync(fd, tmp, 0, tmp.length, 0);
+          buf = tmp.slice(0, n).toString("utf8");
+        } finally {
+          fs.closeSync(fd);
+        }
+      } catch (e) {
+        continue;
+      }
+      const desc = extractDescription(buf, ext);
+      const tokens = estimateTokens(buf, tokenType(ext));
+      let reldir = path.relative(root, dir);
+      if (reldir === "") reldir = ".";
+      reldir = reldir.split(path.sep).join("/");
+      entries.push({ reldir, base: name, desc, tokens });
+    }
+  }
+  return entries;
+}
+
+// ---- serialize (EXACT anatomy.md format the hook parses) ----------------------------------------
+
+function serialize(entries, root) {
+  const groups = new Map();
+  for (const e of entries) {
+    if (!groups.has(e.reldir)) groups.set(e.reldir, []);
+    groups.get(e.reldir).push(e);
+  }
+  const dirs = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+  const out = [];
+  out.push("# anatomy.md");
+  out.push("");
+  out.push("> Auto-maintained by cco-anatomy-scan. Last scanned: " + new Date().toISOString());
+  out.push("> Root: " + root + " | Files: " + entries.length + " tracked");
+  out.push("");
+  for (const dir of dirs) {
+    out.push("## " + dir);
+    const files = groups.get(dir).sort((a, b) => a.base.localeCompare(b.base));
+    for (const f of files) {
+      // EXACT entry: `- \`<basename>\` — <desc> (~<N> tok)` (em-dash, tilde, ` tok)`).
+      // Omit the ` — <desc>` span when there is no description (the hook's regex makes it optional).
+      const descPart = f.desc ? " — " + f.desc : "";
+      out.push("- `" + f.base + "`" + descPart + " (~" + f.tokens + " tok)");
+    }
+    out.push("");
+  }
+  return out.join("\n").replace(/\n+$/, "\n");
+}
+
+// ---- main ----------------------------------------------------------------------------------------
+
+function parseArgs(argv) {
+  const args = { root: null, out: null, help: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") args.help = true;
+    else if (a === "--out") args.out = argv[++i];
+    else if (a === "--root") args.root = argv[++i];
+    else if (!a.startsWith("-") && args.root == null) args.root = a;
+  }
+  return args;
+}
+
+function printHelp() {
+  // Print the leading comment block (lines 4-23ish) as help.
+  const self = fs.readFileSync(__filename, "utf8").split(/\r?\n/);
+  const help = [];
+  for (let i = 1; i < self.length; i++) {
+    const l = self[i];
+    if (!l.startsWith("//")) break;
+    help.push(l.replace(/^\/\/ ?/, ""));
+  }
+  process.stdout.write(help.join("\n") + "\n");
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    printHelp();
+    process.exit(0);
+  }
+  const root = path.resolve(args.root || process.cwd());
+  const outPath = args.out
+    ? path.resolve(args.out)
+    : path.join(os.homedir(), ".claude", "cco-memory", "anatomy.md");
+
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    process.stderr.write("cco-anatomy-scan: not a directory: " + root + "\n");
+    process.exit(1);
+  }
+
+  const entries = walk(root);
+  const md = serialize(entries, root);
+
+  // This is the EXPLICIT builder: create the store / output dir on purpose.
+  try {
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  } catch (e) {}
+  fs.writeFileSync(outPath, md);
+
+  process.stdout.write(
+    "cco-anatomy-scan: indexed " + entries.length + " files from " + root + " -> " + outPath + "\n"
+  );
+}
+
+main();

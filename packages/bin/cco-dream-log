@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+# cco-tool-version: 1
+# AUTO-02 — the /dream kept/discarded LOG WRITER (the deliverable the operator reviews at breakfast).
+# The 08-02 runner calls this once per iteration to append ONE metadata-only row to BOTH a human .md
+# table and a machine .jsonl. This is the AUTO-02 deliverable (D-07).
+#
+# CONTRACT (D-07/D-11 metadata-only): a row carries EXACTLY {ts, iter, summary, before, after,
+# decision, why} — and NOTHING else, EVER. summary/why are SHORT operator/loop strings (truncated to
+# a sane cap), NEVER file contents, diffs, patch bodies, command output, or secrets. build_row takes
+# a FIXED signature (not **kwargs), so a stray payload key cannot be smuggled into the log.
+#
+# CONTRACT (append-not-overwrite): both files are opened in append mode ("a"); prior rows are NEVER
+# truncated or rewritten. The .md header row is written ONCE (only when the .md file does not yet
+# exist), then one data row is appended per call.
+#
+# CONTRACT (fail-safe, T-08-05): ALL filesystem work is wrapped so ANY error -> warn to stderr and
+# exit 0. A log failure must NEVER crash the loop. (Mirrors the cco-log.js never-throw discipline.)
+#
+# stdlib only — NO subprocess, NO network, NO LLM, NO third-party import. Pure functions live up top
+# (test_cco_dream_log.py imports them — keep signatures STABLE); the CLI (argparse) is below under
+# if __name__ == "__main__". Mirrors the cco-ledger spine.
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import json
+import os
+import sys
+from typing import Any
+
+TOOL_VERSION = 1
+
+# The ONLY fields a row may carry (D-07/D-11). Declared once so the shape is auditable.
+ROW_FIELDS = ("ts", "iter", "summary", "before", "after", "decision", "why")
+
+# A sane cap for the free-text fields — they are SHORT loop/operator strings, never payloads. Long
+# input is truncated here so a file-dump-sized string can never land in the log.
+TEXT_CAP = 200
+
+
+# ---------------------------------------------------------------------------
+# Pure functions (unit-tested by test_cco_dream_log.py — keep signatures stable)
+# ---------------------------------------------------------------------------
+def _truncate(text: Any, cap: int = TEXT_CAP) -> str:
+    """Coerce to str and truncate to `cap` chars (the no-payload guard for free-text fields)."""
+    s = "" if text is None else str(text)
+    if len(s) > cap:
+        return s[:cap]
+    return s
+
+
+def build_row(
+    iter: int,  # noqa: A002 — "iter" is the contracted field name (matches the eval state + the log schema)
+    summary: str,
+    before: Any,
+    after: Any,
+    decision: str,
+    why: str,
+) -> dict[str, Any]:
+    """Build ONE log row carrying EXACTLY the seven metadata fields — no other key, ever (D-07/D-11).
+
+    - ts: an ISO timestamp string (datetime.now().isoformat()).
+    - iter: the iteration number (int-coerced; left as-is if already int).
+    - summary / why: SHORT strings, truncated to TEXT_CAP (never a payload).
+    - before / after: coerced to str (a literal "-" is allowed for an unset value, e.g. the first
+      iteration has no "before").
+    - decision: the keep|discard verdict (passed through; the CLI restricts it to the two choices).
+    """
+    try:
+        iter_val: Any = int(iter)
+    except (TypeError, ValueError):
+        iter_val = iter
+    return {
+        "ts": _dt.datetime.now().isoformat(),
+        "iter": iter_val,
+        "summary": _truncate(summary),
+        "before": _truncate(before),
+        "after": _truncate(after),
+        "decision": str(decision),
+        "why": _truncate(why),
+    }
+
+
+def md_header() -> str:
+    """The markdown table header (+ the separator row). Written ONCE per .md file."""
+    return (
+        "| iter | summary | before | after | decision | why | ts |\n"
+        "| ---- | ------- | ------ | ----- | -------- | --- | -- |"
+    )
+
+
+def _cell(value: Any) -> str:
+    """Escape a value for a markdown table cell: replace any pipe so it cannot break the columns,
+    and collapse newlines (a row is one line)."""
+    s = "" if value is None else str(value)
+    return s.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+
+def md_row(row: dict[str, Any]) -> str:
+    """One pipe-delimited markdown data row for a built row (field pipes escaped)."""
+    return (
+        f"| {_cell(row['iter'])} | {_cell(row['summary'])} | {_cell(row['before'])} "
+        f"| {_cell(row['after'])} | {_cell(row['decision'])} | {_cell(row['why'])} "
+        f"| {_cell(row['ts'])} |"
+    )
+
+
+# ===========================================================================
+# CLI — appends one metadata-only row to <log>.md and <log>.jsonl. ALL filesystem work is wrapped
+# FAIL-SAFE: any error -> warn to stderr, exit 0 (T-08-05); a log failure must NEVER crash the loop.
+# Mirrors the cco-ledger CLI shape (tested pure functions above; glue below).
+# ===========================================================================
+def _append_row(log_base: str, row: dict[str, Any]) -> None:
+    """Append `row` to <log_base>.jsonl and <log_base>.md, writing the md header once. Raises on any
+    filesystem error so the CLI's fail-safe wrapper can catch it (warn + exit 0)."""
+    md_path = log_base + ".md"
+    jsonl_path = log_base + ".jsonl"
+
+    parent = os.path.dirname(os.path.abspath(log_base))
+    os.makedirs(parent, exist_ok=True)
+
+    # .md: write the header only when the file does not yet exist, then append the data row.
+    write_header = not os.path.exists(md_path)
+    with open(md_path, "a", encoding="utf-8") as fh:
+        if write_header:
+            fh.write(md_header() + "\n")
+        fh.write(md_row(row) + "\n")
+
+    # .jsonl: append one compact JSON object line.
+    with open(jsonl_path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="cco-dream-log",
+        description=(
+            "AUTO-02 /dream kept/discarded log writer. Appends ONE metadata-only row per iteration to "
+            "<log>.md (a markdown table; header written once) and <log>.jsonl. Fields: "
+            "ts,iter,summary,before,after,decision,why — NEVER file contents/diffs/output/secrets "
+            "(summary/why are short, truncated to 200 chars). Append-not-overwrite; fail-safe."
+        ),
+    )
+    parser.add_argument("--log", required=True, metavar="PATH", help="log path WITHOUT extension (.md/.jsonl appended)")
+    parser.add_argument("--iter", required=True, help="iteration number")
+    parser.add_argument("--summary", default="", help="SHORT attempt summary (truncated to 200 chars; no payloads)")
+    parser.add_argument("--before", default="-", help="metric before (or '-' if unset)")
+    parser.add_argument("--after", default="-", help="metric after (or '-' if unset)")
+    parser.add_argument("--decision", required=True, choices=["keep", "discard"], help="the keep|discard verdict")
+    parser.add_argument("--why", default="", help="SHORT reason (truncated to 200 chars; no payloads)")
+    args = parser.parse_args(argv)
+
+    try:
+        row = build_row(
+            iter=args.iter,
+            summary=args.summary,
+            before=args.before,
+            after=args.after,
+            decision=args.decision,
+            why=args.why,
+        )
+        _append_row(args.log, row)
+    except Exception as err:  # noqa: BLE001 — fail-safe is the whole point (T-08-05)
+        sys.stderr.write(f"cco-dream-log: warning — log append failed, skipped (loop unaffected): {err}\n")
+        return 0
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None

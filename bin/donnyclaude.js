@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, readdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +33,7 @@ const DEFAULT_TOP_K_AUTOINVOKE_SKILLS = Object.freeze([
   'gsd-next',
   'gsd-verify-work',
   'gsd-ship',
+  'web-research',
 ]);
 
 // ── Branding ────────────────────────────────────────────────────────────────
@@ -176,6 +177,8 @@ function installGlobalTools() {
     { name: 'GSD workflow engine', src: 'gsd', dest: 'get-shit-done' },
     { name: 'hooks', src: 'hooks', dest: 'hooks' },
     { name: 'commands', src: 'commands', dest: 'commands' },
+    { name: 'cco CLI tools', src: 'bin', dest: 'bin', showCount: true },
+    { name: 'cco memory substrate', src: 'cco-memory', dest: 'cco-memory' },
   ];
 
   for (const comp of components) {
@@ -204,6 +207,25 @@ function installGlobalTools() {
     } else {
       info(`${comp.name} not found in package -- skipping`);
     }
+  }
+
+  // Statusline (single file: packages/core/statusline.py -> ~/.claude/statusline.py)
+  const statuslineSrc = join(ROOT, 'packages', 'core', 'statusline.py');
+  if (existsSync(statuslineSrc)) {
+    copyFileSync(statuslineSrc, join(CLAUDE_HOME, 'statusline.py'));
+    ok('Statusline installed');
+  }
+
+  // Normalize the cco CLI tools to executable (cpSync usually preserves mode; be explicit).
+  const binDir = join(CLAUDE_HOME, 'bin');
+  if (!IS_WIN && existsSync(binDir)) {
+    try {
+      for (const f of readdirSync(binDir)) {
+        if (f.startsWith('cco-')) {
+          try { chmodSync(join(binDir, f), 0o755); } catch {}
+        }
+      }
+    } catch {}
   }
 
   // Settings merge
@@ -446,6 +468,18 @@ function mergeSettings() {
       }
     }
 
+    // Fill non-destructive extras only when the user has not set them.
+    if (template.statusLine && !existing.statusLine) existing.statusLine = template.statusLine;
+    if (template.env) {
+      if (!existing.env) existing.env = {};
+      for (const [k, v] of Object.entries(template.env)) {
+        if (!(k in existing.env)) existing.env[k] = v;
+      }
+    }
+    for (const k of ['skills', 'alwaysThinkingEnabled', 'autoCompactEnabled']) {
+      if (template[k] !== undefined && existing[k] === undefined) existing[k] = template[k];
+    }
+
     writeFileSync(settingsPath, JSON.stringify(existing, null, 2));
     ok('Settings merged (existing config preserved, backup at settings.json.bak)');
   } else {
@@ -534,6 +568,9 @@ function handleDoctor() {
     ['Hooks directory', () => existsSync(join(CLAUDE_HOME, 'hooks'))],
     ['Settings file', () => existsSync(join(CLAUDE_HOME, 'settings.json'))],
     ['Commands directory', () => existsSync(join(CLAUDE_HOME, 'commands'))],
+    ['cco CLI tools', () => existsSync(join(CLAUDE_HOME, 'bin'))],
+    ['cco memory substrate', () => existsSync(join(CLAUDE_HOME, 'cco-memory'))],
+    ['Statusline', () => existsSync(join(CLAUDE_HOME, 'statusline.py'))],
   ];
 
   let passed = 0;
@@ -561,6 +598,16 @@ function main() {
   console.log(BANNER);
 
   switch (command) {
+    case 'install':
+      // Install/refresh the global toolkit WITHOUT launching the wizard
+      // (headless / CI / reinstall). Same as the default path minus the wizard.
+      if (!checkPrerequisites()) {
+        console.log('\n\x1b[31mPrerequisite check failed. Fix issues above and retry.\x1b[0m');
+        process.exit(1);
+      }
+      installGlobalTools();
+      ok('Toolkit installed (wizard skipped)');
+      break;
     case 'update':
       handleUpdate();
       break;
@@ -577,6 +624,7 @@ function main() {
     case '-h':
       console.log('Usage:');
       console.log('  npx donnyclaude            Install tools & launch setup wizard');
+      console.log('  npx donnyclaude install    Install/refresh tools only (no wizard)');
       console.log('  npx donnyclaude update     Update to latest version');
       console.log('  npx donnyclaude doctor     Check installation health');
       console.log('  npx donnyclaude version    Show version');

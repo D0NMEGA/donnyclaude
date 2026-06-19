@@ -1,0 +1,237 @@
+#!/usr/bin/env node
+// cco-tool-version: 1
+// OBS-01 operator reader. Tails + aggregates the cco-* hook event log written by cco-log.js
+// (~/.claude/cco-memory/hooks/events-<date>.jsonl) into a per-hook table: fires / p50 / p95 ms /
+// warn / block. Operator-facing ONLY — it never reads or writes the statusline bridge, never
+// injects model context, and never edits settings.json. Run it directly:
+//
+//   node ~/.claude/bin/cco-hooks            today's events, aggregated
+//   node ~/.claude/bin/cco-hooks --since 1h all logs, last 1h (also 30m / 24h / 7d)
+//   node ~/.claude/bin/cco-hooks --watch    live, re-renders every 2s (Ctrl-C to exit)
+//   node ~/.claude/bin/cco-hooks --json     the aggregate object as JSON (OBS-02 / Phase-6 feed)
+//   node ~/.claude/bin/cco-hooks --help     this usage
+//
+// Robust to a corrupt/missing log: each line is JSON.parse'd in a try/catch and malformed lines
+// are skipped; a missing log prints a clean "no events" message and exits 0 (never crashes).
+"use strict";
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+const HOOKS_DIR = path.join(os.homedir(), ".claude", "cco-memory", "hooks");
+
+function localDate(d = new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Parse a duration like "30m" / "1h" / "24h" / "7d" / "90s" -> milliseconds (null if unparseable).
+function parseDuration(s) {
+  const m = /^(\d+)\s*([smhd])$/.exec(String(s || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  const unit = { s: 1e3, m: 60e3, h: 3600e3, d: 86400e3 }[m[2]];
+  return n * unit;
+}
+
+// List event-*.jsonl files. For the default (today) view, just today's file; for --since, all of them.
+function logFiles(all) {
+  try {
+    if (!all) {
+      const f = path.join(HOOKS_DIR, "events-" + localDate() + ".jsonl");
+      return fs.existsSync(f) ? [f] : [];
+    }
+    return fs
+      .readdirSync(HOOKS_DIR)
+      .filter((n) => /^events-\d{4}-\d{2}-\d{2}\.jsonl$/.test(n))
+      .map((n) => path.join(HOOKS_DIR, n));
+  } catch (e) {
+    return [];
+  }
+}
+
+// Read all matching event records. sinceMs = null -> no time filter (today's file already scoped).
+function readEvents(opts) {
+  const out = [];
+  const cutoff = opts.sinceMs != null ? Date.now() - opts.sinceMs : null;
+  for (const file of logFiles(opts.sinceMs != null)) {
+    let text = "";
+    try { text = fs.readFileSync(file, "utf8"); } catch (e) { continue; }
+    for (const line of text.split("\n")) {
+      const s = line.trim();
+      if (!s) continue;
+      let rec;
+      try { rec = JSON.parse(s); } catch (e) { continue; } // skip malformed (tampering-safe)
+      if (!rec || typeof rec !== "object") continue;
+      if (cutoff != null) {
+        const t = Date.parse(rec.ts);
+        if (!Number.isFinite(t) || t < cutoff) continue;
+      }
+      out.push(rec);
+    }
+  }
+  return out;
+}
+
+function percentile(sortedAsc, p) {
+  if (!sortedAsc.length) return 0;
+  const idx = Math.min(sortedAsc.length - 1, Math.floor(p * sortedAsc.length));
+  return sortedAsc[idx];
+}
+
+// Aggregate records into { hooks: { <hook>: {fires, p50, p95, warn, block} }, totals: {...} }.
+function aggregate(records) {
+  const byHook = {};
+  for (const r of records) {
+    const hook = r.hook || "(unknown)";
+    const h = (byHook[hook] = byHook[hook] || { fires: 0, lat: [], warn: 0, block: 0 });
+    h.fires += 1;
+    if (typeof r.latency_ms === "number") h.lat.push(r.latency_ms);
+    const dec = r.decision || "none";
+    if (dec === "warn") h.warn += 1;
+    if (dec === "block") h.block += 1;
+  }
+  const hooks = {};
+  let tFires = 0, tWarn = 0, tBlock = 0;
+  const allLat = [];
+  for (const name of Object.keys(byHook).sort()) {
+    const h = byHook[name];
+    const lat = h.lat.slice().sort((a, b) => a - b);
+    hooks[name] = {
+      fires: h.fires,
+      p50: percentile(lat, 0.5),
+      p95: percentile(lat, 0.95),
+      warn: h.warn,
+      block: h.block,
+    };
+    tFires += h.fires; tWarn += h.warn; tBlock += h.block;
+    for (const v of h.lat) allLat.push(v);
+  }
+  allLat.sort((a, b) => a - b);
+  return {
+    hooks,
+    totals: {
+      hooks: Object.keys(hooks).length,
+      fires: tFires,
+      p50: percentile(allLat, 0.5),
+      p95: percentile(allLat, 0.95),
+      warn: tWarn,
+      block: tBlock,
+    },
+  };
+}
+
+function renderTable(agg, label) {
+  const names = Object.keys(agg.hooks);
+  const lines = [];
+  lines.push(`cco-hooks — ${label}`);
+  if (!names.length) {
+    lines.push("  (no events in range)");
+    return lines.join("\n");
+  }
+  const pad = (s, w) => String(s).padEnd(w);
+  const lpad = (s, w) => String(s).padStart(w);
+  const wHook = Math.max(4, ...names.map((n) => n.length));
+  lines.push(
+    `  ${pad("hook", wHook)}  ${lpad("fires", 6)}  ${lpad("p50ms", 6)}  ${lpad("p95ms", 6)}  ${lpad("warn", 5)}  ${lpad("block", 5)}`
+  );
+  for (const n of names) {
+    const h = agg.hooks[n];
+    lines.push(
+      `  ${pad(n, wHook)}  ${lpad(h.fires, 6)}  ${lpad(h.p50, 6)}  ${lpad(h.p95, 6)}  ${lpad(h.warn, 5)}  ${lpad(h.block, 5)}`
+    );
+  }
+  const t = agg.totals;
+  lines.push(
+    `  ${pad("TOTAL", wHook)}  ${lpad(t.fires, 6)}  ${lpad(t.p50, 6)}  ${lpad(t.p95, 6)}  ${lpad(t.warn, 5)}  ${lpad(t.block, 5)}`
+  );
+  return lines.join("\n");
+}
+
+function help() {
+  return [
+    "cco-hooks — OBS-01 operator reader for cco-* hook events",
+    "",
+    "Usage:",
+    "  cco-hooks               aggregate today's events (per-hook fires / p50 / p95 / warn / block)",
+    "  cco-hooks --since <dur>  aggregate across all logs in the window (e.g. 30m, 1h, 24h, 7d)",
+    "  cco-hooks --watch        live table, re-rendered every 2s (Ctrl-C to exit)",
+    "  cco-hooks --json         emit the aggregate object as JSON (for OBS-02 / Phase-6)",
+    "  cco-hooks --help         show this help",
+    "",
+    `Reads:  ${path.join(HOOKS_DIR, "events-<date>.jsonl")}`,
+    "Notes:  operator-facing only — never touches the statusline, model context, or settings.json.",
+  ].join("\n");
+}
+
+function parseArgs(argv) {
+  const o = { mode: "today", sinceMs: null, json: false, watch: false, help: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") o.help = true;
+    else if (a === "--json") o.json = true;
+    else if (a === "--watch" || a === "-w") o.watch = true;
+    else if (a === "--since") {
+      const d = parseDuration(argv[++i]);
+      if (d != null) o.sinceMs = d;
+    } else if (a.startsWith("--since=")) {
+      const d = parseDuration(a.slice("--since=".length));
+      if (d != null) o.sinceMs = d;
+    }
+  }
+  return o;
+}
+
+function rangeLabel(o) {
+  if (o.sinceMs != null) {
+    const mins = Math.round(o.sinceMs / 60000);
+    return mins >= 60 && mins % 60 === 0 ? `last ${mins / 60}h` : `last ${mins}m`;
+  }
+  return `today (${localDate()})`;
+}
+
+function main() {
+  const o = parseArgs(process.argv.slice(2));
+
+  if (o.help) {
+    process.stdout.write(help() + "\n");
+    return;
+  }
+
+  const compute = () => aggregate(readEvents(o));
+
+  if (o.json) {
+    process.stdout.write(JSON.stringify(compute(), null, 2) + "\n");
+    return;
+  }
+
+  // Empty/missing log → clean message, exit 0 (never crash).
+  const hasAny = logFiles(o.sinceMs != null).length > 0;
+
+  if (o.watch) {
+    const draw = () => {
+      const agg = compute();
+      process.stdout.write("\x1b[2J\x1b[H"); // clear screen + home
+      process.stdout.write(renderTable(agg, rangeLabel(o) + "  (watch — Ctrl-C to exit)") + "\n");
+    };
+    draw();
+    setInterval(draw, 2000);
+    return; // setInterval keeps the process alive; Ctrl-C exits
+  }
+
+  if (!hasAny) {
+    process.stdout.write(
+      `no cco-hook events yet (events-${localDate()}.jsonl not found)\n`
+    );
+    return;
+  }
+  process.stdout.write(renderTable(compute(), rangeLabel(o)) + "\n");
+}
+
+try {
+  main();
+} catch (e) {
+  // Operator tool — degrade to a message, never a stack-trace crash.
+  process.stdout.write("cco-hooks: no readable events (" + (e && e.message ? e.message : "error") + ")\n");
+  process.exit(0);
+}

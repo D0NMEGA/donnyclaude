@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+# cco-tool-version: 1
+# OBS-02 token-cost ledger. Parses ~/.claude/projects/*/*.jsonl, computes the REAL token cost the
+# statusline cannot (historical / lifetime + cache-accurate), deduped by requestId (last-wins, the
+# ccusage #74 trap) and priced via a cached LiteLLM snapshot. The jsonl has NO costUSD field, so cost
+# is COMPUTED (ccusage `calculate` mode). Opus 4.8 (2026): $5/1M in, $25/1M out; 1h-cache = 2x input,
+# 5m-cache = 1.25x input, cache-read = 0.1x input; NO >200K long-context surcharge.
+#
+# D-12 METADATA-ONLY: this tool reads ONLY message.usage / message.model / requestId / timestamp from
+# each line. It NEVER reads or prints message.content (prompt/file text). Output is token counts and
+# dollars only. Operator-facing; it does not touch the statusline bridge or settings.json.
+#
+# Pure, unit-tested functions live up top (test_cco_ledger.py imports them); the CLI is below.
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import glob
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from typing import Any
+
+TOOL_VERSION = 1
+
+HOME = os.path.expanduser("~")
+PROJECTS_GLOB = os.path.join(HOME, ".claude", "projects", "*", "*.jsonl")
+PRICES_PATH = os.path.join(HOME, ".claude", "cco-memory", "litellm-prices.json")
+LITELLM_URL = (
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/"
+    "model_prices_and_context_window.json"
+)
+
+# Research-verified fallback constants ($/token) — written if the cache is absent and the live
+# LiteLLM fetch fails. 1h-cache = 2x in, 5m-cache = 1.25x in, cache-read = 0.1x in. NO surcharge.
+FALLBACK_PRICES: dict[str, dict[str, float]] = {
+    "claude-opus-4-8": {
+        "in": 5e-06,
+        "out": 25e-06,
+        "cache_5m": 6.25e-06,
+        "cache_1h": 10e-06,
+        "cache_read": 0.5e-06,
+    }
+}
+
+# Map model-string aliases the jsonl might carry -> the price-table key (Assumption A1 mitigation:
+# a table-key mismatch must not silently zero the cost).
+MODEL_ALIASES: dict[str, str] = {
+    "anthropic/claude-opus-4-8": "claude-opus-4-8",
+    "claude-opus-4-8-20260101": "claude-opus-4-8",
+}
+
+
+# ---------------------------------------------------------------------------
+# Pure functions (unit-tested by test_cco_ledger.py — keep signatures stable)
+# ---------------------------------------------------------------------------
+def _canon_model(model: str | None) -> str:
+    """Canonicalize a model string to its price-table key via the alias map."""
+    if not model:
+        return ""
+    return MODEL_ALIASES.get(model, model)
+
+
+def dedup_usages(lines: list[dict[str, Any]]) -> dict[str, tuple[str | None, dict[str, Any]]]:
+    """Collapse parsed jsonl dicts to {requestId: (model, usage)}, keeping the LAST entry per
+    requestId (streaming writes the same requestId repeatedly with growing counts; the last is the
+    complete one — summing all => 2-5x overcount, ccusage #74). Falls back to message.id when
+    requestId is absent. Only type=="assistant" lines with a message.usage are considered.
+    """
+    seen: dict[str, tuple[str | None, dict[str, Any]]] = {}
+    for d in lines:
+        if not isinstance(d, dict) or d.get("type") != "assistant":
+            continue
+        message = d.get("message") or {}
+        usage = message.get("usage")
+        if not usage:
+            continue
+        rid = d.get("requestId") or message.get("id")
+        if not rid:
+            continue
+        seen[rid] = (message.get("model"), usage)  # last-wins (later overwrites earlier)
+    return seen
+
+
+def line_cost(model: str | None, usage: dict[str, Any], prices: dict[str, dict[str, float]]) -> float:
+    """Cost (USD) for a single deduped usage record (ccusage `calculate` mode — costUSD is absent).
+
+        cost = input_tokens*in + output_tokens*out
+             + cache_creation.ephemeral_1h_input_tokens * cache_1h   # 2x input  (CC #899)
+             + cache_creation.ephemeral_5m_input_tokens * cache_5m   # 1.25x input
+             + cache_read_input_tokens * cache_read
+
+    NO >200K long-context multiplier is applied (Anthropic dropped it in 2026). An unknown model
+    (price-table miss) contributes $0 (caller flags it "unpriced") instead of crashing.
+    """
+    p = prices.get(_canon_model(model))
+    if not p:
+        return 0.0
+    cc = usage.get("cache_creation") or {}
+    return (
+        usage.get("input_tokens", 0) * p["in"]
+        + usage.get("output_tokens", 0) * p["out"]
+        + cc.get("ephemeral_1h_input_tokens", 0) * p["cache_1h"]
+        + cc.get("ephemeral_5m_input_tokens", 0) * p["cache_5m"]
+        + usage.get("cache_read_input_tokens", 0) * p["cache_read"]
+    )
+
+
+def parse_lines(jsonl_text: str) -> list[dict[str, Any]]:
+    """Parse jsonl text into a list of dicts, skipping malformed/blank lines without raising."""
+    out: list[dict[str, Any]] = []
+    for line in jsonl_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue  # T-05-05: a malformed line must never crash the ledger
+        if isinstance(obj, dict):
+            out.append(obj)
+    return out
+
+
+def session_cost(jsonl_text: str, prices: dict[str, dict[str, float]]) -> float:
+    """End-to-end cost for one session's jsonl text: parse -> dedup by requestId -> sum line_cost."""
+    deduped = dedup_usages(parse_lines(jsonl_text))
+    return sum(line_cost(model, usage, prices) for model, usage in deduped.values())
+
+
+# ===========================================================================
+# CLI — wires the tested pure functions above. Everything below is glue (no model-facing output;
+# operator-only; never touches the statusline bridge or settings.json).
+# ===========================================================================
+def _map_litellm_entry(entry: dict[str, Any]) -> dict[str, float] | None:
+    """Map one LiteLLM table entry -> the cco price shape. LiteLLM's single
+    `cache_creation_input_token_cost` is the 5-MINUTE rate (1.25x input); the 1-HOUR rate (2x input)
+    is NOT in the table, so it is derived as 2*input (the ccusage #899 fix). Returns None if the
+    entry lacks the basic input/output costs."""
+    in_cost = entry.get("input_cost_per_token")
+    out_cost = entry.get("output_cost_per_token")
+    if in_cost is None or out_cost is None:
+        return None
+    cache_5m = entry.get("cache_creation_input_token_cost", in_cost * 1.25)
+    cache_read = entry.get("cache_read_input_token_cost", in_cost * 0.1)
+    return {
+        "in": float(in_cost),
+        "out": float(out_cost),
+        "cache_5m": float(cache_5m),
+        "cache_1h": float(in_cost) * 2.0,  # #899: 1h cache = 2x input (NOT in the LiteLLM table)
+        "cache_read": float(cache_read),
+    }
+
+
+def _fetch_litellm_prices() -> dict[str, dict[str, float]] | None:
+    """Fetch the live LiteLLM table and extract the models we price. Returns None on any failure
+    (offline / rate-limit / schema change) so the caller can fall back to the verified constants."""
+    try:
+        req = urllib.request.Request(LITELLM_URL, headers={"User-Agent": "cco-ledger/1"})
+        with urllib.request.urlopen(req, timeout=6) as resp:  # noqa: S310 (trusted constant URL)
+            table = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return None
+    if not isinstance(table, dict):
+        return None
+    out: dict[str, dict[str, float]] = {}
+    for key in list(FALLBACK_PRICES) + list(MODEL_ALIASES):
+        entry = table.get(key)
+        if isinstance(entry, dict):
+            mapped = _map_litellm_entry(entry)
+            if mapped:
+                out[MODEL_ALIASES.get(key, key)] = mapped
+    return out or None
+
+
+def _write_prices(prices: dict[str, dict[str, float]], source: str, fetched: bool) -> None:
+    """Persist the price snapshot to PRICES_PATH (best-effort; never raises to the caller)."""
+    payload = {
+        "_meta": {
+            "cco-tool-version": TOOL_VERSION,
+            "source": source,
+            "fetched_from_litellm": fetched,
+            "litellm_url": LITELLM_URL,
+            "note": (
+                "Units are $/token. 1h-cache = 2x input, 5m-cache = 1.25x input, cache-read = "
+                "0.1x input. NO >200K long-context surcharge (Anthropic dropped it in 2026). "
+                "Refresh via `cco-ledger --refresh-prices`."
+            ),
+        },
+        **prices,
+    }
+    try:
+        os.makedirs(os.path.dirname(PRICES_PATH), exist_ok=True)
+        with open(PRICES_PATH, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
+def load_prices(refresh: bool = False) -> dict[str, dict[str, float]]:
+    """Return the price table. Order: cached file (unless --refresh) -> live LiteLLM fetch ->
+    research-verified fallback constants. A refresh re-fetches and rewrites the cache. The returned
+    table is always usable (fallback guarantees claude-opus-4-8 is priced — Assumption A1 mitigation)."""
+    if not refresh:
+        try:
+            with open(PRICES_PATH, encoding="utf-8") as fh:
+                cached = json.load(fh)
+            prices = {k: v for k, v in cached.items() if not k.startswith("_")}
+            if prices:
+                return prices
+        except (OSError, ValueError):
+            pass  # cache missing/corrupt -> fetch or fall back
+
+    fetched = _fetch_litellm_prices()
+    if fetched:
+        _write_prices(fetched, source="litellm-live", fetched=True)
+        return fetched
+
+    _write_prices(FALLBACK_PRICES, source="fallback-constants", fetched=False)
+    return FALLBACK_PRICES
+
+
+def _iter_jsonl_files(session: str | None) -> list[str]:
+    """All ~/.claude/projects/*/*.jsonl files; for --session, only files whose name contains the sid."""
+    files = sorted(glob.glob(PROJECTS_GLOB))
+    if session:
+        files = [f for f in files if session in os.path.basename(f)]
+    return files
+
+
+def _local_date(ts: str | None) -> str | None:
+    """Local YYYY-MM-DD from an ISO timestamp string (None if unparseable)."""
+    if not ts:
+        return None
+    try:
+        parsed = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return parsed.astimezone().strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+
+
+def _new_model_row() -> dict[str, Any]:
+    return {"requests": 0, "input": 0, "output": 0, "cache": 0, "cost": 0.0, "priced": True}
+
+
+def collect_rollup(
+    files: list[str], prices: dict[str, dict[str, float]], today_only: bool = False
+) -> dict[str, Any]:
+    """Parse the jsonl files, dedup by requestId (last-wins), price, and roll up per model.
+
+    METADATA-ONLY (D-12): reads only type / requestId / timestamp / message.{model,usage}; it never
+    touches message.content. Returns {per_model: {...}, total: {...}, files: N, unpriced_models: [...]}.
+    """
+    today = _dt.datetime.now().astimezone().strftime("%Y-%m-%d")
+    deduped: dict[str, tuple[str | None, dict[str, Any]]] = {}
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        lines: list[dict[str, Any]] = []
+        for raw in text.splitlines():
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(obj, dict) or obj.get("type") != "assistant":
+                continue
+            if today_only and _local_date(obj.get("timestamp")) != today:
+                continue
+            lines.append(obj)
+        # Dedup WITHIN each file by requestId (requestIds are unique per session/file).
+        for rid, (model, usage) in dedup_usages(lines).items():
+            deduped[f"{os.path.basename(path)}::{rid}"] = (model, usage)
+
+    per_model: dict[str, dict[str, Any]] = {}
+    unpriced: set[str] = set()
+    for model, usage in deduped.values():
+        key = model or "unknown"
+        row = per_model.setdefault(key, _new_model_row())
+        cc = usage.get("cache_creation") or {}
+        row["requests"] += 1
+        row["input"] += usage.get("input_tokens", 0)
+        row["output"] += usage.get("output_tokens", 0)
+        row["cache"] += (
+            usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+        )
+        cost = line_cost(model, usage, prices)
+        row["cost"] += cost
+        if prices.get(_canon_model(model)) is None:
+            row["priced"] = False
+            unpriced.add(key)
+        # (cc referenced so token attribution stays explicit; not summed separately into output)
+        _ = cc
+
+    total = {
+        "requests": sum(r["requests"] for r in per_model.values()),
+        "input": sum(r["input"] for r in per_model.values()),
+        "output": sum(r["output"] for r in per_model.values()),
+        "cache": sum(r["cache"] for r in per_model.values()),
+        "cost": sum(r["cost"] for r in per_model.values()),
+    }
+    return {
+        "per_model": per_model,
+        "total": total,
+        "files": len(files),
+        "unpriced_models": sorted(unpriced),
+    }
+
+
+def _fmt_int(n: int) -> str:
+    return f"{n:,}"
+
+
+def _render_table(rollup: dict[str, Any], scope_label: str) -> str:
+    per_model = rollup["per_model"]
+    if not per_model:
+        return "no session logs found"
+    lines = [f"cco-ledger — {scope_label} ({rollup['files']} jsonl file(s))", ""]
+    header = f"{'model':<26} {'reqs':>6} {'input':>14} {'output':>12} {'cache':>14} {'$':>10}"
+    lines.append(header)
+    lines.append("-" * len(header))
+    for model in sorted(per_model):
+        r = per_model[model]
+        flag = "" if r["priced"] else "  (unpriced)"
+        lines.append(
+            f"{model:<26} {r['requests']:>6} {_fmt_int(r['input']):>14} "
+            f"{_fmt_int(r['output']):>12} {_fmt_int(r['cache']):>14} {r['cost']:>10.4f}{flag}"
+        )
+    t = rollup["total"]
+    lines.append("-" * len(header))
+    lines.append(
+        f"{'TOTAL':<26} {t['requests']:>6} {_fmt_int(t['input']):>14} "
+        f"{_fmt_int(t['output']):>12} {_fmt_int(t['cache']):>14} {t['cost']:>10.4f}"
+    )
+    if rollup["unpriced_models"]:
+        lines.append("")
+        lines.append("unpriced (no price-table entry): " + ", ".join(rollup["unpriced_models"]))
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="cco-ledger",
+        description=(
+            "OBS-02 token-cost ledger from ~/.claude/projects/*/*.jsonl. Dedups by requestId "
+            "(last-wins), computes cost (no costUSD field in the jsonl), cache-accurate (1h=2x, "
+            "5m=1.25x input), no >200K surcharge. Metadata-only: token counts + dollars, never "
+            "prompt/file content."
+        ),
+    )
+    parser.add_argument("--session", metavar="SID", help="only sessions whose jsonl filename contains SID")
+    parser.add_argument("--today", action="store_true", help="only lines with today's local-date timestamp")
+    parser.add_argument("--json", dest="as_json", action="store_true", help="emit the rollup object as JSON")
+    parser.add_argument("--refresh-prices", action="store_true", help="re-fetch the LiteLLM price table and exit")
+    args = parser.parse_args(argv)
+
+    if args.refresh_prices:
+        prices = load_prices(refresh=True)
+        src = "litellm-live" if _prices_look_fetched() else "fallback-constants"
+        sys.stdout.write(f"refreshed prices -> {PRICES_PATH} (source: {src}); models: {sorted(prices)}\n")
+        return 0
+
+    prices = load_prices()
+    files = _iter_jsonl_files(args.session)
+    rollup = collect_rollup(files, prices, today_only=args.today)
+
+    scope = "today" if args.today else (f"session {args.session}" if args.session else "lifetime")
+
+    if args.as_json:
+        # Metadata-only JSON for the OBS-01 reader / Phase-6 feed.
+        out = {
+            "scope": scope,
+            "files": rollup["files"],
+            "total": rollup["total"],
+            "per_model": rollup["per_model"],
+            "unpriced_models": rollup["unpriced_models"],
+            "lifetime": rollup["total"],  # alias: when scope==lifetime this IS the lifetime total
+        }
+        sys.stdout.write(json.dumps(out, indent=2) + "\n")
+        return 0
+
+    sys.stdout.write(_render_table(rollup, scope) + "\n")
+    return 0
+
+
+def _prices_look_fetched() -> bool:
+    try:
+        with open(PRICES_PATH, encoding="utf-8") as fh:
+            return bool(json.load(fh).get("_meta", {}).get("fetched_from_litellm"))
+    except (OSError, ValueError):
+        return False
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
