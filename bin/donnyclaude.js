@@ -216,6 +216,18 @@ function installGlobalTools() {
     ok('Statusline installed');
   }
 
+  // Reference docs (research-tools, obsidian-memory) -> ~/.claude/docs so the
+  // operating guide's links resolve on the user's machine.
+  const docsSrc = join(ROOT, 'docs');
+  if (existsSync(docsSrc)) {
+    cpSync(docsSrc, join(CLAUDE_HOME, 'docs'), { recursive: true, force: true });
+    ok('Docs installed');
+  }
+
+  // Global operating guide -> ~/.claude/CLAUDE.md (non-destructive). This is
+  // what makes the bundled rules load instead of sitting unused on disk.
+  installOperatingGuide();
+
   // Normalize the cco CLI tools to executable (cpSync usually preserves mode; be explicit).
   const binDir = join(CLAUDE_HOME, 'bin');
   if (!IS_WIN && existsSync(binDir)) {
@@ -428,6 +440,49 @@ function applyInvocationFlags(installedSkillsDir, donnyclaudeSkillsSrc, topKAllo
   ok(`Invocation flags applied to donnyclaude skills (${flipped} updated, ${kept} unchanged${note})`);
 }
 
+// Make the bundled rules actually load, without clobbering a user's own global
+// CLAUDE.md. A fresh machine gets the full operating guide; an existing
+// CLAUDE.md gets only an idempotent, clearly-marked standards block appended.
+const DONNY_STD_BEGIN = '<!-- BEGIN donnyclaude standards (managed) -->';
+const DONNY_STD_END = '<!-- END donnyclaude standards (managed) -->';
+const DONNY_COMMON_RULES = [
+  'coding-style', 'writing-style', 'git-workflow', 'testing', 'security',
+  'patterns', 'performance', 'development-workflow', 'agents', 'hooks',
+];
+
+function donnyStandardsBlock() {
+  const imports = DONNY_COMMON_RULES.map((r) => `@~/.claude/rules/common/${r}.md`).join('\n');
+  return `${DONNY_STD_BEGIN}\n${imports}\n${DONNY_STD_END}`;
+}
+
+function installOperatingGuide() {
+  const src = join(ROOT, 'packages', 'core', 'CLAUDE.md');
+  if (!existsSync(src)) {
+    info('No operating guide in package -- skipping');
+    return;
+  }
+  const dest = join(CLAUDE_HOME, 'CLAUDE.md');
+  if (!existsSync(dest)) {
+    copyFileSync(src, dest);
+    ok('Operating guide installed (~/.claude/CLAUDE.md)');
+    return;
+  }
+  // Existing CLAUDE.md: splice in or refresh only the managed block, leaving
+  // every line the user wrote untouched.
+  let cur = readFileSync(dest, 'utf-8');
+  const block = donnyStandardsBlock();
+  const b = cur.indexOf(DONNY_STD_BEGIN);
+  const e = cur.indexOf(DONNY_STD_END);
+  if (b !== -1 && e !== -1 && e > b) {
+    cur = cur.slice(0, b) + block + cur.slice(e + DONNY_STD_END.length);
+    ok('Refreshed DonnyClaude standards in your existing ~/.claude/CLAUDE.md');
+  } else {
+    cur = cur.replace(/\s*$/, '') + `\n\n${block}\n`;
+    ok('Added a DonnyClaude standards block to your existing ~/.claude/CLAUDE.md');
+  }
+  writeFileSync(dest, cur);
+}
+
 function mergeSettings() {
   const settingsPath = join(CLAUDE_HOME, 'settings.json');
   const templatePath = join(ROOT, 'packages', 'core', 'settings-template.json');
@@ -571,6 +626,7 @@ function handleDoctor() {
     ['cco CLI tools', () => existsSync(join(CLAUDE_HOME, 'bin'))],
     ['cco memory substrate', () => existsSync(join(CLAUDE_HOME, 'cco-memory'))],
     ['Statusline', () => existsSync(join(CLAUDE_HOME, 'statusline.py'))],
+    ['Operating guide', () => existsSync(join(CLAUDE_HOME, 'CLAUDE.md'))],
   ];
 
   let passed = 0;

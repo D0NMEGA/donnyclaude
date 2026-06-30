@@ -42,7 +42,9 @@ Every non-trivial task writes its state to disk under `.planning/` - requirement
 roadmap, per-phase plans, summaries, and verification reports - so context
 survives `/clear` and new sessions. Subagents each get a curated, isolated slice
 of that context rather than the whole transcript. The Context7 MCP supplies live
-library docs so the model codes against current APIs, not stale training data.
+library docs so the model codes against current APIs, not stale training data. A
+global operating guide loads the coding and writing standards every session, so
+generated code and prose follow them without being pasted into each prompt.
 
 ### Harness engineering
 Under the agents sits the Donny engine: a deterministic Node CLI that the
@@ -87,10 +89,11 @@ done, and stops cold when something is not.
 |-----------|-------|------------|
 | Skills    | 94    | Slash commands - the Donny workflow plus utilities and language packs |
 | Agents    | 48    | Specialized subagents - planners, reviewers, verifiers, build-fixers |
-| Rules     | 14    | Coding standards, common + per-language |
+| Rules     | 13    | Coding and writing standards (common + 12 language packs), auto-loaded |
 | Hooks     | 29    | Format, guard, and state-integrity hooks that run on each turn |
 | MCP       | 2     | context7 (live docs) and playwright (browser), registered at user scope |
 | Engine    | 1     | The Donny CLI and workflow library |
+| Config    | 1     | A global operating guide (`~/.claude/CLAUDE.md`) that loads the rules; never clobbers an existing one |
 
 Everything lands in `~/.claude/`. Existing settings are preserved, not clobbered.
 

@@ -1,6 +1,6 @@
 {
   "name": "donnyclaude",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "type": "module",
   "description": "Prompt, context, harness, and loop engineering for Claude Code in one config. The Donny workflow engine, 94 skills, 48 agents, deterministic verification gates, and curated MCP - installed in one command.",
   "main": "bin/donnyclaude.js",

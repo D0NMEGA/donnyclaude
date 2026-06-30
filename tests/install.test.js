@@ -48,6 +48,17 @@ describe('Package structure', () => {
     }
   });
 
+  it('ships the writing-style rule in rules/common', () => {
+    assert.ok(
+      existsSync(join(ROOT, 'packages', 'rules', 'common', 'writing-style.md')),
+      'rules/common/writing-style.md missing'
+    );
+  });
+
+  it('ships the operating guide that loads the rules', () => {
+    assert.ok(existsSync(join(ROOT, 'packages', 'core', 'CLAUDE.md')), 'packages/core/CLAUDE.md missing');
+  });
+
   it('has templates/ with all required files', () => {
     assert.ok(existsSync(join(ROOT, 'templates', 'setup-prompt.md')));
     assert.ok(existsSync(join(ROOT, 'templates', 'mcp-json', 'mcp-template.json')));
@@ -219,6 +230,59 @@ describe('Settings merge', () => {
     const result = JSON.parse(readFileSync(settingsPath, 'utf-8'));
     // SessionStart should still have the custom hook, not the template's
     assert.equal(result.hooks.SessionStart[0].hooks[0].command, 'echo custom');
+  });
+});
+
+// ── Test: Operating guide ───────────────────────────────────────────────────
+
+describe('Operating guide', () => {
+  const GUIDE = join(ROOT, 'packages', 'core', 'CLAUDE.md');
+  const BEGIN = '<!-- BEGIN donnyclaude standards (managed) -->';
+  const END = '<!-- END donnyclaude standards (managed) -->';
+  const RULES = ['coding-style', 'writing-style', 'git-workflow', 'testing', 'security',
+    'patterns', 'performance', 'development-workflow', 'agents', 'hooks'];
+
+  function block() {
+    return `${BEGIN}\n${RULES.map(r => `@~/.claude/rules/common/${r}.md`).join('\n')}\n${END}`;
+  }
+
+  it('imports the common rules inside a managed block', () => {
+    const content = readFileSync(GUIDE, 'utf-8');
+    assert.ok(content.includes(BEGIN) && content.includes(END), 'managed markers missing');
+    assert.ok(content.includes('@~/.claude/rules/common/writing-style.md'), 'writing-style import missing');
+    assert.ok(content.includes('@~/.claude/rules/common/coding-style.md'), 'coding-style import missing');
+  });
+
+  it('fresh install copies the whole guide', () => {
+    const HOME = join(tmpdir(), `dc-guide-${Date.now()}-a`);
+    const dest = join(HOME, 'CLAUDE.md');
+    mkdirSync(HOME, { recursive: true });
+    cpSync(GUIDE, dest);
+    const out = readFileSync(dest, 'utf-8');
+    assert.ok(out.includes('DonnyClaude operating guide'), 'guide header missing');
+    assert.ok(out.includes(BEGIN), 'managed block missing');
+    rmSync(HOME, { recursive: true, force: true });
+  });
+
+  it('existing CLAUDE.md keeps user content and stays idempotent', () => {
+    const HOME = join(tmpdir(), `dc-guide-${Date.now()}-b`);
+    const dest = join(HOME, 'CLAUDE.md');
+    mkdirSync(HOME, { recursive: true });
+    writeFileSync(dest, '# My own rules\nKeep this line.\n');
+
+    // First run: append the managed block.
+    let cur = readFileSync(dest, 'utf-8').replace(/\s*$/, '') + `\n\n${block()}\n`;
+    writeFileSync(dest, cur);
+    // Second run: splice-replace, must not add a second block.
+    cur = readFileSync(dest, 'utf-8');
+    const b = cur.indexOf(BEGIN), e = cur.indexOf(END);
+    cur = cur.slice(0, b) + block() + cur.slice(e + END.length);
+    writeFileSync(dest, cur);
+
+    const out = readFileSync(dest, 'utf-8');
+    assert.ok(out.includes('Keep this line.'), 'user content lost');
+    assert.equal(out.split(BEGIN).length - 1, 1, 'not idempotent: more than one managed block');
+    rmSync(HOME, { recursive: true, force: true });
   });
 });
 
