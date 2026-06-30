@@ -7,7 +7,7 @@
 // Branches on hook_event_name and ALWAYS exits 0 on BOTH branches: SessionEnd cannot block; PreCompact
 // CAN block and MUST NOT (DoS-on-self, T-02-12). Idempotent: one note per cwd+day; a re-fire updates
 // the same note (appends to its Events log) rather than duplicating. Fires in EVERY repo, so it
-// no-ops when ~/vault is absent and degrades to a minimal note in non-GSD dirs.
+// no-ops when ~/vault is absent and degrades to a minimal note in non-Donny dirs.
 //
 // v2 — date + title fixes: (1) uses LOCAL calendar date (a real /compact at 22:50 CT was 03:50Z, so
 // UTC `toISOString().slice(0,10)` produced tomorrow's date and broke the date-keyed note); (2) Title is
@@ -164,7 +164,7 @@ process.stdin.on("end", () => {
         { timeout: 2000, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || "-";
     } catch (e) {}
 
-    // phase / resume — best-effort from cwd/.planning/STATE.md; "-" in non-GSD dirs.
+    // phase / resume — best-effort from cwd/.planning/STATE.md; "-" in non-Donny dirs.
     // Capture just the phase NUMBER for the Title; keep the focus/resume lines for the body.
     let phaseNum = "", focus = "", resume = "";
     try {

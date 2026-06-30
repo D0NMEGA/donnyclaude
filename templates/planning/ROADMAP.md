@@ -12,7 +12,7 @@
 
 ## Phases
 
-<!-- Phases are added by /gsd:new-project or /gsd:add-phase -->
+<!-- Phases are added by /donny-init or /donny-add-phase -->
 <!-- Example:
 - [ ] **Phase 1: Foundation** - Set up project structure, CI/CD, core dependencies
 -->

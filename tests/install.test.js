@@ -41,8 +41,8 @@ describe('Package structure', () => {
     assert.equal(pkg.type, 'module');
   });
 
-  it('has packages/ with skills, agents, rules, gsd, hooks, commands', () => {
-    const dirs = ['skills', 'agents', 'rules', 'gsd', 'hooks', 'commands'];
+  it('has packages/ with skills, agents, rules, donny, hooks, commands', () => {
+    const dirs = ['skills', 'agents', 'rules', 'donny', 'hooks', 'commands'];
     for (const dir of dirs) {
       assert.ok(existsSync(join(ROOT, 'packages', dir)), `packages/${dir} missing`);
     }
@@ -108,11 +108,11 @@ describe('Templates', () => {
     }
   });
 
-  it('all CLAUDE.md templates mention GSD', () => {
+  it('all CLAUDE.md templates mention Donny', () => {
     const stacks = ['generic', 'python-fastapi', 'nextjs-typescript', 'rust', 'go'];
     for (const stack of stacks) {
       const content = readFileSync(join(ROOT, 'templates', 'claude-md', `${stack}.md`), 'utf-8');
-      assert.ok(content.includes('gsd'), `${stack}.md does not mention GSD`);
+      assert.ok(content.includes('donny'), `${stack}.md does not mention Donny`);
     }
   });
 
@@ -241,7 +241,7 @@ describe('Fresh install simulation', () => {
     const dest = join(FRESH_CLAUDE, 'skills');
     cpSync(src, dest, { recursive: true, force: true });
     assert.ok(existsSync(dest));
-    assert.ok(countDirItems(dest) >= 100);
+    assert.ok(countDirItems(dest) >= 90);
   });
 
   it('copies agents to fresh directory', () => {
@@ -261,9 +261,9 @@ describe('Fresh install simulation', () => {
     assert.ok(existsSync(join(dest, 'python')));
   });
 
-  it('copies GSD engine', () => {
-    const src = join(ROOT, 'packages', 'gsd');
-    const dest = join(FRESH_CLAUDE, 'get-shit-done');
+  it('copies Donny engine', () => {
+    const src = join(ROOT, 'packages', 'donny');
+    const dest = join(FRESH_CLAUDE, 'donny');
     cpSync(src, dest, { recursive: true, force: true });
     assert.ok(existsSync(dest));
     assert.ok(countDirItems(dest) >= 3);

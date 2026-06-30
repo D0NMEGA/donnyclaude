@@ -1,0 +1,88 @@
+{
+  "version": "6.9",
+  "hitCount": 440,
+  "request": {
+    "queryString": "glymphatic clearance focused ultrasound",
+    "resultType": "core",
+    "pageSize": 25
+  },
+  "resultList": {
+    "result": [
+      {
+        "id": "38912345",
+        "source": "MED",
+        "pmid": "38912345",
+        "pmcid": "PMC11223344",
+        "doi": "10.1038/s41593-024-01700-9",
+        "title": "Ultrasonic modulation of brain glymphatic transport",
+        "authorString": "Chen J, Rivera A, Okafor N, Tanaka H, Smith R, Vasquez L, Petrov D.",
+        "authorList": {
+          "author": [
+            {"fullName": "Chen J", "firstName": "Jing", "lastName": "Chen"},
+            {"fullName": "Rivera A", "firstName": "Ana", "lastName": "Rivera"},
+            {"fullName": "Okafor N", "firstName": "Ngozi", "lastName": "Okafor"},
+            {"fullName": "Tanaka H", "firstName": "Hiro", "lastName": "Tanaka"},
+            {"fullName": "Smith R", "firstName": "Robert", "lastName": "Smith"},
+            {"fullName": "Vasquez L", "firstName": "Luis", "lastName": "Vasquez"},
+            {"fullName": "Petrov D", "firstName": "Dmitri", "lastName": "Petrov"}
+          ]
+        },
+        "journalInfo": {
+          "issue": "7",
+          "volume": "27",
+          "journalIssueId": 9988776,
+          "dateOfPublication": "2024 Jul",
+          "monthOfPublication": 7,
+          "yearOfPublication": 2024,
+          "journal": {
+            "title": "Nature Neuroscience",
+            "medlineAbbreviation": "Nat Neurosci",
+            "essn": "1546-1726",
+            "issn": "1097-6256",
+            "nlmid": "9809671"
+          }
+        },
+        "pubYear": "2024",
+        "firstPublicationDate": "2024-07-15",
+        "abstractText": "The glymphatic system clears metabolic waste from the brain via cerebrospinal-fluid influx along perivascular spaces, and its dysfunction is increasingly implicated in neurodegenerative disease. Here we show that low-intensity focused ultrasound (LIFU) applied transcranially to the murine brain markedly accelerates glymphatic influx and solute clearance without disrupting the blood-brain barrier. Using in vivo two-photon imaging together with fluorescent cerebrospinal-fluid tracers, we quantified perivascular tracer transport before, during and after sonication across a range of acoustic pressures and pulse-repetition frequencies. Focused ultrasound at 0.35 MPa increased tracer penetration depth by 62 percent and expanded the perivascular clearance volume by 1.8-fold relative to sham-treated controls, an effect that persisted for at least ninety minutes after stimulation. Pharmacological inhibition of aquaporin-4 water channels in astrocytic endfeet abolished the ultrasound-evoked enhancement, indicating that the response depends on the same aquaporin-4-mediated water flux that governs baseline glymphatic function rather than on thermal or cavitation-mediated barrier opening. We further observed coordinated vasomotion and increased arteriolar pulsatility during sonication, suggesting that ultrasound entrains the slow vascular oscillations thought to drive perivascular pumping. Together these findings establish focused ultrasound as a non-invasive, spatially targeted method to augment glymphatic clearance and motivate its evaluation as a therapeutic strategy for conditions characterized by impaired waste clearance, including Alzheimer's disease and traumatic brain injury.",
+        "isOpenAccess": "Y",
+        "inEPMC": "Y",
+        "inPMC": "N",
+        "hasPDF": "Y",
+        "citedByCount": 17,
+        "keywordList": {
+          "keyword": [
+            "glymphatic",
+            "focused ultrasound",
+            "cerebrospinal fluid",
+            "aquaporin-4",
+            "perivascular clearance",
+            "neurodegeneration",
+            "vasomotion"
+          ]
+        },
+        "fullTextUrlList": {
+          "fullTextUrl": [
+            {
+              "availability": "Open access",
+              "documentStyle": "html",
+              "site": "Europe_PMC",
+              "url": "https://europepmc.org/articles/PMC11223344"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PPR998877",
+        "source": "PPR",
+        "pmid": "",
+        "pmcid": "",
+        "title": "Acoustic entrainment of perivascular flow: a preprint",
+        "authorString": "Lindqvist E.",
+        "pubYear": "2025",
+        "isOpenAccess": "N",
+        "citedByCount": 0
+      }
+    ]
+  }
+}

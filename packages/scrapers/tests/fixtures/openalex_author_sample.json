@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/A5000296931",
+      "display_name": "Jordan Amadio",
+      "orcid": "https://orcid.org/0000-0003-3468-2620",
+      "works_count": 47,
+      "cited_by_count": 618,
+      "summary_stats": {"h_index": 10, "i10_index": 10},
+      "last_known_institutions": [
+        {"display_name": "The University of Texas at Austin"}
+      ],
+      "topics": [
+        {"display_name": "Spinal Fractures and Injuries"},
+        {"display_name": "Soft Robotics and Actuators"},
+        {"display_name": "Spine and Intervertebral Disc Pathology"}
+      ]
+    }
+  ]
+}

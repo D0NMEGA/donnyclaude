@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // cco-hook-version: 2
-// PreToolUse permission guard (GUARD-01/02). Mirrors gsd-prompt-guard.js's spine but DENIES
+// PreToolUse permission guard (GUARD-01/02). Mirrors donny-prompt-guard.js's spine but DENIES
 // (permissionDecision:"deny" + process.exit(2)) instead of advising. Denies ONLY catastrophic
 // Bash; ALLOWS ordinary local destructive commands; FAILS OPEN (exit 0) on any non-match, parse
 // error, missing field, traversal session_id, or timeout — a guard bug must NEVER wedge all Bash

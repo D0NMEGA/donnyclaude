@@ -15,3 +15,6 @@ ahol-claude-dry-run.ahol-claude-dry-run.json
 
 # GSD per-project runtime state (schema lives in packages/gsd/bin/lib/config.cjs)
 .planning/config.json
+
+# internal build planning (not published)
+.planning/

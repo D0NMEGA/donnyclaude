@@ -96,7 +96,7 @@ function scoreSkills(skills, promptTokens, overrides) {
 }
 
 function pickTopK(scored, k, eventName) {
-  // Path 2 branching (see .planning/research/ahol/ws1-refinement-smoke.md):
+  // Path 2 branching:
   // SessionStart returns autoInvoke only (orientation). UserPromptSubmit
   // returns prompt-matched only (refinement), since autoInvoke skills are
   // already in context from the prior SessionStart manifest. Undefined

@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "id": "https://ror.org/00hj54h04",
+      "names": [
+        {"value": "University of Texas at Austin", "types": ["ror_display"]},
+        {"value": "UT Austin", "types": ["alias"]}
+      ],
+      "links": [
+        {"value": "https://www.utexas.edu"}
+      ]
+    }
+  ]
+}

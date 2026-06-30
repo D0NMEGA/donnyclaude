@@ -37,7 +37,7 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/gsd-check-update.js\"" }
+          { "type": "command", "command": "node \"$HOME/.claude/hooks/donny-check-update.js\"" }
         ]
       },
       {
@@ -69,7 +69,7 @@
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/gsd-prompt-guard.js\"", "timeout": 5 }
+          { "type": "command", "command": "node \"$HOME/.claude/hooks/donny-prompt-guard.js\"", "timeout": 5 }
         ]
       },
       {

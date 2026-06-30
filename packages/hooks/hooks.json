@@ -134,7 +134,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-pre-compact-backup.js\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/donny-pre-compact-backup.js\"",
             "timeout": 15
           }
         ],
@@ -147,7 +147,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-session-start.js\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/donny-session-start.js\"",
             "timeout": 10
           }
         ],
@@ -158,7 +158,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-backup-restore.js\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/donny-backup-restore.js\"",
             "timeout": 10
           }
         ],
@@ -269,7 +269,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/gsd-verify-edit.js\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/hooks/donny-verify-edit.js\"",
             "timeout": 10
           }
         ],

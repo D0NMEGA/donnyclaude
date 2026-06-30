@@ -1,0 +1,129 @@
+{
+  "posts": [
+    {
+      "id": 901001,
+      "topic_id": 70001,
+      "post_number": 1,
+      "username": "atdev",
+      "name": "A. Dev",
+      "avatar_template": "/user_avatar/community.openai.com/atdev/{size}/1.png",
+      "created_at": "2026-05-12T14:03:22.000Z",
+      "like_count": 31,
+      "blurb": "Connecting a remote <span class=\"search-highlight\">MCP</span> server over OAuth &amp; SSE finally works end-to-end."
+    },
+    {
+      "id": 901002,
+      "topic_id": 70001,
+      "post_number": 7,
+      "username": "replyguy",
+      "name": "Reply Guy",
+      "avatar_template": "/user_avatar/community.openai.com/replyguy/{size}/2.png",
+      "created_at": "2026-05-13T09:41:10.000Z",
+      "like_count": 4,
+      "blurb": "Same here — the remote MCP handshake is much smoother now."
+    },
+    {
+      "id": 901010,
+      "topic_id": 70002,
+      "post_number": 1,
+      "username": "toolsmith",
+      "name": "Tool Smith",
+      "avatar_template": "/user_avatar/community.openai.com/toolsmith/{size}/3.png",
+      "created_at": "2026-04-28T18:22:05.000Z",
+      "like_count": 12,
+      "blurb": "How do I expose function tools to an MCP client without leaking the API key?"
+    },
+    {
+      "id": 901020,
+      "topic_id": 70003,
+      "post_number": 3,
+      "username": "ragfan",
+      "name": "RAG Fan",
+      "avatar_template": "/user_avatar/community.openai.com/ragfan/{size}/4.png",
+      "created_at": "2026-03-15T11:09:48.000Z",
+      "like_count": 58,
+      "blurb": "Hybrid retrieval (BM25 + dense) beat pure embeddings for our MCP docs corpus."
+    },
+    {
+      "id": 901030,
+      "topic_id": 70004,
+      "post_number": 1,
+      "username": "newbie",
+      "name": "New Bie",
+      "avatar_template": "/user_avatar/community.openai.com/newbie/{size}/5.png",
+      "created_at": "2026-02-02T07:55:31.000Z",
+      "like_count": 0,
+      "blurb": "Is there an MCP quickstart for absolute beginners?"
+    }
+  ],
+  "topics": [
+    {
+      "id": 70001,
+      "title": "Remote MCP server over OAuth + SSE",
+      "fancy_title": "Remote MCP server over OAuth + SSE",
+      "slug": "remote-mcp-server-over-oauth-sse",
+      "posts_count": 9,
+      "reply_count": 8,
+      "like_count": 35,
+      "created_at": "2026-05-12T14:03:22.000Z",
+      "category_id": 12,
+      "tags": ["mcp", "oauth"]
+    },
+    {
+      "id": 70002,
+      "title": "Exposing function tools to an MCP client safely",
+      "fancy_title": "Exposing function tools to an MCP client safely",
+      "slug": "exposing-function-tools-to-an-mcp-client-safely",
+      "posts_count": 4,
+      "reply_count": 3,
+      "like_count": 12,
+      "created_at": "2026-04-28T18:22:05.000Z",
+      "category_id": 12,
+      "tags": ["mcp", "security"]
+    },
+    {
+      "id": 70003,
+      "title": "Hybrid retrieval for an MCP docs corpus",
+      "fancy_title": "Hybrid retrieval for an MCP docs corpus",
+      "slug": "hybrid-retrieval-for-an-mcp-docs-corpus",
+      "posts_count": 6,
+      "reply_count": 5,
+      "like_count": 60,
+      "created_at": "2026-03-15T11:09:48.000Z",
+      "category_id": 9
+    },
+    {
+      "id": 70004,
+      "title": "MCP quickstart for beginners?",
+      "fancy_title": "MCP quickstart for beginners?",
+      "slug": "mcp-quickstart-for-beginners",
+      "posts_count": 2,
+      "reply_count": 1,
+      "like_count": 1,
+      "created_at": "2026-02-02T07:55:31.000Z",
+      "category_id": 5
+    }
+  ],
+  "users": [
+    {"id": 5001, "username": "atdev", "name": "A. Dev"},
+    {"id": 5002, "username": "toolsmith", "name": "Tool Smith"}
+  ],
+  "categories": [
+    {"id": 12, "name": "API", "color": "0088CC"},
+    {"id": 9, "name": "Retrieval", "color": "2ECC71"},
+    {"id": 5, "name": "Getting Started", "color": "AAAAAA"}
+  ],
+  "groups": [],
+  "grouped_search_result": {
+    "more_posts": null,
+    "more_users": null,
+    "more_categories": null,
+    "term": "mcp",
+    "search_log_id": 12345,
+    "more_full_page_results": true,
+    "can_create_topic": false,
+    "post_ids": [901001, 901002, 901010, 901020, 901030],
+    "user_ids": [5001, 5002],
+    "category_ids": [12, 9, 5]
+  }
+}

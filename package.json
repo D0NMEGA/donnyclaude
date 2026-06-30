@@ -1,14 +1,14 @@
 {
   "name": "donnyclaude",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
-  "description": "Opinionated, all-in-one Claude Code power-user setup. Zero to production-grade AI-assisted development in one command.",
+  "description": "Prompt, context, harness, and loop engineering for Claude Code in one config. The Donny workflow engine, 94 skills, 48 agents, deterministic verification gates, and curated MCP - installed in one command.",
   "main": "bin/donnyclaude.js",
   "bin": {
     "donnyclaude": "bin/donnyclaude.js"
   },
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
     "lint": "node --check bin/donnyclaude.js"
   },
   "keywords": [
@@ -18,7 +18,11 @@
     "developer-tools",
     "productivity",
     "workflow",
-    "agents"
+    "agents",
+    "donny",
+    "loop-engineering",
+    "context-engineering",
+    "mcp"
   ],
   "author": "Donovan Santine <donovan@moltgrid.net>",
   "license": "MIT",

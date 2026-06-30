@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<!--
+  Offline parser fuel for SRC-09 (DDG-Lite). A trimmed-but-shape-faithful copy of a
+  lite.duckduckgo.com/lite/ results page: a <table> of result rows where each result
+  link is <a class="result-link" href="//duckduckgo.com/l/?uddg=<encoded real url>&rut=...">.
+  The parser must (a) capture only result-link <a>s, (b) URL-decode the `uddg` param to the
+  REAL target, and (c) IGNORE the non-result footer <a> at the bottom (no result-link class).
+-->
+<html>
+<head><title>MoltGrid at DuckDuckGo Lite</title></head>
+<body>
+<form action="/lite/" method="post">
+  <input name="q" type="text" value="MoltGrid github" />
+</form>
+<table border="0">
+  <tr>
+    <td valign="top">1.&nbsp;</td>
+    <td>
+      <a rel="nofollow" class="result-link"
+         href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2FD0NMEGA%2FMoltGrid&amp;rut=abc123">MoltGrid on GitHub</a>
+    </td>
+  </tr>
+  <tr>
+    <td class="result-snippet">A small grid-compute project. Source and docs.</td>
+  </tr>
+  <tr>
+    <td valign="top">2.&nbsp;</td>
+    <td>
+      <a rel="nofollow" class="result-link"
+         href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fmoltgrid.example.com%2F&amp;rut=def456">MoltGrid — official site</a>
+    </td>
+  </tr>
+  <tr>
+    <td class="result-snippet">The MoltGrid landing page.</td>
+  </tr>
+  <tr>
+    <td valign="top">3.&nbsp;</td>
+    <td>
+      <a rel="nofollow" class="result-link"
+         href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fblog.example.org%2Fmoltgrid-deep-dive&amp;rut=ghi789">MoltGrid deep dive — Example Blog</a>
+    </td>
+  </tr>
+  <tr>
+    <td class="result-snippet">A long-form write-up about MoltGrid internals.</td>
+  </tr>
+</table>
+<div class="footer">
+  <a class="footer-link" href="https://duckduckgo.com/about">About DuckDuckGo</a>
+</div>
+</body>
+</html>

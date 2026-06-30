@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/anthropics/claude-code/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/anthropics/claude-code/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/anthropics/claude-code/releases.atom"/>
+  <title>Release notes from claude-code</title>
+  <updated>2026-05-10T18:30:00Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/1/v1.2.0</id>
+    <updated>2026-05-10T18:30:00Z</updated>
+    <published>2026-05-10T18:30:00Z</published>
+    <title>v1.2.0</title>
+    <content type="html">&lt;p&gt;Adds the &lt;span class="x"&gt;MCP&lt;/span&gt; server &amp;amp; OAuth support to claude code.&lt;/p&gt;</content>
+    <link rel="alternate" type="text/html" href="https://github.com/anthropics/claude-code/releases/tag/v1.2.0"/>
+    <author><name>release-bot</name></author>
+    <category term="release"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1/v1.1.0</id>
+    <updated>2026-04-22T09:15:00Z</updated>
+    <published>2026-04-22T09:15:00Z</published>
+    <title>v1.1.0</title>
+    <content type="html">&lt;p&gt;Improves the agent CLI loop and adds &lt;code&gt;--rerank&lt;/code&gt; flag.&lt;/p&gt;</content>
+    <link rel="alternate" type="text/html" href="https://github.com/anthropics/claude-code/releases/tag/v1.1.0"/>
+    <author><name>release-bot</name></author>
+    <category term="release"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1/v1.0.0</id>
+    <updated>2026-03-01T12:00:00Z</updated>
+    <published>2026-03-01T12:00:00Z</published>
+    <title>v1.0.0</title>
+    <content type="html">&lt;p&gt;First stable release of the claude code agent.&lt;/p&gt;</content>
+    <link rel="alternate" type="text/html" href="https://github.com/anthropics/claude-code/releases/tag/v1.0.0"/>
+    <author><name>release-bot</name></author>
+    <category term="release"/>
+  </entry>
+</feed>

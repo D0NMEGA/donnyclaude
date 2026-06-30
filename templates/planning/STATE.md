@@ -1,5 +1,5 @@
 ---
-gsd_state_version: 1.0
+donny_state_version: 1.0
 milestone: v1.0
 milestone_name: ""
 status: not_started
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: Not started
-Status: Ready for /gsd:new-project
+Status: Ready for /donny-init
 
 ## Performance Metrics
 

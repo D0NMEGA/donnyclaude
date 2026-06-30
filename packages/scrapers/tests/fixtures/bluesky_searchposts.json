@@ -1,0 +1,98 @@
+{
+  "posts": [
+    {
+      "uri": "at://did:plc:rkjxbatkiros6f7pwtgsir54/app.bsky.feed.post/3mom6srkiqk2v",
+      "cid": "bafyreidwbo4kxhr2s7gxample0a",
+      "author": {
+        "handle": "den.dev",
+        "did": "did:plc:rkjxbatkiros6f7pwtgsir54",
+        "displayName": "Den"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "createdAt": "2026-06-19T01:27:17.219Z",
+        "langs": ["en"],
+        "tags": ["mcp", "anthropic"],
+        "text": "Unreal. Our today's MCP announcement is top of HN right now.\nZero-touch OAuth for MCP is live."
+      },
+      "likeCount": 24,
+      "repostCount": 1,
+      "replyCount": 0,
+      "quoteCount": 1,
+      "bookmarkCount": 2,
+      "indexedAt": "2026-06-19T01:27:18.870Z",
+      "labels": []
+    },
+    {
+      "uri": "at://did:plc:nywb5oene54cllowkfwouxzz/app.bsky.feed.post/3moo5kycdjk2q",
+      "cid": "bafyreieefdeygypbenkxample1b",
+      "author": {
+        "handle": "chadloder.dev",
+        "did": "did:plc:nywb5oene54cllowkfwouxzz",
+        "displayName": "Chad Loder"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "createdAt": "2026-06-19T20:10:21.000Z",
+        "langs": ["en"],
+        "text": "Palantir is actually quite late to the AI game, too. What meager AI capabilities they ship lean on model context protocol tooling built elsewhere."
+      },
+      "likeCount": 421,
+      "repostCount": 32,
+      "replyCount": 3,
+      "quoteCount": 1,
+      "bookmarkCount": 5,
+      "indexedAt": "2026-06-19T20:10:22.268Z",
+      "labels": []
+    },
+    {
+      "uri": "at://did:plc:qruaxn2eewkli7hsvzxo5hwf/app.bsky.feed.post/3mojcvjbtjc2q",
+      "cid": "bafyreify3cpnvfe52mhxample2c",
+      "author": {
+        "handle": "eva.computer",
+        "did": "did:plc:qruaxn2eewkli7hsvzxo5hwf",
+        "displayName": "eva"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "createdAt": "2026-06-17T22:02:24.962Z",
+        "langs": ["en"],
+        "text": "lovense mcp server 🤔"
+      },
+      "likeCount": 48,
+      "repostCount": 2,
+      "replyCount": 8,
+      "quoteCount": 0,
+      "bookmarkCount": 2,
+      "indexedAt": "2026-06-17T22:02:25.375Z",
+      "labels": []
+    },
+    {
+      "uri": "at://did:plc:imageonly0pk7xbictouvqlm6/app.bsky.feed.post/3moqvmi7ngk2m",
+      "cid": "bafyreickxgfnc6arpo7xample3d",
+      "author": {
+        "handle": "imageposter.bsky.social",
+        "did": "did:plc:imageonly0pk7xbictouvqlm6",
+        "displayName": "Image Poster"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "createdAt": "2026-06-20T22:26:01.098Z",
+        "langs": ["en"],
+        "embed": {
+          "$type": "app.bsky.embed.images",
+          "images": [{"alt": "an image with no caption text"}]
+        },
+        "text": ""
+      },
+      "likeCount": 87,
+      "repostCount": 12,
+      "replyCount": 4,
+      "quoteCount": 3,
+      "bookmarkCount": 1,
+      "indexedAt": "2026-06-20T22:26:02.962Z",
+      "labels": []
+    }
+  ],
+  "cursor": "5"
+}

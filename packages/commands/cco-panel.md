@@ -60,7 +60,7 @@ checklists):
 | Correctness / quality | **code-reviewer** | bugs, error handling, maintainability, dead code |
 | Security | **security-reviewer** | OWASP Top 10, secrets, injection, authn/z, unsafe crypto |
 | Architecture | **architect** | design, coupling, scalability, structural smells |
-| Tests / verification | **code-reviewer** or **gsd-verifier** (tests-focused) | are there tests, do they cover this change, do they pass |
+| Tests / verification | **code-reviewer** or **donny-verifier** (tests-focused) | are there tests, do they cover this change, do they pass |
 
 For a **Python** target (`.py` files), include **python-reviewer** (PEP8 / type
 hints / Pythonic idiom / perf) as an additional or substitute lens.

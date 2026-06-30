@@ -1,312 +1,139 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/skills-105-ff3333?style=for-the-badge" alt="105 Skills">
-  <img src="https://img.shields.io/badge/agents-49-ff3333?style=for-the-badge" alt="49 Agents">
-  <img src="https://img.shields.io/badge/languages-13-ff3333?style=for-the-badge" alt="13 Languages">
+  <img src="https://raw.githubusercontent.com/d0nmega/donnyclaude/main/assets/banner.png" alt="DonnyClaude" width="100%">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/skills-94-ff3333?style=for-the-badge" alt="94 Skills">
+  <img src="https://img.shields.io/badge/agents-48-ff3333?style=for-the-badge" alt="48 Agents">
+  <img src="https://img.shields.io/badge/engine-Donny-ff3333?style=for-the-badge" alt="Donny engine">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="MIT License">
 </p>
 
 # DonnyClaude
 
-**Your Claude Code just got superpowers.**
+**Prompt, context, harness, and loop engineering for Claude Code - in one config.**
 
-DonnyClaude is an opinionated, all-in-one power-user setup for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). One command installs 105 skills, 49 specialized agents, coding rules for 13 languages, a full project workflow engine, and 7 pre-configured MCP servers. Then Claude itself walks you through setting up your project.
-
-> *"I went from a fresh Claude Code install to autonomous multi-phase project execution in under 2 minutes."*
-
----
-
-> **Project status (2026-05-08): paused, not abandoned.** v1.2 closed without shipping its full scope after the AHOL (Autonomous Harness Optimization Loop) post-mortem revealed that the work labeled "Harness Optimization" was donnyclaude-package maintenance, not substrate-level harness research. The substrate research moved to a separate sister project, **harness-lab**, which forks mini-SWE-agent and runs ablations on the agent loop, tool catalog, sampling, and context-management layers that donnyclaude (sitting on top of Claude Code) cannot reach.
->
-> donnyclaude itself remains usable and shipped — `npx donnyclaude` continues to work as documented. The v1.2 phases (skill prune, install manifest, progressive disclosure, subagent return contracts, hook backup/restore subsystem) are preserved as v1.3 backlog and resume whenever a maintenance window opens. AHOL's final state is tagged as `ahol-v1-final`.
->
-> See `.planning/research/ahol/AHOL-POSTMORTEM.md` for the methodology errors, `.planning/research/ahol/MILESTONE-PLAN-harness-pivot-v1.md` for the next-cycle plan, and `.planning/research/ahol/HARNESS-RESEARCH-2026-05-08.md` for the deep research backing the migration. The harness-lab repo (sibling to this one) is where `harness-pivot-v1` executes.
-
----
-
-## Quick Start
+The four disciplines that decide whether an AI coding setup is a toy or a tool
+usually live in scattered blog posts and private dotfiles. DonnyClaude assembles
+all four into one installable config: carefully engineered agent prompts, a
+context layer that survives `/clear`, a deterministic harness that drives the
+models, and a verification loop that refuses to mark unfinished work as done.
 
 ```bash
-# Install directly from GitHub
 npx donnyclaude
 ```
 
-That's it. DonnyClaude checks your prerequisites, installs the full toolkit to `~/.claude/`, then launches Claude Code as an interactive setup wizard to configure your project.
+One command installs the [Donny](#the-donny-engine) workflow engine, 94 skills,
+48 specialized agents, coding rules for 13 languages, project hooks, and a curated
+MCP setup - then Claude itself walks you through your first project.
 
-<details>
-<summary><b>Alternative install methods</b></summary>
+---
+
+## The four pillars
+
+### Prompt engineering
+48 agents and 94 slash-command skills, each a deliberately engineered prompt with
+a single responsibility and a minimal tool grant. Reviewers, build-fixers,
+researchers, planners, and verifiers - named and scoped so the right prompt runs
+for the right job instead of one overloaded system prompt trying to do everything.
+
+### Context engineering
+Every non-trivial task writes its state to disk under `.planning/` - requirements,
+roadmap, per-phase plans, summaries, and verification reports - so context
+survives `/clear` and new sessions. Subagents each get a curated, isolated slice
+of that context rather than the whole transcript. The Context7 MCP supplies live
+library docs so the model codes against current APIs, not stale training data.
+
+### Harness engineering
+Under the agents sits the Donny engine: a deterministic Node CLI that the
+workflows call for the things a language model should not guess at - plan
+dependency-graph validation, frontmatter schemas, requirement coverage, secret
+scanning, phase completion. Model-tiered subagents (Opus for planning and
+verification, lighter tiers for mechanical work) keep cost proportional to the
+task. Hooks enforce formatting, guards, and state integrity on every turn.
+
+### Loop engineering
+The unit of work is a loop: discover the next phase, plan it, execute it with
+wave-parallel subagents, verify it, ship it, repeat. The generator never grades
+its own work - a separate skeptical verifier checks goal achievement by running
+code, and beneath even that sits a deterministic engine gate so the verdict
+cannot drift from the truth. Run a single phase by hand, or hand the whole
+roadmap to autonomous mode and let it advance unattended.
+
+---
+
+## The Donny engine
+
+Donny is the workflow engine at the core - a planning-and-execution loop that
+turns an idea into shipped, verified code through explicit phases. Its signature
+is **deterministic verification**: where most agent workflows let an LLM declare
+"looks good," Donny backs every gate with engine-enforced checks.
+
+- `verify phase-verified` - a phase ships only when its verification status is
+  actually `passed`, parsed from disk, never an LLM's say-so.
+- `verify milestone-coverage` - requirement coverage computed across plans,
+  summaries, and verifications, not hand-tallied.
+- `verify threats-clear` / `security scan-secrets` - open threats and leaked
+  credentials block the commit deterministically.
+- `phase defer` - a skipped phase is recorded honestly as deferred, never
+  silently marked complete.
+
+The result is a loop you can leave running: it tells you the truth about what is
+done, and stops cold when something is not.
+
+## What gets installed
+
+| Component | Count | What it is |
+|-----------|-------|------------|
+| Skills    | 94    | Slash commands - the Donny workflow plus utilities and language packs |
+| Agents    | 48    | Specialized subagents - planners, reviewers, verifiers, build-fixers |
+| Rules     | 14    | Coding standards, common + per-language |
+| Hooks     | 29    | Format, guard, and state-integrity hooks that run on each turn |
+| MCP       | 2     | context7 (live docs) and playwright (browser), registered at user scope |
+| Engine    | 1     | The Donny CLI and workflow library |
+
+Everything lands in `~/.claude/`. Existing settings are preserved, not clobbered.
+
+## Quickstart
 
 ```bash
-# Clone and run locally
-git clone https://github.com/d0nmega/donnyclaude.git
-cd donnyclaude
-node bin/donnyclaude.js
+npx donnyclaude                 # install, then the setup wizard
 
-# Or install globally
-npm install -g donnyclaude
-donnyclaude
+# then, in Claude Code:
+/donny-init                     # research -> requirements -> roadmap
+/donny-plan-phase 1             # plan a phase (with dependency + requirement gates)
+/donny-execute-phase 1          # build it (wave-parallel subagents, atomic commits)
+/donny-verify-work 1            # conversational UAT
+/donny-ship                     # open a PR once verification passes
 ```
 
-</details>
-
----
-
-## What's Inside
-
-| | Component | Count | What It Does |
-|---|-----------|-------|-------------|
-| **Skills** | GSD workflow, Superpowers, ECC quality, language patterns | 105 | Slash commands for every dev workflow |
-| **Agents** | Executor, verifier, planner, reviewer, debugger... | 49 | Specialized AI agents for each task type |
-| **Rules** | TypeScript, Python, Rust, Go, C++, Kotlin, Java, Swift, PHP, Perl, C#, COBOL | 70 files | Coding standards enforced automatically |
-| **GSD Engine** | Get Shit Done workflow | 1 | Plan -> Execute -> Verify -> Ship |
-| **Hooks** | Format, guard, context monitor | 8 | Automatic quality gates on every edit |
-| **Commands** | Slash commands | 60 | `/gsd:plan-phase`, `/code-review`, `/tdd`... |
-| **MCP Servers** | Context7, Playwright, 21st.dev, Exa, Semantic Scholar, Computer Use, Vercel | 7 | Live docs, browser automation, UI generation |
-
----
-
-## Tuned Defaults
-
-DonnyClaude ships a few opinionated harness defaults beyond the raw component count above. They go live the moment `~/.claude/settings.json` is merged at install.
-
-- **Proactive 60% compaction.** `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "60"` lowers Claude Code's automatic compaction trigger from the default ~83.5% to 60% of the context window. Per the harness research consensus (see `.planning/research/DEEP-RESEARCH.md` section 4d, "Optimal compaction thresholds"), late compaction at 83.5% lets the agent spend 15+ minutes producing degraded outputs from noisy context before the lossy summarization fires. 60% pre-empts that drift while still leaving headroom for the response buffer. Combined with the WS-3 PreCompact backup hook (active state serialization to `.claude/backups/`), context loss across compactions becomes recoverable rather than silent.
-- **Skill progressive disclosure.** Only 10 GSD workflow skills (new-project, new-milestone, plan-phase, discuss-phase, execute-phase, autonomous, progress, next, verify-work, ship) keep `disable-model-invocation: false` after install. The other ~95 skills load on demand when invoked by name, surfaced via a SessionStart hook that emits a prompt-aware top-K manifest. Net effect: ~78% reduction in always-loaded skill catalog tokens. Override per-skill via `settings.json` `skills.autoInvoke`.
-
----
-
-## Installation
-
-### Prerequisites
-
-- **Node.js 20+** -- [nodejs.org](https://nodejs.org/)
-- **Anthropic API key** -- [console.anthropic.com](https://console.anthropic.com/)
-
-### macOS
-
-```bash
-brew install node    # if needed
-npx donnyclaude
-```
-
-### Windows
-
-```powershell
-# Install Node.js from https://nodejs.org/ (LTS recommended)
-# Then open PowerShell or Command Prompt:
-npx donnyclaude
-```
-
-<details>
-<summary>Alternative: WSL2</summary>
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-npx donnyclaude
-```
-
-</details>
-
-### Linux
-
-```bash
-# Ubuntu/Debian
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Fedora
-sudo dnf install nodejs
-
-# Arch
-sudo pacman -S nodejs npm
-
-# Then:
-npx donnyclaude
-```
-
----
-
-## How It Works
-
-### Phase 1: Preflight
-
-DonnyClaude checks for Node.js, npm, and Claude Code CLI. Installs Claude Code automatically if missing.
-
-```
-Checking prerequisites...
-  ✓ Node.js v24.1.0
-  ✓ npm 11.0.0
-  ✓ Claude Code 2.1.97
-```
-
-### Phase 2: Install Toolkit
-
-Copies all 105 skills, 49 agents, rules, hooks, GSD engine, and commands to `~/.claude/`. If you already have Claude Code customizations, they're preserved -- DonnyClaude merges, never clobbers.
-
-```
-Installing DonnyClaude toolkit...
-  ✓ 105 skills installed
-  ✓ 49 agents installed
-  ✓ Rules installed (common + language-specific)
-  ✓ GSD workflow engine installed
-  ✓ Hooks installed
-  ✓ Commands installed
-  ✓ Settings merged (existing config preserved)
-```
-
-### Phase 3: Interactive Setup (Claude is the wizard)
-
-Claude Code launches and walks you through project configuration:
-
-1. **Stack detection** -- reads package.json / pyproject.toml / Cargo.toml
-2. **CLAUDE.md generation** -- project instructions tailored to your stack
-3. **Planning scaffold** -- `.planning/` directory with PROJECT.md, ROADMAP.md, STATE.md
-4. **MCP server config** -- `.mcp.json` with 7 servers, prompts for API keys (skip any you don't have)
-
----
-
-## The GSD Workflow
-
-DonnyClaude is built around **Get Shit Done (GSD)** -- an autonomous project execution engine:
-
-```
-/gsd:new-project       Start a new project with deep context gathering
-/gsd:plan-phase N      Plan a phase before any code is written
-/gsd:execute-phase N   Execute with parallel subagents
-/gsd:verify-work       Verify every phase before moving on
-/gsd:progress          See where you are
-/gsd:autonomous        Run ALL phases back-to-back, hands-free
-```
-
-**The loop:** Brainstorm -> Plan -> Test -> Build -> Review -> Verify -> Ship
-
-Every phase gets planned before execution. Tests are written before code. Code is reviewed before merge. Nothing ships without verification.
-
----
-
-## Supported Stacks
-
-| Stack | Template | Extra Tools |
-|-------|----------|-------------|
-| **Python** (FastAPI, Django, Flask) | `python-fastapi.md` | python-review, python-testing, pytest patterns |
-| **TypeScript** (Next.js, Node, React) | `nextjs-typescript.md` | 21st.dev Magic, Playwright, shadcn/ui |
-| **Rust** | `rust.md` | rust-review, rust-build, cargo-llvm-cov |
-| **Go** | `go.md` | go-review, go-build, table-driven tests |
-| **Other** | `generic.md` | All base tools, universal rules |
-
----
-
-## MCP Servers
-
-Every project gets its own `.mcp.json` with 7 servers pre-configured:
-
-| Server | API Key? | What It Does |
-|--------|----------|-------------|
-| [Context7](https://context7.com) | No | Live library documentation -- never use stale APIs again |
-| [Playwright](https://playwright.dev) | No | Browser automation, visual QA, E2E testing |
-| [21st.dev Magic](https://21st.dev) | Yes | Generate, refine, and browse UI components |
-| [Exa](https://exa.ai) | Yes | Web search with code-aware results |
-| [Semantic Scholar](https://semanticscholar.org) | No | Academic paper search and citation graphs |
-| Computer Use | No | Control your desktop -- screenshots, clicks, typing |
-| [Vercel](https://vercel.com) | OAuth | Deploy, manage env vars, check status |
-
----
-
-## Commands
-
-```bash
-npx donnyclaude            # Install + setup wizard
-npx donnyclaude doctor     # Health check
-npx donnyclaude update     # Update to latest
-npx donnyclaude version    # Show version
-npx donnyclaude help       # Show help
-```
-
----
-
-## What Gets Created
-
-**In your project:**
-
-```
-your-project/
-  CLAUDE.md              # AI instructions tailored to your stack
-  .mcp.json              # 7 MCP servers, ready to go
-  .planning/
-    PROJECT.md           # Vision and constraints
-    REQUIREMENTS.md      # Tracked requirements
-    ROADMAP.md           # Phase-based execution plan
-    STATE.md             # Current progress tracker
-    config.json          # Workflow config (models, toggles)
-```
-
-**Globally (`~/.claude/`):**
-
-```
-~/.claude/
-  skills/        105 skills (GSD, Superpowers, ECC, language-specific — cruft removed in v1.2, see docs/PRUNE-LOG.md)
-  agents/        49 specialized agents
-  rules/         Coding standards for 13 languages
-  get-shit-done/ GSD workflow engine
-  hooks/         Auto-formatting and guard rails
-  commands/      60 slash commands
-  settings.json  Permissions and hook config
-```
-
----
-
-## Customizing
-
-**Add skills:** Drop a `SKILL.md` into `~/.claude/skills/your-skill/`
-
-**Add rules:** Copy and customize: `cp -r ~/.claude/rules/typescript ~/.claude/rules/your-lang`
-
-**Tune GSD:** Edit `.planning/config.json` to change models, parallelization, and workflow toggles
-
-**Power users:** Set `"defaultMode": "bypassPermissions"` in `~/.claude/settings.json` for fully autonomous operation (DonnyClaude defaults to `acceptEdits` for safety)
-
----
-
-## Existing Claude Code Users
-
-Already have a `~/.claude/` directory? DonnyClaude is safe to run:
-
-- **Settings:** Merged, never overwritten. Your permissions, existing hooks, and custom config are preserved. A backup is created at `settings.json.bak` before any merge.
-- **Skills/agents/rules:** Added alongside your existing ones. If you've customized a file with the same name, it will be overwritten -- back up any custom modifications first.
-- **Doctor:** Run `donnyclaude doctor` to verify everything is healthy after install.
-
----
-
-## Uninstall
-
-To remove DonnyClaude's tools from your system:
-
-```bash
-# Remove global tools
-rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/rules
-rm -rf ~/.claude/get-shit-done ~/.claude/hooks ~/.claude/commands
-
-# Restore settings backup (if you had pre-existing settings)
-cp ~/.claude/settings.json.bak ~/.claude/settings.json
-
-# Remove project-local files (per project)
-rm CLAUDE.md .mcp.json
-rm -rf .planning/
-```
-
----
-
-## Credits
-
-Built by [Donovan Santine](https://github.com/d0nmega) (D0NMEGA) -- BME Honors at UT Austin, building [MoltGrid](https://moltgrid.net).
-
-Powered by:
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) by Anthropic
-- [GSD](https://discord.gg/gsd) workflow engine
-- [Everything Claude Code](https://github.com/anthropics/claude-code) skill ecosystem
-- [Context7](https://context7.com) live documentation
-
----
-
-## License
-
-MIT -- use it, fork it, ship it.
+Use `/donny-progress` any time to see where you are and what is next, or
+`/donny-autonomous` to advance the whole roadmap hands-off. `/donny-help` lists
+every command.
+
+## Requirements
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (the installer
+  installs it if missing)
+- Node.js >= 20
+- `uv` for the bundled research scrapers (optional; self-bootstraps on first run)
+
+## Optional tools
+
+- **Research scrapers** (bundled) - a multi-source HTTP research digest. See
+  [docs/research-tools.md](docs/research-tools.md).
+- **Obsidian** - a vault as durable memory. The installer offers to install it.
+  See [docs/obsidian-memory.md](docs/obsidian-memory.md).
+- **browser-harness** - optional, for login-gated research. Installed separately;
+  see [docs/research-tools.md](docs/research-tools.md).
+
+## Credits and license
+
+DonnyClaude is MIT licensed. The Donny engine began as a fork of the GSD workflow
+engine and has since diverged substantially - rebuilt around deterministic
+verification gates, model-tiered subagents, and a subagent-safe research path.
+
+The optional `browser-harness` integration references
+[browser-use/browser-harness](https://github.com/browser-use/browser-harness)
+(MIT, Copyright (c) 2026 Browser Use); it is not bundled, and all credit for that
+project belongs to its authors.

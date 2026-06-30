@@ -1,0 +1,116 @@
+[project]
+name = "scrapers"
+version = "0.1.0"
+description = "Multi-source research scraper"
+requires-python = ">=3.12"
+dependencies = [
+    "aiolimiter>=1.2.1",
+    "aiometer>=1.0.0",
+    "bm25s>=0.3.9",
+    "datasketch>=1.10.0",
+    # Phase 5 (D-10/Pitfall 3): hishel moves fast (1.0->1.3 in ~2mo) and its
+    # force-cache + per-request-TTL surface is version-sensitive, so PIN to the
+    # 1.3 line. The [async] extra pulls `anysqlite` — REQUIRED: hishel 1.3.0's
+    # async path defaults to AsyncSqliteStorage and raises ImportError without it
+    # (confirmed against the installed wheel during the 05-01 force-cache spike).
+    "hishel[async]>=1.3,<1.4",
+    "httpx>=0.28.1",
+    # Phase 7 (SEM-01): local static dense embeddings (the dense half of the
+    # hybrid ranker). model2vec is numpy-only at runtime — NO torch, NO
+    # onnxruntime, NO transformers, NO scikit-learn — so it resolves clean on
+    # 3.12+/3.14 and keeps the core install (and Donny subagents) lean. Default-ON
+    # dense lives behind a lazy in-function import in dense.py (SEM-03); the
+    # vendored potion-retrieval-32M-int8 weights ship under models/ (Plan 03).
+    "model2vec>=0.8,<0.9",
+    # Phase 10 (ENRICH-01): YouTube caption/transcript fetch. requests-based + sync
+    # (NOT httpx) — runs off the async fan-out via asyncio.to_thread and is cached
+    # app-level, NOT via hishel (httpx-only; see 10-RESEARCH §Caching reconciliation).
+    # PIN to the 1.2 line: get_transcript()/list_transcripts() were REMOVED in 1.2.0
+    # (instance `.fetch()` is the only API now). Pulls requests + defusedxml only —
+    # kept OFF the eval-runner import path via a lazy in-function import in
+    # transcripts.py (ENRICH-02/SC#4), mirroring dense.py's model2vec.
+    "youtube-transcript-api>=1.2,<1.3",
+    "python-dotenv>=1.2.2",
+    "pyyaml>=6.0.3,<7",
+    "w3lib>=2.4.1",
+    # Phase 13 (RSS-01): RSS/Atom feed parsing for the curated freshness source.
+    # The one new default dep since Phase 10 — pure-Python, pulls only `sgmllib3k`
+    # (NO torch/onnx/transformers), so it resolves clean on 3.12+/3.14. Sync parse
+    # runs off the async fan-out via asyncio.to_thread, and the import lives behind
+    # a lazy in-function `import feedparser` in research.rss (import-light/RSS-01) +
+    # added to tools/check_runner_imports.py FORBIDDEN — mirroring dense.py/
+    # transcripts.py. PIN to the 6.0 line (6.0.12 verified current).
+    "feedparser>=6.0.12,<7",
+]
+
+[project.optional-dependencies]
+# Deferred eval-gated UPGRADE (SC#5): activated ONLY if the SC#5 eval shows
+# model2vec/potion-retrieval-32M P@10 is insufficient. NOT installed by default;
+# fastembed pulls onnxruntime (the heavy 3.14-wheel risk to verify at activation).
+semantic = ["fastembed>=0.8,<0.9"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1,<10",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "eval: cross-phase benchmark + per-source sensitivity suite",
+    "vary_warm_hit: PERF-02 Vary:Authorization warm-cache-hit test — makes the documented `-k vary_warm_hit` selector resolve to test_vary_authorization_warm_hit",
+]
+testpaths = ["eval/tests", "tests"]
+# Phase 5: async resilience units (tests/test_robustness.py) are written with
+# pytest-asyncio; auto mode collects `async def test_*` without a per-test marker.
+asyncio_mode = "auto"
+
+[tool.ruff]
+# Browser-harness scrapers run INSIDE the browser-harness runtime (see their
+# `#!/usr/bin/env browser-harness` shebang), which injects these names as
+# globals. They are not undefined — ruff just can't see the runtime. Declaring
+# them here removes the false-positive F821s without editing the scrapers.
+builtins = [
+    "new_tab", "goto_url", "wait_for_load", "wait", "js", "scroll",
+    "click_at_xy", "capture_screenshot", "page_info", "http_get",
+    "ensure_real_tab", "cdp",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Pre-existing style debt in browser-harness scrapers (out of scope for the
+# additive Phase 1 eval harness; these files are not touched by this milestone).
+# Tracked in .planning/phases/01-eval-harness/deferred-items.md.
+"x_scrape.py" = ["E401", "E702", "F541", "F841"]
+"reddit_scrape.py" = ["E401", "E702", "F541", "F841"]
+# Pre-existing in research_topic.py on lines NOT modified by Phase 1 (the
+# additive SOURCES edit changed neither line 14 nor digest()). D-32/ROB-08
+# forbid non-additive edits to this file in Phase 1; deferred to Phase 2.
+"research_topic.py" = ["E401", "F541"]
+# Pre-existing style debt in research.py (the source-function module). Phase 1
+# is additive/read-only w.r.t. research.py (D-32); deferred to Phase 2 where the
+# endpoint rewrites edit this file in scope.
+"research.py" = ["E401", "F841"]
+
+# ── ty (type checker) ───────────────────────────────────────────────────────
+# Scoped rule relaxations for PRE-EXISTING, out-of-scope files only. ty stays
+# strict everywhere else (notably the new eval/ package). Tracked in
+# .planning/phases/01-eval-harness/deferred-items.md.
+
+[[tool.ty.overrides]]
+# Browser-harness scrapers run inside the browser-harness runtime (see their
+# `#!/usr/bin/env browser-harness` shebang), which injects new_tab/js/wait/etc.
+# as globals — ty can't see them, so the unresolved-reference errors are false
+# positives. Not touched by Phase 1.
+include = ["x_scrape.py", "reddit_scrape.py"]
+
+[tool.ty.overrides.rules]
+unresolved-reference = "ignore"
+
+[[tool.ty.overrides]]
+# research_topic.py:40 reassigns R.write_out (the intentional monkeypatch-collect
+# hook the eval harness reuses, D-30). Pre-existing on a line NOT modified by the
+# additive Phase 1 edit; D-32/ROB-08 forbid non-additive edits here in Phase 1.
+include = ["research_topic.py"]
+
+[tool.ty.overrides.rules]
+invalid-assignment = "ignore"

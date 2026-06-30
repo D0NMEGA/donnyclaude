@@ -2,13 +2,13 @@
 
 ## Installed Tool Stack
 
-### GSD (Get Shit Done) -- Workflow Engine
-- `/gsd:new-project` -- Initialize project structure
-- `/gsd:plan-phase N` -- Plan EVERY phase before execution
-- `/gsd:execute-phase N` -- Execute with fresh subagent contexts
-- `/gsd:verify-work` -- Verify after EVERY phase completion
-- `/gsd:progress` -- Check status between phases
-- `/gsd:quick "task"` -- Ad-hoc task with GSD guarantees
+### Donny -- Workflow Engine
+- `/donny-init` -- Initialize project structure
+- `/donny-plan-phase N` -- Plan EVERY phase before execution
+- `/donny-execute-phase N` -- Execute with fresh subagent contexts
+- `/donny-verify-work` -- Verify after EVERY phase completion
+- `/donny-progress` -- Check status between phases
+- `/donny-quick "task"` -- Ad-hoc task with Donny guarantees
 
 ### Superpowers -- Development Methodology
 - `/superpowers:brainstorming` -- BEFORE any creative or design work
@@ -36,7 +36,7 @@
 
 ## Execution Rules
 1. Run all phases autonomously. Do NOT pause unless genuinely ambiguous.
-2. Use GSD for every phase: plan -> execute -> verify -> next.
+2. Use Donny for every phase: plan -> execute -> verify -> next.
 3. Use Context7 before writing ANY crate code. No exceptions.
 4. TDD: write tests BEFORE implementation. Always.
 5. Use rust-review on ALL code before marking a phase done.

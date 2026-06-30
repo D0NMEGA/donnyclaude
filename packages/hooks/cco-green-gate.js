@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // cco-hook-version: 1
 // Green-Before-Done gate (FORCE-01/02) on BOTH Stop (main agent) and SubagentStop (a finishing
-// subagent, e.g. a gsd-executor). At the moment work is declared "done", it re-checks the project's
+// subagent, e.g. a donny-executor). At the moment work is declared "done", it re-checks the project's
 // lint/test bar — the SAME ruff/type/pytest bar cco-lint-loop already computes (D-02; this file
 // MIRRORS those helpers inline so the v1 PostToolUse chain stays byte-for-byte untouched) — scoped
 // to the project at the input `cwd`. If the bar is RED it BLOCKS completion with the binary-verified

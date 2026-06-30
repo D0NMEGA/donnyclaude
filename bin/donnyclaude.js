@@ -23,16 +23,15 @@ const SAFE_COMMANDS = new Set(['node', 'npm', 'claude', 'npx']);
 // User can override per-skill via settings.json skills.autoInvoke.
 // Rotation logic is deferred to a later enhancement; this is the safe static default.
 const DEFAULT_TOP_K_AUTOINVOKE_SKILLS = Object.freeze([
-  'gsd-new-project',
-  'gsd-new-milestone',
-  'gsd-plan-phase',
-  'gsd-discuss-phase',
-  'gsd-execute-phase',
-  'gsd-autonomous',
-  'gsd-progress',
-  'gsd-next',
-  'gsd-verify-work',
-  'gsd-ship',
+  'donny-init',
+  'donny-plan-phase',
+  'donny-discuss-phase',
+  'donny-execute-phase',
+  'donny-autonomous',
+  'donny-progress',
+  'donny-next',
+  'donny-verify-work',
+  'donny-ship',
   'web-research',
 ]);
 
@@ -174,11 +173,12 @@ function installGlobalTools() {
     { name: 'skills', src: 'skills', dest: 'skills', showCount: true },
     { name: 'agents', src: 'agents', dest: 'agents', showCount: true },
     { name: 'rules', src: 'rules', dest: 'rules', label: 'Rules installed (common + language-specific)' },
-    { name: 'GSD workflow engine', src: 'gsd', dest: 'get-shit-done' },
+    { name: 'Donny workflow engine', src: 'donny', dest: 'donny' },
     { name: 'hooks', src: 'hooks', dest: 'hooks' },
     { name: 'commands', src: 'commands', dest: 'commands' },
     { name: 'cco CLI tools', src: 'bin', dest: 'bin', showCount: true },
     { name: 'cco memory substrate', src: 'cco-memory', dest: 'cco-memory' },
+    { name: 'research scrapers', src: 'scrapers', dest: 'scrapers' },
   ];
 
   for (const comp of components) {
@@ -564,7 +564,7 @@ function handleDoctor() {
     ['Skills directory', () => existsSync(join(CLAUDE_HOME, 'skills'))],
     ['Agents directory', () => existsSync(join(CLAUDE_HOME, 'agents'))],
     ['Rules directory', () => existsSync(join(CLAUDE_HOME, 'rules'))],
-    ['GSD engine', () => existsSync(join(CLAUDE_HOME, 'get-shit-done'))],
+    ['Donny engine', () => existsSync(join(CLAUDE_HOME, 'donny'))],
     ['Hooks directory', () => existsSync(join(CLAUDE_HOME, 'hooks'))],
     ['Settings file', () => existsSync(join(CLAUDE_HOME, 'settings.json'))],
     ['Commands directory', () => existsSync(join(CLAUDE_HOME, 'commands'))],
@@ -589,6 +589,52 @@ function handleDoctor() {
   }
 }
 
+// ── MCP servers ───────────────────────────────────────────────────────────
+// Register the current MCP servers at user scope via the claude CLI (idempotent).
+// Keyless npx servers only -- DonnyClaude writes no tokens anywhere.
+const MCP_SERVERS = Object.freeze([
+  { name: 'context7', pkg: '@upstash/context7-mcp@latest' },
+  { name: 'playwright', pkg: '@playwright/mcp@latest' },
+]);
+
+function setupMcpServers() {
+  heading('Configuring MCP servers');
+  if (!commandExists('claude')) { warn('claude CLI not found -- skipping MCP setup'); return; }
+  for (const s of MCP_SERVERS) {
+    try {
+      // drop any stale definition, then register the current one at user scope
+      try { execSync(`claude mcp remove ${s.name} --scope user`, { stdio: 'ignore' }); } catch {}
+      execSync(`claude mcp add ${s.name} --scope user -- npx -y ${s.pkg}`, { stdio: 'ignore' });
+      ok(`${s.name} registered`);
+    } catch {
+      warn(`could not register ${s.name} -- add manually: claude mcp add ${s.name} --scope user -- npx -y ${s.pkg}`);
+    }
+  }
+  info('Remove any MCP server you do not use with: claude mcp remove <name>');
+}
+
+// ── Obsidian (vault-based memory) ──────────────────────────────────────────
+// DonnyClaude's memory practice uses an Obsidian vault. Install Obsidian if missing.
+function obsidianInstalled() {
+  if (platform() === 'darwin') return existsSync('/Applications/Obsidian.app');
+  try { execSync(IS_WIN ? 'where obsidian' : 'which obsidian', { stdio: 'ignore' }); return true; } catch { return false; }
+}
+
+function hasBrew() { try { execSync('which brew', { stdio: 'ignore' }); return true; } catch { return false; } }
+
+function installObsidian() {
+  heading('Obsidian (vault-based memory)');
+  if (obsidianInstalled()) { ok('Obsidian already installed'); return; }
+  try {
+    if (platform() === 'darwin' && hasBrew()) {
+      execSync('brew install --cask obsidian', { stdio: 'inherit' });
+      ok('Obsidian installed');
+      return;
+    }
+  } catch { /* fall through to manual instructions */ }
+  warn('Obsidian not installed. Get it at https://obsidian.md/download to use the vault memory practice.');
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 function main() {
@@ -606,6 +652,8 @@ function main() {
         process.exit(1);
       }
       installGlobalTools();
+      setupMcpServers();
+      installObsidian();
       ok('Toolkit installed (wizard skipped)');
       break;
     case 'update':
@@ -644,6 +692,8 @@ function main() {
       }
 
       installGlobalTools();
+      setupMcpServers();
+      installObsidian();
       launchWizard();
       break;
     }

@@ -1,0 +1,22 @@
+# Generated research outputs (data, not code) — also covers the app-level
+# YouTube transcript cache out/yt_transcripts.sqlite (Phase 10, ENRICH-02).
+out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Local cco green-gate override (operator bypass; never versioned — see file header)
+.cco/green-gate-off
