@@ -18,3 +18,7 @@ ahol-claude-dry-run.ahol-claude-dry-run.json
 
 # internal build planning (not published)
 .planning/
+
+# Python bytecode (pytest runs at repo root)
+__pycache__/
+*.pyc
