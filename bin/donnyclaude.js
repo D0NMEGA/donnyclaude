@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, readdirSync, copyFileSync, chmodSync, rmSync } from 'node:fs';
+import { join, resolve, dirname, relative } from 'node:path';
+import { createInterface } from 'node:readline';
 import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -174,6 +175,20 @@ function checkPrerequisites() {
 
 // ── Phase 2: Install Global Tools ───────────────────────────────────────────
 
+// Component directories this package owns under ~/.claude. Shared by install,
+// dry-run, diff, and uninstall so the ownership story lives in one place.
+const COMPONENT_DIRS = Object.freeze([
+  { name: 'skills', src: 'skills', dest: 'skills', showCount: true },
+  { name: 'agents', src: 'agents', dest: 'agents', showCount: true },
+  { name: 'rules', src: 'rules', dest: 'rules', label: 'Rules installed (common + language-specific)' },
+  { name: 'Donny workflow engine', src: 'donny', dest: 'donny' },
+  { name: 'hooks', src: 'hooks', dest: 'hooks' },
+  { name: 'commands', src: 'commands', dest: 'commands' },
+  { name: 'cco CLI tools', src: 'bin', dest: 'bin', showCount: true },
+  { name: 'cco memory substrate', src: 'cco-memory', dest: 'cco-memory' },
+  { name: 'research scrapers', src: 'scrapers', dest: 'scrapers' },
+]);
+
 function installGlobalTools() {
   heading('Installing DonnyClaude toolkit...');
 
@@ -184,19 +199,7 @@ function installGlobalTools() {
 
   mkdirSync(CLAUDE_HOME, { recursive: true });
 
-  const components = [
-    { name: 'skills', src: 'skills', dest: 'skills', showCount: true },
-    { name: 'agents', src: 'agents', dest: 'agents', showCount: true },
-    { name: 'rules', src: 'rules', dest: 'rules', label: 'Rules installed (common + language-specific)' },
-    { name: 'Donny workflow engine', src: 'donny', dest: 'donny' },
-    { name: 'hooks', src: 'hooks', dest: 'hooks' },
-    { name: 'commands', src: 'commands', dest: 'commands' },
-    { name: 'cco CLI tools', src: 'bin', dest: 'bin', showCount: true },
-    { name: 'cco memory substrate', src: 'cco-memory', dest: 'cco-memory' },
-    { name: 'research scrapers', src: 'scrapers', dest: 'scrapers' },
-  ];
-
-  for (const comp of components) {
+  for (const comp of COMPONENT_DIRS) {
     const src = join(ROOT, 'packages', comp.src);
     const dest = join(CLAUDE_HOME, comp.dest);
     if (existsSync(src)) {
@@ -708,9 +711,221 @@ function installObsidian() {
   warn('Obsidian not installed. Get it at https://obsidian.md/download to use the vault memory practice.');
 }
 
+// ── Lifecycle: dry-run, diff, uninstall ─────────────────────────────────────
+// One ownership manifest drives all three: a file is "owned" iff this package
+// version ships it. Files the user created under ~/.claude are invisible here
+// by construction, so uninstall and diff can never name or touch them.
+
+function walkFiles(dir, base = dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkFiles(p, base));
+    else out.push(relative(base, p));
+  }
+  return out;
+}
+
+function ownedFileMap() {
+  const entries = [];
+  for (const comp of COMPONENT_DIRS) {
+    const srcDir = join(ROOT, 'packages', comp.src);
+    if (!existsSync(srcDir)) continue;
+    for (const rel of walkFiles(srcDir)) {
+      entries.push({
+        rel: join(comp.dest, rel),
+        src: join(srcDir, rel),
+        dest: join(CLAUDE_HOME, comp.dest, rel),
+        component: comp.name,
+      });
+    }
+  }
+  const statuslineSrc = join(ROOT, 'packages', 'core', 'statusline.py');
+  if (existsSync(statuslineSrc)) {
+    entries.push({ rel: 'statusline.py', src: statuslineSrc, dest: join(CLAUDE_HOME, 'statusline.py'), component: 'statusline' });
+  }
+  const docsSrc = join(ROOT, 'docs');
+  if (existsSync(docsSrc)) {
+    for (const rel of walkFiles(docsSrc)) {
+      entries.push({ rel: join('docs', rel), src: join(docsSrc, rel), dest: join(CLAUDE_HOME, 'docs', rel), component: 'docs' });
+    }
+  }
+  return entries;
+}
+
+function fileState(entry) {
+  if (!existsSync(entry.dest)) return 'new';
+  return readFileSync(entry.src).equals(readFileSync(entry.dest)) ? 'unchanged' : 'differs';
+}
+
+function operatingGuideState() {
+  const dest = join(CLAUDE_HOME, 'CLAUDE.md');
+  if (!existsSync(dest)) return 'absent';
+  const cur = readFileSync(dest, 'utf-8');
+  const src = join(ROOT, 'packages', 'core', 'CLAUDE.md');
+  if (existsSync(src) && cur === readFileSync(src, 'utf-8')) return 'pristine';
+  if (cur.includes(DONNY_STD_BEGIN) && cur.includes(DONNY_STD_END)) {
+    return cur.includes(donnyStandardsBlock()) ? 'block-current' : 'block-stale';
+  }
+  return 'no-block';
+}
+
+function dryRunInstall() {
+  heading('Dry run -- what install would change');
+  const perComponent = new Map();
+  for (const entry of ownedFileMap()) {
+    const bucket = perComponent.get(entry.component) ?? { new: 0, differs: 0, unchanged: 0 };
+    bucket[fileState(entry)]++;
+    perComponent.set(entry.component, bucket);
+  }
+  for (const [name, b] of perComponent) {
+    info(`${name}: ${b.new + b.differs + b.unchanged} files (${b.new} new, ${b.differs} would be updated, ${b.unchanged} unchanged)`);
+  }
+
+  const guideActions = {
+    absent: 'create ~/.claude/CLAUDE.md (full operating guide)',
+    pristine: 'refresh ~/.claude/CLAUDE.md (currently the unmodified shipped guide)',
+    'block-current': 'managed standards block already current -- no change',
+    'block-stale': 'refresh the managed standards block (your own lines untouched)',
+    'no-block': 'append the managed standards block to your existing CLAUDE.md',
+  };
+  info(`CLAUDE.md: ${guideActions[operatingGuideState()]}`);
+  info(existsSync(join(CLAUDE_HOME, 'settings.json'))
+    ? 'settings.json: merge template keys you have not set (backup to settings.json.bak first)'
+    : 'settings.json: create from template');
+  info(`MCP: would register ${MCP_SERVERS.map((s) => s.name).join(', ')} at user scope`);
+  info('skill index: would rebuild ~/.claude/.donnyclaude-skill-index.json');
+  console.log();
+  ok('Dry run only -- nothing was written.');
+}
+
+function handleDiff() {
+  heading('Diff: this package vs ~/.claude');
+  if (!existsSync(CLAUDE_HOME)) {
+    warn('~/.claude does not exist -- nothing is installed. Run: npx donnyclaude');
+    process.exit(1);
+  }
+  const modified = [];
+  const missing = [];
+  let unchanged = 0;
+  for (const entry of ownedFileMap()) {
+    const state = fileState(entry);
+    if (state === 'unchanged') unchanged++;
+    else if (state === 'new') missing.push(entry.rel);
+    else modified.push(entry.rel);
+  }
+  const CAP = 20;
+  if (modified.length) {
+    console.log('\n  Differs from this package version:');
+    for (const f of modified.slice(0, CAP)) fail(f);
+    if (modified.length > CAP) info(`... and ${modified.length - CAP} more`);
+  }
+  if (missing.length) {
+    console.log('\n  Shipped but not installed:');
+    for (const f of missing.slice(0, CAP)) warn(f);
+    if (missing.length > CAP) info(`... and ${missing.length - CAP} more`);
+  }
+  console.log();
+  info(`Managed CLAUDE.md standards block: ${operatingGuideState()}`);
+  console.log(`\n  ${unchanged} unchanged, ${modified.length} differ, ${missing.length} not installed`);
+  info('Files you created yourself are never listed here and never touched.');
+  process.exit(modified.length + missing.length > 0 ? 1 : 0);
+}
+
+function pruneEmptyDirs(dir) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) pruneEmptyDirs(join(dir, entry.name));
+  }
+  if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+}
+
+async function confirmPrompt(question) {
+  if (!process.stdin.isTTY) return false;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise((res) => rl.question(question, res));
+  rl.close();
+  return /^y(es)?$/i.test(answer.trim());
+}
+
+async function handleUninstall(args) {
+  const dry = args.includes('--dry-run');
+  const yes = args.includes('--yes') || args.includes('-y');
+  const noMcp = args.includes('--no-mcp');
+  heading(dry ? 'Uninstall (dry run)' : 'Uninstall DonnyClaude');
+
+  if (!existsSync(CLAUDE_HOME)) {
+    info('~/.claude does not exist -- nothing to remove.');
+    return;
+  }
+
+  const owned = ownedFileMap().filter((e) => existsSync(e.dest));
+  const skillIndex = join(CLAUDE_HOME, '.donnyclaude-skill-index.json');
+  const extras = existsSync(skillIndex) ? [skillIndex] : [];
+  const guideState = operatingGuideState();
+  const guideAction =
+    guideState === 'pristine' ? 'remove ~/.claude/CLAUDE.md (unmodified shipped guide)'
+      : guideState === 'block-current' || guideState === 'block-stale'
+        ? 'strip the managed standards block (your own lines kept)'
+        : 'leave ~/.claude/CLAUDE.md untouched';
+
+  console.log(`\n  Removes ${owned.length} DonnyClaude-owned files${extras.length ? ' plus the skill index' : ''}.`);
+  info(`CLAUDE.md: ${guideAction}`);
+  info('settings.json: left as-is (install-time backup, if any: settings.json.bak)');
+  info(noMcp ? 'MCP: skipped (--no-mcp)' : `MCP: deregister ${MCP_SERVERS.map((s) => s.name).join(', ')} at user scope`);
+  info('Anything you created yourself under ~/.claude is not touched.');
+
+  if (dry) {
+    console.log();
+    ok('Dry run only -- nothing was removed.');
+    return;
+  }
+
+  if (!yes && !(await confirmPrompt('\n  Remove these files? [y/N] '))) {
+    fail('Aborted. Re-run with --yes to skip confirmation.');
+    process.exit(1);
+  }
+
+  for (const entry of owned) rmSync(entry.dest, { force: true });
+  for (const extra of extras) rmSync(extra, { force: true });
+  for (const comp of COMPONENT_DIRS) pruneEmptyDirs(join(CLAUDE_HOME, comp.dest));
+  pruneEmptyDirs(join(CLAUDE_HOME, 'docs'));
+
+  const guidePath = join(CLAUDE_HOME, 'CLAUDE.md');
+  if (guideState === 'pristine') {
+    rmSync(guidePath, { force: true });
+  } else if (guideState === 'block-current' || guideState === 'block-stale') {
+    const cur = readFileSync(guidePath, 'utf-8');
+    const b = cur.indexOf(DONNY_STD_BEGIN);
+    const e = cur.indexOf(DONNY_STD_END);
+    if (b !== -1 && e !== -1 && e > b) {
+      const stripped = (cur.slice(0, b) + cur.slice(e + DONNY_STD_END.length))
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/\s+$/, '\n');
+      writeFileSync(guidePath, stripped);
+    }
+  }
+
+  if (!noMcp && commandExists('claude')) {
+    for (const s of MCP_SERVERS) {
+      try {
+        execSync(`claude mcp remove ${s.name} --scope user`, { stdio: 'ignore' });
+        ok(`${s.name} deregistered`);
+      } catch {
+        info(`${s.name} was not registered (or removal failed) -- check: claude mcp list`);
+      }
+    }
+  } else if (!noMcp) {
+    info('claude CLI not found -- remove MCP servers manually if registered: claude mcp remove <name> --scope user');
+  }
+
+  console.log();
+  ok('DonnyClaude removed. Files you created under ~/.claude were not touched.');
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
 
@@ -720,6 +935,10 @@ function main() {
     case 'install':
       // Install/refresh the global toolkit WITHOUT launching the wizard
       // (headless / CI / reinstall). Same as the default path minus the wizard.
+      if (args.includes('--dry-run')) {
+        dryRunInstall();
+        break;
+      }
       if (!checkPrerequisites()) {
         console.log('\n\x1b[31mPrerequisite check failed. Fix issues above and retry.\x1b[0m');
         process.exit(1);
@@ -729,6 +948,15 @@ function main() {
       installObsidian();
       ok('Toolkit installed (wizard skipped)');
       starAsk();
+      break;
+    case '--dry-run':
+      dryRunInstall();
+      break;
+    case 'uninstall':
+      await handleUninstall(args);
+      break;
+    case 'diff':
+      handleDiff();
       break;
     case 'update':
       handleUpdate();
@@ -749,6 +977,9 @@ function main() {
       console.log('  npx donnyclaude install    Install/refresh tools only (no wizard)');
       console.log('  npx donnyclaude update     Update to latest version');
       console.log('  npx donnyclaude doctor     Check installation health');
+      console.log('  npx donnyclaude --dry-run  Preview what install would change (no writes)');
+      console.log('  npx donnyclaude diff       Show drift vs the installed files (exit 1 = drift)');
+      console.log('  npx donnyclaude uninstall  Remove DonnyClaude-owned files (--yes, --dry-run, --no-mcp)');
       console.log('  npx donnyclaude version    Show version');
       console.log('  npx donnyclaude help       Show this help');
       break;
@@ -774,4 +1005,4 @@ function main() {
   }
 }
 
-main();
+await main();

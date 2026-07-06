@@ -70,9 +70,19 @@ until you start one there.
 - MCP registrations for Context7 (live docs) and Playwright (browser), at user
   scope
 
-Existing settings are preserved, not clobbered. `npx donnyclaude doctor` checks
-installation health at any time. Planned but not implemented yet: `--dry-run`,
-`uninstall`, and `diff` commands.
+Existing settings are preserved, not clobbered. And you can inspect or reverse
+all of it:
+
+```bash
+npx donnyclaude --dry-run       # preview what install would change - no writes
+npx donnyclaude doctor          # check installation health
+npx donnyclaude diff            # drift between installed files and this version (exit 1 = drift)
+npx donnyclaude uninstall       # remove every DonnyClaude-owned file; yours stay
+```
+
+`uninstall` accepts `--dry-run`, `--yes`, and `--no-mcp`. It removes only files
+this package ships, strips just the managed block from `CLAUDE.md`, leaves
+`settings.json` in place, and never touches anything you created yourself.
 
 ## Quickstart
 

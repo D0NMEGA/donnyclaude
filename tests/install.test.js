@@ -445,6 +445,84 @@ describe('Plugin manifest', () => {
   });
 });
 
+// ── Test: Lifecycle commands (--dry-run / diff / uninstall) ─────────────────
+
+describe('Lifecycle commands', () => {
+  const BIN = join(ROOT, 'bin', 'donnyclaude.js');
+  const envHome = { ...process.env, HOME: TEST_HOME, USERPROFILE: TEST_HOME };
+
+  it('install --dry-run writes nothing and says so', () => {
+    cleanTestDir();
+    const out = execSync(`node ${BIN} install --dry-run`, { encoding: 'utf-8', env: envHome });
+    assert.match(out, /dry run/i);
+    assert.ok(!existsSync(TEST_CLAUDE_HOME), 'dry run must not create ~/.claude');
+  });
+
+  it('diff reports a locally modified shipped file and exits 1', () => {
+    cleanTestDir();
+    mkdirSync(join(TEST_CLAUDE_HOME, 'rules', 'common'), { recursive: true });
+    cpSync(
+      join(ROOT, 'packages', 'rules', 'common', 'testing.md'),
+      join(TEST_CLAUDE_HOME, 'rules', 'common', 'testing.md')
+    );
+    writeFileSync(join(TEST_CLAUDE_HOME, 'rules', 'common', 'security.md'), 'locally changed\n');
+    let code = 0;
+    let out = '';
+    try {
+      out = execSync(`node ${BIN} diff`, { encoding: 'utf-8', env: envHome });
+    } catch (e) {
+      code = e.status;
+      out = e.stdout;
+    }
+    assert.equal(code, 1, 'diff must exit 1 when drift exists');
+    assert.match(out, /security\.md/, 'diff must name the modified file');
+    assert.match(out, /unchanged/, 'diff must print a summary');
+  });
+
+  it('uninstall --yes removes owned files, preserves user files, strips the managed block', () => {
+    cleanTestDir();
+    mkdirSync(join(TEST_CLAUDE_HOME, 'skills', 'my-own-skill'), { recursive: true });
+    writeFileSync(join(TEST_CLAUDE_HOME, 'skills', 'my-own-skill', 'SKILL.md'), 'mine\n');
+    cpSync(
+      join(ROOT, 'packages', 'skills', 'web-research'),
+      join(TEST_CLAUDE_HOME, 'skills', 'web-research'),
+      { recursive: true }
+    );
+    mkdirSync(join(TEST_CLAUDE_HOME, 'donny', 'bin'), { recursive: true });
+    cpSync(
+      join(ROOT, 'packages', 'donny', 'VERSION'),
+      join(TEST_CLAUDE_HOME, 'donny', 'VERSION')
+    );
+    const block =
+      '<!-- BEGIN donnyclaude standards (managed) -->\nx\n<!-- END donnyclaude standards (managed) -->';
+    writeFileSync(join(TEST_CLAUDE_HOME, 'CLAUDE.md'), `# My stuff\nkeep me\n\n${block}\n`);
+    execSync(`node ${BIN} uninstall --yes --no-mcp`, { encoding: 'utf-8', env: envHome });
+    assert.ok(!existsSync(join(TEST_CLAUDE_HOME, 'skills', 'web-research')), 'shipped skill must be removed');
+    assert.ok(existsSync(join(TEST_CLAUDE_HOME, 'skills', 'my-own-skill', 'SKILL.md')), 'user skill must survive');
+    assert.ok(!existsSync(join(TEST_CLAUDE_HOME, 'donny')), 'owned engine dir must be pruned when empty');
+    const guide = readFileSync(join(TEST_CLAUDE_HOME, 'CLAUDE.md'), 'utf-8');
+    assert.match(guide, /keep me/, 'user CLAUDE.md content must survive');
+    assert.ok(!guide.includes('BEGIN donnyclaude standards'), 'managed block must be stripped');
+  });
+
+  it('uninstall refuses without --yes when stdin is not a TTY', () => {
+    cleanTestDir();
+    mkdirSync(TEST_CLAUDE_HOME, { recursive: true });
+    cpSync(
+      join(ROOT, 'packages', 'core', 'statusline.py'),
+      join(TEST_CLAUDE_HOME, 'statusline.py')
+    );
+    let code = 0;
+    try {
+      execSync(`node ${BIN} uninstall --no-mcp`, { encoding: 'utf-8', env: envHome, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch (e) {
+      code = e.status;
+    }
+    assert.equal(code, 1, 'must refuse without confirmation in non-TTY');
+    assert.ok(existsSync(join(TEST_CLAUDE_HOME, 'statusline.py')), 'nothing may be removed on refusal');
+  });
+});
+
 // ── Test: Cross-Platform Path Safety ────────────────────────────────────────
 
 describe('Cross-platform safety', () => {
