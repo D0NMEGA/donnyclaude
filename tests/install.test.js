@@ -423,6 +423,28 @@ describe('Star ask', () => {
   });
 });
 
+// ── Test: Plugin manifest (marketplace + plugin.json) ───────────────────────
+
+describe('Plugin manifest', () => {
+  it('plugin.json is valid and lists every bundled agent', () => {
+    const plugin = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf-8'));
+    assert.equal(plugin.name, 'donnyclaude');
+    const agentFiles = readdirSync(join(ROOT, 'packages', 'agents'))
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => `./packages/agents/${f}`)
+      .sort();
+    assert.deepEqual([...plugin.agents].sort(), agentFiles,
+      'plugin.json agents must list packages/agents/*.md exactly (the validator rejects directories)');
+  });
+
+  it('marketplace.json exposes the repo root as the plugin source', () => {
+    const mp = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf-8'));
+    assert.equal(mp.name, 'donnyclaude');
+    assert.equal(mp.plugins[0].name, 'donnyclaude');
+    assert.equal(mp.plugins[0].source, './');
+  });
+});
+
 // ── Test: Cross-Platform Path Safety ────────────────────────────────────────
 
 describe('Cross-platform safety', () => {

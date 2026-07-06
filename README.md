@@ -30,9 +30,9 @@ verification loop:
 npx donnyclaude
 ```
 
-<!-- TODO: 60-90 second terminal demo GIF here. Script: broken repo ->
-     phase plan -> implementation -> failed verification -> fix ->
-     passing verification -> PR-ready work. -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/d0nmega/donnyclaude/main/demo/demo.gif" alt="The Donny engine refuses a failed phase, then passes it once VERIFICATION.md says passed" width="90%">
+</p>
 
 One command installs the [Donny engine](#deterministic-gates-the-donny-engine),
 the skills and agents, coding rules for 13 languages, project hooks, and a
@@ -89,6 +89,19 @@ npx donnyclaude                 # install, then the setup wizard
 
 Use `/donny-progress` any time to see where you are, `/donny-autonomous` to
 advance the whole roadmap hands-off, and `/donny-help` for every command.
+
+### Install as a plugin (experimental)
+
+```text
+/plugin marketplace add d0nmega/donnyclaude
+/plugin install donnyclaude@donnyclaude
+```
+
+The plugin surfaces the skills, commands, and agents through Claude Code's
+plugin system. The Donny engine, hooks, rules, and MCP registrations still
+come from `npx donnyclaude` - run that once first. Pick one distribution for
+the skill surface: a plugin install on top of a full npx install registers
+the slash commands twice.
 
 A project under Donny keeps its state on disk, not in chat history:
 

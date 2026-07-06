@@ -1,0 +1,16 @@
+{
+  "name": "donnyclaude",
+  "owner": {
+    "name": "Donovan Santine",
+    "email": "donovan@moltgrid.net"
+  },
+  "description": "DonnyClaude - the verified workflow engine for Claude Code.",
+  "plugins": [
+    {
+      "name": "donnyclaude",
+      "source": "./",
+      "category": "workflow",
+      "tags": ["workflow", "verification", "planning", "agents"]
+    }
+  ]
+}
