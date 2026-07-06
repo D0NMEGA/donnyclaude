@@ -72,7 +72,7 @@ process.stdin.on("end", () => {
     else if (phase) parts.push(`• Phase: ${phase}`);
     if (resume) parts.push(`• Resume context: ${resume}`);
     if (snap) parts.push(`• Pre-compact snapshot: ${snap}`);
-    parts.push(`(auto-compact is unreliable on 1M Opus; this hook firing confirms a compaction occurred.)`);
+    parts.push(`(auto-compact fires at the 60% override as of CC 2.1.198, verified 2026-07-01; this hook confirms a compaction occurred.)`);
     const message = parts.join("\n");
 
     // 2. Bridge file for a binary-VALID model-facing consumer (tracked follow-up). One-shot payload.

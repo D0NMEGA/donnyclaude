@@ -58,9 +58,9 @@ process.stdin.on("end", () => {
     try { fs.writeFileSync(flagPath, JSON.stringify({ nudged: true })); } catch (e) {}
 
     const message =
-      `[context] ${Math.round(usedRaw)}% used (>= ${THRESHOLD}%). Operator: a /compact at the ` +
-      `next clean boundary will reset headroom. No rush — quality holds on the 1M window; ` +
-      `this is a heads-up, not a deadline. (auto-compact is unreliable on 1M Opus, so /compact is operator-driven.)`;
+      `[context] ${Math.round(usedRaw)}% used (>= ${THRESHOLD}%). Operator: native auto-compact ` +
+      `fires at the ${THRESHOLD}% override (verified 2026-07-01 on CC 2.1.198, trigger:auto on 1M Opus 4.8). ` +
+      `A manual /compact at a clean boundary is optional. This is a heads-up, not a deadline.`;
     // Operator-only channel (D-01/D-03): a top-level systemMessage is the model-invisible surface.
     // The model receives nothing from this hook, so it sees no context-pressure / rush signal.
     process.stdout.write(JSON.stringify({ systemMessage: message }));
