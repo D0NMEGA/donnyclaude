@@ -16,18 +16,17 @@ import importlib.util
 import io
 import json
 import os
-import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest import mock
 
-import pytest
+import pytest  # ty: ignore[unresolved-import]
 
 # Load instinct-cli.py (hyphenated filename requires importlib)
 _spec = importlib.util.spec_from_file_location(
     "instinct_cli",
     os.path.join(os.path.dirname(__file__), "instinct-cli.py"),
 )
+assert _spec is not None and _spec.loader is not None
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 

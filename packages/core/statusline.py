@@ -11,7 +11,13 @@ strips leading whitespace + truncates to width, so reliable flush-right multi-li
 isn't possible — left-stacked is the alignment that always holds with no runoff.
 All fields verified in the 2.1.x binary / a live payload.
 """
-import sys, json, os, time, tempfile, re, subprocess
+import sys
+import json
+import os
+import time
+import tempfile
+import re
+import subprocess
 from datetime import datetime
 try:
     from zoneinfo import ZoneInfo
@@ -36,9 +42,14 @@ def bar(pct, width=6, marker=None):
     return "".join(cells)
 
 def countdown(secs):
-    secs = int(max(0, secs)); d, r = divmod(secs, 86400); h, r = divmod(r, 3600); m, _ = divmod(r, 60)
-    if d: return f"{d}d{h}h"
-    if h: return f"{h}h{m}m"
+    secs = int(max(0, secs))
+    d, r = divmod(secs, 86400)
+    h, r = divmod(r, 3600)
+    m, _ = divmod(r, 60)
+    if d:
+        return f"{d}d{h}h"
+    if h:
+        return f"{h}h{m}m"
     return f"{m}m"
 
 def ct_clock(ts, far):
@@ -89,13 +100,15 @@ def main():
     try:
         d = json.load(sys.stdin)
     except Exception:
-        print("", end=""); return
+        print("", end="")
+        return
     try:  # capture last payload + width sources for diagnostics
         dbg = {"stdin_keys": sorted(d.keys()),
                "env_COLUMNS": os.environ.get("COLUMNS"),
                "get_terminal_size": None}
         try:
-            import shutil; dbg["get_terminal_size"] = list(shutil.get_terminal_size((0, 0)))
+            import shutil
+            dbg["get_terminal_size"] = list(shutil.get_terminal_size((0, 0)))
         except Exception:
             pass
         with open(os.path.expanduser("~/.claude/statusline-last.json"), "w") as f:

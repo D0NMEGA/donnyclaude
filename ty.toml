@@ -1,0 +1,6 @@
+# ty runs repo-wide via the local green-gate hook. The bundled scrapers are a
+# self-contained uv project (httpx, hishel, bm25s, ... resolve in its own venv)
+# with its own test suite, and the browser scrapers use runner-injected globals
+# (js, wait, scroll), so neither resolves from this Node repo's root env.
+[src]
+exclude = ["packages/scrapers"]
