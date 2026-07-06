@@ -390,6 +390,39 @@ describe('CLI commands', () => {
   });
 });
 
+// ── Test: Star ask (consent-based, no lifecycle hooks) ──────────────────────
+
+describe('Star ask', () => {
+  it('package.json declares no install lifecycle scripts', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+    for (const hook of ['preinstall', 'install', 'postinstall', 'prepare']) {
+      assert.equal(pkg.scripts?.[hook], undefined, `unexpected ${hook} lifecycle script`);
+    }
+  });
+
+  it('star ask is opt-out and never touches the GitHub API', () => {
+    const content = readFileSync(join(ROOT, 'bin', 'donnyclaude.js'), 'utf-8');
+    assert.ok(content.includes('DONNYCLAUDE_NO_STAR'), 'opt-out env var missing');
+    assert.ok(content.includes('github.com/d0nmega/donnyclaude'), 'repo URL missing');
+    assert.ok(!content.includes('api.github.com'), 'must not call the GitHub API');
+  });
+
+  it('help and version output stays free of the star ask', () => {
+    for (const cmd of ['help', 'version']) {
+      const output = execSync(`node ${join(ROOT, 'bin', 'donnyclaude.js')} ${cmd}`, {
+        encoding: 'utf-8',
+      });
+      assert.ok(!/star/i.test(output), `${cmd} output should not nag for stars`);
+    }
+  });
+
+  it('README carries the star call-to-action', () => {
+    const readme = readFileSync(join(ROOT, 'README.md'), 'utf-8');
+    assert.ok(readme.includes('github.com/d0nmega/donnyclaude'), 'repo link missing');
+    assert.ok(/star/i.test(readme), 'star ask missing');
+  });
+});
+
 // ── Test: Cross-Platform Path Safety ────────────────────────────────────────
 
 describe('Cross-platform safety', () => {

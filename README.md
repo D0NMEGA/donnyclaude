@@ -7,6 +7,7 @@
   <img src="https://img.shields.io/badge/agents-48-ff3333?style=for-the-badge" alt="48 Agents">
   <img src="https://img.shields.io/badge/engine-Donny-ff3333?style=for-the-badge" alt="Donny engine">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="MIT License">
+  <a href="https://github.com/d0nmega/donnyclaude"><img src="https://img.shields.io/github/stars/d0nmega/donnyclaude?style=for-the-badge&logo=github&color=ff3333&label=star" alt="Star on GitHub"></a>
 </p>
 
 # DonnyClaude
@@ -140,3 +141,8 @@ The optional `browser-harness` integration references
 [browser-use/browser-harness](https://github.com/browser-use/browser-harness)
 (MIT, Copyright (c) 2026 Browser Use); it is not bundled, and all credit for that
 project belongs to its authors.
+
+---
+
+If DonnyClaude saves you time, [star the repo](https://github.com/d0nmega/donnyclaude)
+so others can find it.

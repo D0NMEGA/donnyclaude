@@ -52,6 +52,21 @@ function warn(msg) { console.log(`  \x1b[33m!\x1b[0m ${msg}`); }
 function info(msg) { console.log(`  \x1b[2m${msg}\x1b[0m`); }
 function heading(msg) { console.log(`\n\x1b[1m${msg}\x1b[0m`); }
 
+const REPO_URL = 'https://github.com/d0nmega/donnyclaude';
+
+/**
+ * Polite, consent-based star ask, printed only after a successful install,
+ * update, or wizard run. Deliberately NOT a postinstall hook (skipped by
+ * --ignore-scripts, flagged by supply-chain scanners, rarely seen under the
+ * npx cache) and deliberately no GitHub API call or credential access --
+ * starring stays a manual choice in the user's own browser.
+ */
+function starAsk() {
+  if (process.env.DONNYCLAUDE_NO_STAR) return;
+  console.log(`\n  \x1b[2mEnjoying DonnyClaude? A star helps others find it:\x1b[0m`);
+  console.log(`  \x1b[1m${REPO_URL}\x1b[0m \x1b[2m(hide this line: DONNYCLAUDE_NO_STAR=1)\x1b[0m`);
+}
+
 /** Shell-safe command execution -- only whitelisted commands allowed */
 function commandExists(cmd) {
   if (!SAFE_COMMANDS.has(cmd)) throw new Error(`Unsafe command: ${cmd}`);
@@ -585,6 +600,7 @@ function launchWizard() {
   child.on('exit', (code) => {
     if (code === 0) {
       console.log(`\n\x1b[32mDonnyClaude setup complete.\x1b[0m`);
+      starAsk();
     }
     process.exit(code ?? 0);
   });
@@ -599,6 +615,7 @@ function handleUpdate() {
     ok('Updated to latest version');
     installGlobalTools();
     ok('Global tools updated');
+    starAsk();
   } catch (err) {
     fail('Update failed');
     if (err.message?.includes('EACCES') || err.message?.includes('permission')) {
@@ -711,6 +728,7 @@ function main() {
       setupMcpServers();
       installObsidian();
       ok('Toolkit installed (wizard skipped)');
+      starAsk();
       break;
     case 'update':
       handleUpdate();
