@@ -1,6 +1,6 @@
 {
   "name": "donnyclaude",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "type": "module",
   "description": "The verified workflow engine for Claude Code. Durable .planning project state, phased roadmaps, specialized subagents, and deterministic verification gates - installed in one command.",
   "main": "bin/donnyclaude.js",
