@@ -381,3 +381,131 @@ describe('cmdVerifySummary requirements-completed (D-16)', () => {
     assert.equal(j.passed, false);
   });
 });
+
+// ── expandHomePath (A-03) ───────────────────────────────────────────────────
+// must_haves.artifacts paths are written by a human in a PLAN, and this project's
+// deliverables live outside the repo (~/Developer/cc-autopilot/, ~/.claude/bin/). The bare
+// path.join(cwd, '~/x') that cmdVerifyArtifacts used produced '<cwd>/~/x', which never
+// exists, so 51 of 54 artifact checks failed across the eighteen archived v5.0 plans purely
+// for that reason. A gate that is red on every phase from day one is the ignorable gate this
+// phase exists to prevent.
+
+describe('expandHomePath (A-03)', () => {
+  const HOME = process.env.HOME;
+
+  it('expands a leading ~/', () => {
+    assert.equal(verify.expandHomePath('/tmp/cwd', '~/x/y.txt'), join(HOME, 'x/y.txt'));
+  });
+
+  it('expands a leading $HOME/', () => {
+    assert.equal(verify.expandHomePath('/tmp/cwd', '$HOME/x/y.txt'), join(HOME, 'x/y.txt'));
+  });
+
+  it('passes an absolute path through unchanged', () => {
+    assert.equal(verify.expandHomePath('/tmp/cwd', '/abs/x.txt'), '/abs/x.txt');
+  });
+
+  it('joins a relative path against cwd, as before', () => {
+    assert.equal(verify.expandHomePath('/tmp/cwd', 'rel/x.txt'), join('/tmp/cwd', 'rel/x.txt'));
+  });
+
+  it('does NOT resolve a bare ~user, which this engine does not support', () => {
+    assert.equal(verify.expandHomePath('/tmp/cwd', '~notauser/x'), join('/tmp/cwd', '~notauser/x'));
+  });
+});
+
+// ── cmdVerifyArtifacts home expansion ───────────────────────────────────────
+
+describe('cmdVerifyArtifacts home expansion', () => {
+  /**
+   * Run cmdVerifyArtifacts over a PLAN whose artifacts carry the given paths, with $HOME
+   * pointed at a throwaway directory so the assertion never depends on a real file in the
+   * developer's home. HOME is restored in a finally, because leaking it would silently
+   * change every later test in this process.
+   */
+  function runArtifacts(artifacts, { seed = null } = {}) {
+    const fakeHome = join(tmpdir(), `donny-gate-home-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    if (seed) {
+      fs.mkdirSync(join(fakeHome, dirname(seed)), { recursive: true });
+      fs.writeFileSync(join(fakeHome, seed), 'seeded artifact contents\n', 'utf-8');
+    } else {
+      fs.mkdirSync(fakeHome, { recursive: true });
+    }
+    const root = buildPlanningFixture({
+      phase: '23-fixture',
+      plans: [{ name: '23-01-PLAN.md', content: validPlanContent({ artifacts }) }],
+    });
+    const origHome = process.env.HOME;
+    try {
+      process.env.HOME = fakeHome;
+      const r = verify.captureVerb(
+        () => verify.cmdVerifyArtifacts(root, '.planning/phases/23-fixture/23-01-PLAN.md', false),
+      );
+      assert.equal(r.ok, true, `expected JSON, got ${JSON.stringify(r)}`);
+      return r.json;
+    } finally {
+      process.env.HOME = origHome;
+      cleanupFixture(root);
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
+  }
+
+  it('finds an artifact named by a ~/ path that really exists under $HOME', () => {
+    const j = runArtifacts(
+      [{ path: '~/Developer/seeded/artifact.txt', provides: 'the seeded file' }],
+      { seed: 'Developer/seeded/artifact.txt' },
+    );
+    assert.equal(j.artifacts.length, 1);
+    assert.equal(j.artifacts[0].exists, true, 'a ~/ artifact path must resolve against $HOME');
+    assert.deepEqual(j.artifacts[0].issues, []);
+    assert.equal(j.all_passed, true);
+  });
+
+  it('finds the same artifact named by a $HOME/ path', () => {
+    const j = runArtifacts(
+      [{ path: '$HOME/Developer/seeded/artifact.txt', provides: 'the seeded file' }],
+      { seed: 'Developer/seeded/artifact.txt' },
+    );
+    assert.equal(j.artifacts[0].exists, true, 'a $HOME/ artifact path must resolve against $HOME');
+    assert.equal(j.all_passed, true);
+  });
+
+  it('still reports a genuinely absent ~/ path as missing', () => {
+    const j = runArtifacts([
+      { path: `~/definitely-not-here-${Math.random().toString(36).slice(2)}/x.md`, provides: 'nothing' },
+    ]);
+    assert.equal(j.artifacts[0].exists, false);
+    assert.deepEqual(j.artifacts[0].issues, ['File not found']);
+    assert.equal(j.all_passed, false);
+  });
+
+  it('leaves the no-artifacts-block early return unchanged', () => {
+    const root = buildPlanningFixture({
+      phase: '23-fixture',
+      plans: [{ name: '23-01-PLAN.md', content: validPlanContent({}) }],
+    });
+    try {
+      const r = verify.captureVerb(
+        () => verify.cmdVerifyArtifacts(root, '.planning/phases/23-fixture/23-01-PLAN.md', false),
+      );
+      assert.equal(r.ok, true, `expected JSON, got ${JSON.stringify(r)}`);
+      assert.equal(r.json.error, 'No must_haves.artifacts found in frontmatter');
+    } finally {
+      cleanupFixture(root);
+    }
+  });
+
+  it('leaves cmdVerifyReferences and cmdVerifyKeyLinks untouched (HC-5 blast radius)', () => {
+    // A-03 names verify.cjs:689 only. The references backtick branch and both key-links
+    // joins carry the identical defect and are deliberately NOT fixed here; the residue is
+    // handled by scoring unresolved paths as warnings in the Plan 04 classifier. This pins
+    // that they were not opportunistically widened. Measured: two joins in
+    // cmdVerifyReferences (the at-reference ternary's else branch and the backtick branch),
+    // not the one the plan's acceptance criterion recorded.
+    const src = fs.readFileSync(resolve(ROOT, 'packages/donny/bin/lib/verify.cjs'), 'utf-8');
+    const joins = src.split('\n').filter(l => l.includes('path.join(cwd, cleanRef)'));
+    assert.equal(joins.length, 2, 'cmdVerifyReferences must keep both unexpanded joins');
+    assert.ok(src.includes('const sourceContent = safeReadFile(path.join(cwd, link.from || \'\'));'),
+      'cmdVerifyKeyLinks must keep its unexpanded source join');
+  });
+});
