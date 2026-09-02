@@ -208,6 +208,41 @@ Resume testing: `/donny-verify-work {phase} ${DONNY_WS}` - retest specific phase
 
 This is a WARNING, not a blocker - routing proceeds normally. The debt is visible so the user can make an informed choice.
 
+**Step 1.7: Record gate status**
+
+Scan the current milestone's EXECUTED phases (a phase counts as executed when it has at least one `*-SUMMARY.md`) and read each one's re-derived record-gate verdict. `--read` runs no checkers; it parses the `## Verb Results` table in that phase's `NN-RECORDS.md`, so this scan is cheap and never mutates anything.
+
+```bash
+for d in .planning/phases/*/; do
+  ls "$d"*-SUMMARY.md >/dev/null 2>&1 || continue
+  n=$(basename "$d" | grep -oE '^[0-9]+(\.[0-9]+)?')
+  [ -n "$n" ] || continue
+  v=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "$n" --read --raw 2>/dev/null || echo "not_run")
+  echo "$n $v"
+done
+```
+
+Track `record_not_run` (count of `not_run`) and `record_failing` (count of `fail`).
+
+**If `record_not_run` > 0 OR `record_failing` > 0:** Add a warning section to the progress report output (in the `report` step), placed immediately after the verification-debt warning section Step 1.6 emits, and before the route suggestion:
+
+```markdown
+## Record Gate ({F} failing, {N} never run)
+
+| Phase | Verdict | Detail |
+|-------|---------|--------|
+| {phase} | fail | {counts.error} checker error(s) |
+| {phase} | not_run | no `NN-RECORDS.md` for this phase |
+
+Run the gate: `/donny-audit-phase {phase} --records ${DONNY_WS}`
+```
+
+A `not_run` phase is NOT a passing phase. Absence of the record file means the gate never ran (D-10, GATE-02) and must be reported as such, never folded into a pass count or omitted from the table.
+
+This is a WARNING, not a blocker - routing proceeds normally. The status is visible so the user can make an informed choice.
+
+Archived phases are out of scope: this scan walks `.planning/phases/` only, matching the milestone boundary Step 1.6's `audit-uat` already respects, and archived milestone phases deliberately carry no `NN-RECORDS.md`.
+
 **Step 2: Route based on counts**
 
 | Condition | Meaning | Action |
