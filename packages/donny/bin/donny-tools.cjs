@@ -97,7 +97,7 @@
  *   verify artifacts <plan-file>       Check must_haves.artifacts
  *   verify key-links <plan-file>       Check must_haves.key_links
  *   verify schema-drift <phase> [--skip]  Detect schema file changes without push
- *   verify gate <phase>                Run all 13 record checkers on a phase (advisory)
+ *   verify gate <phase> [--write]      Run all 13 record checkers on a phase (advisory)
  *
  * Template Fill:
  *   template fill summary --phase N    Create pre-filled SUMMARY.md
@@ -537,8 +537,9 @@ async function runCommand(command, args, cwd, raw) {
         verify.cmdVerifySchemaDrift(cwd, args[2], skipFlag, raw);
       } else if (subcommand === 'gate') {
         // The record gate (GATE-01): runs all thirteen checkers in-process and emits ONE
-        // JSON document. The {} is the options slot Plan 06 fills with --write.
-        verify.cmdVerifyGate(cwd, args[2], {}, raw);
+        // JSON document. --write additionally writes NN-RECORDS.md (RECORD-04); the default
+        // stays read-only so inspection never mutates the audit trail.
+        verify.cmdVerifyGate(cwd, args[2], { write: args.includes('--write') }, raw);
       } else {
         error('Unknown verify subcommand. Available: plan-structure, plan-graph, phase-verified, ui-reviewed, threats-clear, milestone-coverage, phase-completeness, references, commits, artifacts, key-links, schema-drift, gate');
       }

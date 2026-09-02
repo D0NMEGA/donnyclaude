@@ -692,12 +692,262 @@ function runGate(cwd, phaseArg) {
   };
 }
 
+// ─── The NN-RECORDS.md artifact (RECORD-04, D-09) ────────────────────────────
+
 /**
- * CLI wrapper for the record gate: donny-tools.cjs verify gate <phase>.
+ * Sanitize one dynamic value before it is interpolated into a record.
  *
- * Signature matches the cmdVerifySchemaDrift(cwd, phaseArg, skipFlag, raw) precedent of one
- * extra parameter before `raw`. `options` is the slot Plan 06 fills with --write; it is
- * accepted and ignored here so the dispatch does not have to change again.
+ * Detail and finding strings originate in operator-authored PLAN and SUMMARY markdown and
+ * arrive here unchanged, so three things have to be neutralised (T-23-23):
+ *
+ *   newlines, because a detail carrying a line of '---' would reintroduce from inside the
+ *     gate's own output the frontmatter shadowing this artifact exists to catch;
+ *   pipes, because one would break the table the verdict is later re-derived from;
+ *   unbounded length, because a single 40 KB finding makes the record unreadable, and an
+ *     unreadable gate is a muted gate.
+ *
+ * Truncation happens BEFORE the pipe is escaped, so a pipe sitting on the 200-character
+ * boundary can never be cut in half and leave a dangling backslash behind.
+ *
+ * Every dynamic value in renderRecordsMd passes through here. There is no raw interpolation.
+ */
+function cell(value) {
+  const s = String(value === undefined || value === null ? '' : value)
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+  const clipped = s.length > 200 ? s.slice(0, 197) + '...' : s;
+  return clipped.replace(/\|/g, '\\|');
+}
+
+/** One markdown table row from already-sanitized cells. */
+function recordsRow(cells) {
+  return '| ' + cells.join(' | ') + ' |';
+}
+
+/**
+ * The one markdown table inside a '## <heading>' section, isolated by heading.
+ *
+ * Isolation is not cosmetic. A record carries three tables, and two of them have a column a
+ * naive scan would mistake for a verdict: Findings has a Severity column and the Audit Trail
+ * has a Verdict column (T-23-24). threatRegisterStatus documents the identical hazard for
+ * SECURITY.md's two tables and solves it the same way.
+ *
+ * @returns {{header: string[], data: string[][]}|null} null when the section or its table is absent
+ */
+function recordsTable(md, headingRe) {
+  const lines = String(md || '').split(/\r?\n/);
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (headingRe.test(lines[i].trim())) { start = i + 1; break; }
+  }
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (/^#{1,6}\s+/.test(lines[i].trim())) { end = i; break; }
+  }
+  const rows = lines.slice(start, end).filter(l => l.trim().startsWith('|'));
+  if (rows.length === 0) return null;
+  const header = splitTableRow(rows[0]);
+  const data = [];
+  for (let i = 1; i < rows.length; i++) {
+    const cells = splitTableRow(rows[i]);
+    if (!isSeparatorRow(cells)) data.push(cells);
+  }
+  return { header, data };
+}
+
+const RECORDS_VERB_RESULTS_RE = /^#{1,6}\s+verb results\s*$/i;
+const RECORDS_TRAIL_RE = /^#{1,6}\s+record gate audit trail\s*$/i;
+
+/** Findings rows kept before the omitted-count tail. A gate that emits 500 rows is a gate
+ *  nobody reads; the full set stays on the per-invocation rows of the gate JSON. */
+const RECORDS_FINDINGS_CAP = 50;
+
+/** Kept verbatim in step with templates/RECORDS.md, so the written artifact explains its own
+ *  constraints the way 21-SECURITY.md does. The heading-parity test is what pins the two. */
+const RECORDS_FORMAT_NOTE = [
+  'NOTE ON FORMAT: this file intentionally contains no bare `---` horizontal rules in its body.',
+  'Only the two frontmatter fence lines above use `---`. The engine\'s frontmatter parser',
+  '(`bin/lib/frontmatter.cjs:16-17`) treats every `---`/`---` pair in a file as a candidate',
+  'frontmatter block and prefers the LAST one, so a decorative section rule would make the real',
+  'frontmatter above silently unreadable. This is the same defect class the record gate exists to',
+  'catch, and `templates/SECURITY.md` currently has it.',
+];
+
+const RECORDS_VERDICT_PROSE = [
+  'The verdict is re-derived from the Verb Results table below on every read, never trusted from',
+  'the frontmatter above (D-11, the A6 ENFORCING GATE pattern). `status` is `fail` if and only if',
+  'at least one Verb Results row has Severity `error`. A hand-edited, stale or truncated',
+  'frontmatter verdict is non-authoritative by construction; a disagreement is reported as',
+  '`consistent: false` and the table wins.',
+  '',
+  'Severities: `pass` (clean), `warning` (recorded, does not fail), `error` (fails the gate),',
+  '`not_applicable` (the check does not apply to this phase), `not_yet` (the input artifact',
+  'legitimately does not exist at this point in the phase lifecycle). The absence of this file',
+  'entirely is a sixth state, `not_run`, and never reads as a pass (D-10, GATE-02).',
+];
+
+/** How each verb's scope reads in the record. */
+const RECORDS_SCOPE_LABEL = { phase: 'phase', plan: 'per-plan', summary: 'per-summary' };
+
+/**
+ * Render a gate result as NN-RECORDS.md (D-09).
+ *
+ * Two invariants the whole artifact rests on:
+ *
+ *   1. Exactly two '---' lines, the frontmatter fences. Everything dynamic goes through
+ *      cell(), so no detail string can put a third one at column 0 (C-12, T-23-23).
+ *   2. The frontmatter counts are derived from the same thirteen rollup rows the Verb Results
+ *      table is built from, so the declared verdict and the re-derived one agree by
+ *      construction and a `consistent: false` on read means a human edited the file.
+ *
+ * @param {object} gate a runGate result with found: true
+ * @param {{runBy?: string, trail?: string[][]}} opts prior audit-trail rows to preserve (D-04)
+ * @returns {string} the complete markdown document
+ */
+function renderRecordsMd(gate, opts) {
+  const o = opts || {};
+  const runBy = o.runBy || 'donny-tools verify gate';
+  const trail = Array.isArray(o.trail) ? o.trail : [];
+
+  const rollup = Array.isArray(gate && gate.rollup) ? gate.rollup : [];
+  const byVerb = new Map(rollup.map(r => [r.verb, r]));
+  // Built from GATE_VERBS rather than from the rollup, so the record is thirteen rows even if
+  // a verb ever fails to produce one (T-23-21).
+  const rows = GATE_VERBS.map(v => byVerb.get(v) || {
+    verb: v, scope: GATE_VERB_SCOPE[v], targets: 0, severity: 'not_applicable',
+    detail: 'the verb produced no rollup row', findings: [],
+  });
+
+  const tally = { pass: 0, warning: 0, error: 0, not_applicable: 0, not_yet: 0 };
+  for (const r of rows) {
+    if (Object.prototype.hasOwnProperty.call(tally, r.severity)) tally[r.severity] += 1;
+  }
+
+  const padded = normalizePhaseName(String((gate && gate.phase) || ''));
+  const base = String((gate && gate.phase_dir) || '').split('/').pop() || padded;
+  const slug = base.replace(/^\d+[A-Za-z]?(?:\.\d+)*-/, '') || base || 'unknown';
+  const created = new Date().toISOString().slice(0, 10);
+
+  const out = [];
+  out.push('---');
+  out.push('status: ' + cell((gate && gate.verdict) || 'fail'));
+  out.push('agent: donny-tools verify gate');
+  out.push('phase: ' + cell(padded + '-' + slug));
+  out.push('slug: ' + cell(slug));
+  out.push('verbs_run: ' + rows.length);
+  out.push('errors: ' + tally.error);
+  out.push('warnings: ' + tally.warning);
+  out.push('not_yet: ' + tally.not_yet);
+  out.push('not_applicable: ' + tally.not_applicable);
+  out.push('passed: ' + tally.pass);
+  out.push('created: ' + created);
+  out.push('---');
+  out.push('');
+  out.push('# Phase ' + cell(padded) + ' - Record Gate');
+  out.push('');
+  out.push(...RECORDS_FORMAT_NOTE);
+  out.push('');
+  out.push('## Verdict');
+  out.push('');
+  out.push(...RECORDS_VERDICT_PROSE);
+  out.push('');
+
+  out.push('## Verb Results');
+  out.push('');
+  out.push(recordsRow(['Verb', 'Scope', 'Targets', 'Severity', 'Detail']));
+  out.push('|------|-------|---------|----------|--------|');
+  for (const r of rows) {
+    out.push(recordsRow([
+      cell(r.verb),
+      cell(RECORDS_SCOPE_LABEL[r.scope] || r.scope || 'phase'),
+      cell(r.targets === undefined || r.targets === null ? 0 : r.targets),
+      cell(r.severity),
+      cell(r.detail),
+    ]));
+  }
+  out.push('');
+
+  out.push('## Findings');
+  out.push('');
+  out.push(recordsRow(['Verb', 'Target', 'Severity', 'Finding']));
+  out.push('|------|--------|----------|---------|');
+  let omitted = 0;
+  let shown = 0;
+  for (const v of (Array.isArray(gate && gate.verbs) ? gate.verbs : [])) {
+    if (v.severity === 'pass' || v.severity === 'not_applicable') continue;
+    const found = Array.isArray(v.findings) ? v.findings : [];
+    if (found.length === 0) continue;
+    if (shown >= RECORDS_FINDINGS_CAP) { omitted += 1; continue; }
+    shown += 1;
+    out.push(recordsRow([cell(v.verb), cell(v.target || ''), cell(v.severity), cell(found.join('; '))]));
+  }
+  if (omitted > 0) {
+    out.push(recordsRow(['...', '...', '...', cell('and ' + omitted + ' more finding row(s) omitted')]));
+  }
+  out.push('');
+
+  out.push('## Record Gate Audit Trail');
+  out.push('');
+  out.push(recordsRow(['Run Date', 'Verbs', 'Errors', 'Warnings', 'Not yet', 'N/A', 'Verdict', 'Run By']));
+  out.push('|----------|-------|--------|----------|---------|-----|---------|--------|');
+  // Preserved rows are re-emitted from their parsed cells WITHOUT re-sanitizing. They were
+  // written by this renderer and are already clean; running cell() over them again would
+  // double-escape a pipe and silently rewrite history D-04 exists to keep. A table row is one
+  // line by construction, so a preserved row can never introduce a '---' at column 0.
+  for (const t of trail) out.push(recordsRow(t.map(c => String(c))));
+  out.push(recordsRow([
+    created,
+    String(rows.length),
+    String(tally.error),
+    String(tally.warning),
+    String(tally.not_yet),
+    String(tally.not_applicable),
+    cell((gate && gate.verdict) || 'fail'),
+    cell(runBy),
+  ]));
+  out.push('');
+  return out.join('\n');
+}
+
+/**
+ * Write (or re-write) a phase's NN-RECORDS.md, preserving its audit trail (D-04, D-09).
+ *
+ * The target path is built ONLY from the phase directory runGate already resolved and
+ * containment-checked against planningRoot (T-23-06), plus normalizePhaseName. No component
+ * comes from the caller's raw phase argument, so there is no traversal surface here at all.
+ *
+ * The Verb Results and Findings tables are REPLACED on every write, because the current
+ * verdict must reflect the current artifacts. Only the audit trail accumulates, and a run is
+ * never skipped because a passing record already exists (D-04 is explicit about that).
+ *
+ * @returns {string|null} the cwd-relative posix path written, or null when nothing was written
+ */
+function writeRecordsFile(cwd, gate, opts) {
+  if (!gate || gate.found !== true) return null;
+  const padded = normalizePhaseName(gate.phase);
+  const phaseAbs = path.resolve(cwd, gate.phase_dir);
+  const target = path.join(phaseAbs, padded + '-RECORDS.md');
+
+  const prior = safeReadFile(target);
+  const priorTable = prior ? recordsTable(prior, RECORDS_TRAIL_RE) : null;
+  const trail = priorTable ? priorTable.data : [];
+
+  fs.writeFileSync(target, renderRecordsMd(gate, { ...(opts || {}), trail }), 'utf-8');
+  return path.relative(cwd, target).split(path.sep).join('/');
+}
+
+/**
+ * CLI wrapper for the record gate: donny-tools.cjs verify gate <phase> [--write|--read].
+ *
+ * Three modes, one verb (HC-4 allows exactly one new CLI verb for this phase):
+ *
+ *   verify gate <phase>           runs the thirteen checkers, writes nothing
+ *   verify gate <phase> --write   runs them and writes NN-RECORDS.md, adding records_file
+ *   verify gate <phase> --read    runs NOTHING; re-reads the existing record (Plan 06 Task 2)
+ *
+ * The default stays read-only so inspection can never silently mutate the audit trail
+ * (T-23-26), and every writing caller declares itself at the call site.
  *
  * The error() on a missing argument is correct and matches every sibling verb. The rule the
  * gate must never break is the reverse one: it must never PASS an empty argument to a verb.
@@ -705,7 +955,12 @@ function runGate(cwd, phaseArg) {
 function cmdVerifyGate(cwd, phaseArg, options, raw) {
   if (!phaseArg) { error('phase required: verify gate <phase>'); }
   const result = runGate(cwd, phaseArg);
-  output(result, raw, result.found ? result.verdict : 'not_found');
+  let emitted = result;
+  if (options && options.write && result.found) {
+    const rel = writeRecordsFile(cwd, result, {});
+    if (rel) emitted = { ...result, records_file: rel };
+  }
+  output(emitted, raw, result.found ? result.verdict : 'not_found');
 }
 
 function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
@@ -2139,7 +2394,11 @@ module.exports = {
   canonPhaseNum,
   harvestCommitHashes,
   runGate,
+  renderRecordsMd,
+  writeRecordsFile,
   cmdVerifyGate,
+  splitTableRow,
+  isSeparatorRow,
   cmdVerifySummary,
   cmdVerifyPlanStructure,
   validatePlanGraph,
