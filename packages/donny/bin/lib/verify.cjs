@@ -389,6 +389,38 @@ function classifyVerbResult(verb, captured, opts) {
     }
   }
 }
+/**
+ * Reduce a milestone-wide coverage payload to the requirements mapped to one phase (D-15).
+ *
+ * cmdVerifyMilestoneCoverage takes no phase argument at all (verify.cjs:466) and always reports
+ * the whole current milestone, so D-15's per-phase view has to be a post-hoc filter on the
+ * returned requirements[] array.
+ *
+ * Matching is on the canonical phase NUMBER, never on a substring. requirements[].phase is the
+ * resolved phase DIRECTORY NAME when the phase exists on disk and the raw traceability label
+ * ("Phase 25") when it does not (verify.cjs:544), so both forms are reduced through the same
+ * digit extraction the verb itself uses at verify.cjs:539, then compared with canonPhaseNum.
+ * Substring matching would make phase 2 match 23-record-integrity-and-the-validation-gate.
+ *
+ * Constraint carried from C-9: this verb walks .planning/phases only and always reads the
+ * CURRENT REQUIREMENTS.md, with no archive fallthrough. On an archived phase the filter
+ * therefore returns an empty array, which classifyVerbResult maps to 'not_yet' rather than to a
+ * pass or a failure.
+ *
+ * @param {{gate?: string, requirements?: Array}} coverage the parsed milestone-coverage payload
+ * @param {string} phaseArg a phase number or a phase directory name
+ * @returns {Array} the subset of coverage.requirements belonging to that phase, in input order
+ */
+function filterCoverageToPhase(coverage, phaseArg) {
+  const want = canonPhaseNum((String(phaseArg || '').match(/(\d+(?:\.\d+)?)/) || [])[1]);
+  if (want === null) return [];
+  const rows = (coverage && coverage.requirements) || [];
+  return rows.filter((r) => {
+    if (!r || !r.phase) return false;
+    const got = canonPhaseNum((String(r.phase).match(/(\d+(?:\.\d+)?)/) || [])[1]);
+    return got !== null && got === want;
+  });
+}
 function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   if (!summaryPath) {
     error('summary-path required');
@@ -1816,6 +1848,8 @@ module.exports = {
   expandHomePath,
   GATE_VERBS,
   classifyVerbResult,
+  filterCoverageToPhase,
+  canonPhaseNum,
   cmdVerifySummary,
   cmdVerifyPlanStructure,
   validatePlanGraph,
