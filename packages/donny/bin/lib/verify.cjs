@@ -64,6 +64,28 @@ function captureVerb(fn) {
   }
 }
 
+/**
+ * Resolve a path from a planning artifact, expanding a leading '~/' or '$HOME/'.
+ *
+ * Why: must_haves.artifacts paths are written by a human in a PLAN, and this project's
+ * deliverables live outside the repo (for example ~/Developer/cc-autopilot/ and
+ * ~/.claude/bin/). A bare path.join(cwd, '~/x') produces '<cwd>/~/x', which never exists, so
+ * every out-of-repo artifact reads as missing. Measured before this fix: 51 of 54 artifact
+ * checks failed across the eighteen archived v5.0 plans, purely for this reason.
+ *
+ * Scope is deliberately narrow (A-03): only '~/' and '$HOME/' prefixes, plus the absolute-path
+ * passthrough that cmdVerifyPlanStructure, cmdVerifyReferences and cmdVerifyKeyLinks already
+ * use. No shell expansion, no arbitrary environment interpolation, no '~user' resolution.
+ */
+function expandHomePath(cwd, p) {
+  const home = process.env.HOME || os.homedir() || '';
+  if (p === '~' || p === '$HOME') return home;
+  if (p.startsWith('~/')) return path.join(home, p.slice(2));
+  if (p.startsWith('$HOME/')) return path.join(home, p.slice(6));
+  if (path.isAbsolute(p)) return p;
+  return path.join(cwd, p);
+}
+
 function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   if (!summaryPath) {
     error('summary-path required');
@@ -767,7 +789,7 @@ function cmdVerifyArtifacts(cwd, planFilePath, raw) {
     const artPath = artifact.path;
     if (!artPath) continue;
 
-    const artFullPath = path.join(cwd, artPath);
+    const artFullPath = expandHomePath(cwd, artPath);
     const exists = fs.existsSync(artFullPath);
     const check = { path: artPath, exists, issues: [], passed: false };
 
@@ -1488,6 +1510,7 @@ function cmdVerifySchemaDrift(cwd, phaseArg, skipFlag, raw) {
 
 module.exports = {
   captureVerb,
+  expandHomePath,
   cmdVerifySummary,
   cmdVerifyPlanStructure,
   validatePlanGraph,
