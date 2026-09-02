@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -2118,5 +2118,139 @@ describe('D-04 re-close appends', () => {
       const md = fs.readFileSync(join(root, GATE_DIR, '23-RECORDS.md'), 'utf-8');
       assert.equal(dataRows(md, '## Record Gate Audit Trail').length, 3);
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// workflow.record_gate config (GATE-03 / CONFIG-03 / D-07)
+//
+// Every assertion below that touches acceptance or rejection runs the CLI in a
+// child process on purpose: both paths end in error(), which writes to fd 2 and
+// calls process.exit(1), and neither is observable in-process.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CONFIG_TEMPLATE = resolve(ROOT, 'packages/donny/templates/config.json');
+
+/** A throwaway project root carrying only .planning/, optionally with a config.json. */
+const withConfigFixture = (config, fn) => {
+  const root = join(
+    tmpdir(),
+    'donny-record-gate-cfg-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+  );
+  fs.mkdirSync(join(root, '.planning'), { recursive: true });
+  if (config !== null) {
+    fs.writeFileSync(
+      join(root, '.planning', 'config.json'),
+      JSON.stringify(config, null, 2) + '\n',
+      'utf-8',
+    );
+  }
+  try {
+    return fn(root);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+};
+
+const readCfg = (root) => JSON.parse(fs.readFileSync(join(root, '.planning', 'config.json'), 'utf-8'));
+
+/** The exact shell idiom every workflow uses to read an optional config key. */
+const configGetIdiom = (root, key) => execSync(
+  `node ${JSON.stringify(TOOLS)} config-get ${key} --raw 2>/dev/null || echo "true"`,
+  { cwd: root, encoding: 'utf-8' },
+).trim();
+
+describe('workflow.record_gate config (GATE-03 / CONFIG-03)', () => {
+  it('is registered in VALID_CONFIG_KEYS, which is what KNOWN_TOP_LEVEL derives from', () => {
+    const { VALID_CONFIG_KEYS } = require(resolve(ROOT, 'packages/donny/bin/lib/config.cjs'));
+    assert.ok(VALID_CONFIG_KEYS.has('workflow.record_gate'), 'config-set validates against this set');
+  });
+
+  it('is accepted by config-set and lands in the workflow block', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-set', 'workflow.record_gate', 'true']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(readCfg(root).workflow.record_gate, true);
+    });
+  });
+
+  it('accepts false too, so the key is a real toggle and not a rubber stamp', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-set', 'workflow.record_gate', 'false']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(readCfg(root).workflow.record_gate, false);
+    });
+  });
+
+  it('rejects a typo and names the valid key in the message (T-23-08)', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-set', 'workflow.recrod_gate', 'true']);
+      assert.notEqual(r.status, 0, 'a typo must be an error, never a silent no-op');
+      assert.match(r.stderr, /Unknown config key/);
+      assert.match(
+        r.stderr,
+        /workflow\.record_gate/,
+        'the rejection must name the key the operator meant, not merely refuse',
+      );
+      assert.equal(readCfg(root).workflow, undefined, 'a rejected key is never written');
+    });
+  });
+
+  it('exits non-zero on a missing key, which is what makes the || fallback fire', () => {
+    withConfigFixture({ workflow: { verifier: true } }, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw']);
+      assert.notEqual(r.status, 0, 'cmdConfigGet calls error() on an absent key');
+    });
+  });
+
+  it('resolves true through the workflow shell idiom when the key is absent (D-07)', () => {
+    withConfigFixture({ workflow: { verifier: true } }, (root) => {
+      assert.equal(
+        configGetIdiom(root, 'workflow.record_gate'),
+        'true',
+        'an existing project with no record_gate key behaves as if it were true',
+      );
+    });
+  });
+
+  it('reports false through that same idiom once it is explicitly disabled', () => {
+    withConfigFixture({ workflow: { record_gate: false } }, (root) => {
+      assert.equal(
+        configGetIdiom(root, 'workflow.record_gate'),
+        'false',
+        'the || fallback must never mask an operator who turned the gate off',
+      );
+    });
+  });
+
+  it('is present and true in a newly created project config', () => {
+    withConfigFixture(null, (root) => {
+      // A throwaway HOME keeps ~/.donny/defaults.json out of the merge, so this
+      // measures buildNewProjectConfig's hardcoded block and nothing else.
+      const home = join(root, 'fake-home');
+      fs.mkdirSync(home, { recursive: true });
+      execFileSync(process.execPath, [TOOLS, 'config-new-project'], {
+        cwd: root,
+        encoding: 'utf-8',
+        env: { ...process.env, HOME: home },
+      });
+      const cfg = readCfg(root);
+      assert.equal(cfg.workflow.record_gate, true, 'a new project ships with the gate on (D-07)');
+    });
+  });
+
+  it('is present and true in templates/config.json', () => {
+    const tpl = JSON.parse(fs.readFileSync(CONFIG_TEMPLATE, 'utf-8'));
+    assert.equal(tpl.workflow.record_gate, true);
+  });
+
+  it('is deliberately absent from loadConfig, mirroring security_enforcement', () => {
+    // Both keys are read through config-get in workflow prose, never through
+    // loadConfig in Node. If this fails because record_gate was added to
+    // core.cjs, check whether security_enforcement moved there too - the two
+    // are meant to stay symmetrical (D-07).
+    const core = fs.readFileSync(resolve(ROOT, 'packages/donny/bin/lib/core.cjs'), 'utf-8');
+    assert.ok(!core.includes('security_enforcement'), 'the precedent record_gate follows');
+    assert.ok(!core.includes('record_gate'), 'record_gate must follow that precedent');
   });
 });
