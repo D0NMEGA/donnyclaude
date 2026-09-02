@@ -1990,3 +1990,133 @@ describe('GATE-02 not-run is never a pass', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECORD-04 and GATE-02, end to end through the shipped CLI.
+//
+// The individual pieces can each be correct while the composition is wrong, so these drive
+// donny-tools.cjs as a subprocess and read what actually landed on disk. Nothing here calls
+// renderRecordsMd or writeRecordsFile directly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GATE_DIR = `.planning/phases/${GATE_PHASE}`;
+const recordsIn = (root) => fs.readdirSync(join(root, GATE_DIR)).filter((f) => /RECORDS\.md$/i.test(f));
+
+describe('RECORD-04 end to end', () => {
+  it('answers "were this phase\'s records checked" from the phase directory alone', () => {
+    withGateFixture({}, (root) => {
+      const w = runTools(root, ['verify', 'gate', '23', '--write']);
+      assert.equal(w.status, 0, w.stderr);
+      assert.equal(JSON.parse(w.stdout).records_file, `${GATE_DIR}/23-RECORDS.md`);
+
+      // The padded name, not a bare RECORDS.md. audit-phase.md:117-123 carries a guard for
+      // exactly this because an auditor once wrote the bare name and broke State-A re-run
+      // detection. Node cannot make that mistake, but the assertion stays explicit.
+      assert.deepEqual(recordsIn(root), ['23-RECORDS.md']);
+
+      const md = fs.readFileSync(join(root, GATE_DIR, '23-RECORDS.md'), 'utf-8');
+      assert.ok(md.includes('## Verb Results'));
+      assert.equal(dataRows(md, '## Verb Results').length, 13);
+      const trail = dataRows(md, '## Record Gate Audit Trail');
+      assert.equal(trail.length, 1);
+      assert.match(cellsOf(trail[0])[0], /^\d{4}-\d{2}-\d{2}$/, 'the trail row must be dated');
+    });
+  });
+
+  it('agrees with a live gate run: the artifact status equals verify gate --raw', () => {
+    withGateFixture({}, (root) => {
+      runTools(root, ['verify', 'gate', '23', '--write']);
+      const fromFile = runTools(root, [
+        'frontmatter', 'get', `${GATE_DIR}/23-RECORDS.md`, '--pick', 'status',
+      ]);
+      const live = runTools(root, ['verify', 'gate', '23', '--raw']);
+      assert.equal(fromFile.stdout.trim(), live.stdout.trim());
+      assert.ok(['pass', 'fail'].includes(live.stdout.trim()));
+    });
+  });
+
+  it('reads back consistent, so the written verdict survives its own re-derivation', () => {
+    withGateFixture({}, (root) => {
+      runTools(root, ['verify', 'gate', '23', '--write']);
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.present, true);
+      assert.equal(r.has_table, true);
+      assert.equal(r.consistent, true);
+      assert.equal(r.file, `${GATE_DIR}/23-RECORDS.md`);
+    });
+  });
+});
+
+describe('GATE-02 not-run versus pass', () => {
+  it('distinguishes an un-run phase from a run one by file presence alone', () => {
+    const unrun = buildGateFixture({});
+    const ran = buildGateFixture({});
+    try {
+      runTools(ran, ['verify', 'gate', '23', '--write']);
+      // No parsing: the literal GATE-02 wording is that absence is the not-run state.
+      assert.deepEqual(recordsIn(unrun), []);
+      assert.deepEqual(recordsIn(ran), ['23-RECORDS.md']);
+
+      const a = verify.readRecordsVerdict(unrun, '23');
+      const b = verify.readRecordsVerdict(ran, '23');
+      assert.equal(a.verdict, 'not_run');
+      assert.ok(['pass', 'fail'].includes(b.verdict));
+      assert.notEqual(a.verdict, b.verdict);
+    } finally {
+      cleanupFixture(unrun);
+      cleanupFixture(ran);
+    }
+  });
+
+  it('has no path by which an absent record yields a pass', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.notEqual(r.verdict, 'pass');
+      assert.equal(r.derived, null);
+      assert.equal(r.present, false);
+      assert.equal(r.consistent, null);
+      assert.equal(runTools(root, ['verify', 'gate', '23', '--read', '--raw']).stdout, 'not_run');
+    });
+  });
+});
+
+describe('gate default is read-only', () => {
+  it('writes nothing when --write is absent', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(JSON.parse(r.stdout).records_file, undefined);
+      assert.deepEqual(recordsIn(root), [], 'inspection must never mutate the audit trail');
+    });
+  });
+});
+
+describe('D-04 re-close appends', () => {
+  it('adds a trail row per run while the Verb Results table stays at thirteen', () => {
+    withGateFixture({}, (root) => {
+      for (let i = 0; i < 3; i += 1) {
+        const r = runTools(root, ['verify', 'gate', '23', '--write']);
+        assert.equal(r.status, 0, r.stderr);
+      }
+      const md = fs.readFileSync(join(root, GATE_DIR, '23-RECORDS.md'), 'utf-8');
+      const trail = dataRows(md, '## Record Gate Audit Trail');
+      assert.equal(trail.length, 3, 'a re-close appends; it never replaces the history');
+      assert.equal(dataRows(md, '## Verb Results').length, 13);
+      assert.equal(fenceCount(md), 2);
+      assert.equal(headings(md).length, 4);
+    });
+  });
+
+  it('is not skipped because a passing record already exists', () => {
+    withGateFixture({}, (root) => {
+      runTools(root, ['verify', 'gate', '23', '--write']);
+      runTools(root, ['verify', 'gate', '23', '--write']);
+      const first = fs.readFileSync(join(root, GATE_DIR, '23-RECORDS.md'), 'utf-8');
+      assert.equal(extractFrontmatter(first).status, 'pass', 'the fixture phase passes');
+      const third = runTools(root, ['verify', 'gate', '23', '--write']);
+      assert.equal(third.status, 0, third.stderr);
+      const md = fs.readFileSync(join(root, GATE_DIR, '23-RECORDS.md'), 'utf-8');
+      assert.equal(dataRows(md, '## Record Gate Audit Trail').length, 3);
+    });
+  });
+});
