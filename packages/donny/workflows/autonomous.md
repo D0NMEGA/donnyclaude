@@ -505,10 +505,40 @@ Display the review result summary (score from UI-REVIEW.md if produced). Continu
 
 Confirm this phase's tests actually catch regressions with a soft mutation check: follow @$HOME/.claude/donny/references/mutation-gate.md on the phase's changed source. It self-skips when no unit tests changed or no mutation tool is available for the stack, reports surviving mutants as a quality signal, and NEVER hard-blocks.
 
-Record the outcome in the action ledger (fail-safe), with `--status` set to the gate result (`<survivors>/<total>`, or `skipped`, or `unavailable`), then proceed to the iterate step regardless:
+Record the outcome in the action ledger (fail-safe), with `--status` set to the gate result (`<survivors>/<total>`, or `skipped`, or `unavailable`), then proceed to the record gate (3d.7) regardless:
 ```bash
 node "$HOME/.claude/donny/bin/donny-tools.cjs" ledger append "${PHASE_NUM}" mutation --status "<result>" >/dev/null 2>&1 || true
 ```
+
+**3d.7. Record gate (soft)**
+
+> Run after 3d.6 Mutation gate, before the iterate step. This workflow is the autonomous (`--auto`) path, so the gate runs here as well as inside execute-phase (D-03).
+
+Run the deterministic record checkers over the phase's planning artifacts. No model is involved.
+
+```bash
+RECORD_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.record_gate --raw 2>/dev/null || echo "true")
+```
+
+If `RECORD_CFG` is `false`: skip silently to the iterate step.
+
+Otherwise:
+
+```bash
+node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUM}" --write >/dev/null 2>&1 || true
+RECORD_VERDICT=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUM}" --read --raw 2>/dev/null || echo "not_run")
+```
+
+Record the outcome in the action ledger (fail-safe), then proceed to the iterate step regardless:
+```bash
+node "$HOME/.claude/donny/bin/donny-tools.cjs" ledger append "${PHASE_NUM}" record-gate --status "${RECORD_VERDICT}" >/dev/null 2>&1 || true
+```
+
+Report one line in the autonomous progress output: `[records] {RECORD_VERDICT}` and, when the verdict is `fail`, the failing checker names.
+
+**This step NEVER hard-blocks.** A `fail` or `not_run` verdict is recorded and the loop continues (D-02, and the same posture 3d.6 already takes).
+
+**On the double run.** Step 3c runs execute-phase inline, and the `record_gate` step added there has already fired by the time this step runs. That is deliberate and is NOT deduplicated. D-04 states the gate never skips because a passing record exists, and the verdict is always derived from the current artifacts. Between the execute-phase close and this point, 3d.5 UI Review and 3d.6 Mutation gate have run and may have added artifacts, so this is a later observation rather than a repeat of the same one. Both runs append a dated row to the same `NN-RECORDS.md` audit trail, distinguished by the `Run By` column, and the trail is the point: it is the history of every run. Do not add a "skip if a record already exists" branch.
 
 </step>
 
@@ -1067,6 +1097,7 @@ Log `Phase {N} ⏭ {Name} - Skipped by user` and proceed to iterate.
 - [ ] Frontend phases get UI review audit after successful execution (step 3d.5) if UI-SPEC exists
 - [ ] UI phase and UI review respect workflow.ui_phase and workflow.ui_review config toggles
 - [ ] UI review is advisory (non-blocking) - phase proceeds to iterate regardless of score
+- [ ] Record gate runs at step 3d.7 after the mutation gate, records its verdict in the action ledger, and never blocks the loop
 - [ ] `--only N` restricts execution to exactly one phase
 - [ ] `--only N` skips lifecycle step (audit/complete/cleanup)
 - [ ] `--only N` exits cleanly after single phase completes
