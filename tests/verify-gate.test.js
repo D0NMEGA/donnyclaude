@@ -272,3 +272,112 @@ describe('pre-repair v5 fixture', () => {
     assert.match(manifest, /f328bee/);
   });
 });
+
+// ── cmdVerifySummary requirements-completed (D-16) ──────────────────────────
+// The phase's headline check. Before this plan cmdVerifySummary imported extractFrontmatter
+// and never called it, so the one field the milestone turns on went unchecked. There are
+// three failing states, not two: besides missing and empty, the key can parse as a STRING (a
+// trailing inline comment defeats the endsWith(']') test at frontmatter.cjs:55) or the whole
+// block can be shadowed by a body `---` pair (extractFrontmatter keeps the LAST block). Both
+// look correct to a human reader, and both are the July J2 defect the pre-repair fixture
+// above carries. The predicate is the same Array.isArray gate cmdVerifyMilestoneCoverage:586
+// uses, so a SUMMARY this check accepts is one the coverage engine can read.
+
+const SUMMARY_PHASE = '23-fixture';
+
+/** Build a one-SUMMARY fixture, drive cmdVerifySummary over it, return the parsed JSON. */
+function runVerifySummary(content, { name = '23-01-SUMMARY.md' } = {}) {
+  const root = buildPlanningFixture({ phase: SUMMARY_PHASE, summaries: [{ name, content }] });
+  try {
+    // Relative on purpose: cmdVerifySummary resolves with a bare path.join(cwd, summaryPath)
+    // and has no path.isAbsolute guard, unlike its sibling verbs.
+    const r = verify.captureVerb(
+      () => verify.cmdVerifySummary(root, `.planning/phases/${SUMMARY_PHASE}/${name}`, 2, false),
+    );
+    assert.equal(r.ok, true, `expected JSON, got ${JSON.stringify(r)}`);
+    return r.json;
+  } finally {
+    cleanupFixture(root);
+  }
+}
+
+describe('cmdVerifySummary requirements-completed (D-16)', () => {
+  it('accepts a parseable array and reports it verbatim', () => {
+    const j = runVerifySummary(summaryContent({ requirementsCompleted: ['PILOT-04'] }));
+    assert.deepEqual(j.checks.requirements_completed, ['PILOT-04']);
+    assert.deepEqual(j.errors, []);
+    assert.equal(j.passed, true);
+  });
+
+  it('fails a SUMMARY with no requirements-completed key', () => {
+    const j = runVerifySummary(summaryContent({ requirementsCompleted: null }));
+    assert.equal(j.passed, false);
+    assert.equal(j.checks.requirements_completed, null);
+    assert.ok(j.errors.some(e => /requirements-completed missing/.test(e)),
+      `expected a missing error, got ${JSON.stringify(j.errors)}`);
+  });
+
+  it('fails an empty requirements-completed list, and keeps the parsed empty array', () => {
+    const j = runVerifySummary(summaryContent({ requirementsCompleted: [] }));
+    assert.equal(j.passed, false);
+    assert.deepEqual(j.checks.requirements_completed, []);
+    assert.ok(j.errors.some(e => /requirements-completed is empty/.test(e)),
+      `expected an empty error, got ${JSON.stringify(j.errors)}`);
+  });
+
+  it('fails the `[]  # REQUIRED - ...` form, which parses as a string', () => {
+    const j = runVerifySummary(summaryContent({ requirementsCompleted: 'inline-comment' }));
+    assert.equal(j.passed, false);
+    assert.equal(j.checks.requirements_completed, null);
+    assert.ok(j.errors.some(e => /not a YAML list/.test(e)),
+      `expected a not-a-list error, got ${JSON.stringify(j.errors)}`);
+  });
+
+  it('fails when a body `---` pair shadows otherwise valid frontmatter', () => {
+    const j = runVerifySummary(summaryContent({ requirementsCompleted: 'shadowed' }));
+    assert.equal(j.passed, false);
+    assert.equal(j.checks.requirements_completed, null);
+    // Shadowing is indistinguishable from absence at the parse layer, so it lands on the
+    // missing branch. The error string names the shadowing case so the reader is not sent
+    // hunting for a key that is right there in the file.
+    assert.ok(j.errors.some(e => /requirements-completed missing/.test(e)),
+      `expected a missing error, got ${JSON.stringify(j.errors)}`);
+  });
+
+  it('carries requirements_completed: null on the missing-file early return', () => {
+    const root = buildPlanningFixture({ phase: SUMMARY_PHASE });
+    try {
+      const r = verify.captureVerb(
+        () => verify.cmdVerifySummary(root, `.planning/phases/${SUMMARY_PHASE}/23-99-SUMMARY.md`, 2, false),
+      );
+      assert.equal(r.ok, true, `expected JSON, got ${JSON.stringify(r)}`);
+      assert.equal(r.json.passed, false);
+      assert.deepEqual(r.json.checks, {
+        summary_exists: false,
+        files_created: { checked: 0, found: 0, missing: [] },
+        commits_exist: false,
+        self_check: 'not_found',
+        requirements_completed: null,
+      });
+      assert.deepEqual(r.json.errors, ['SUMMARY.md not found']);
+    } finally {
+      cleanupFixture(root);
+    }
+  });
+
+  it('leaves the four pre-existing checks behaving exactly as before', () => {
+    const failing = summaryContent({ requirementsCompleted: ['PILOT-04'] })
+      .replace('## Self-Check: PASSED', '## Self-Check: FAILED\n\nMissing: src/never-written.js');
+    const j = runVerifySummary(failing);
+    assert.equal(j.checks.summary_exists, true);
+    assert.deepEqual(j.checks.files_created, { checked: 0, found: 0, missing: [] });
+    assert.equal(j.checks.commits_exist, false);
+    assert.equal(j.checks.self_check, 'failed');
+    assert.ok(j.errors.includes('Self-check section indicates failure'),
+      `expected the self-check error, got ${JSON.stringify(j.errors)}`);
+    // The new check is orthogonal: a valid requirements-completed does not rescue a red
+    // self-check, and a red self-check does not suppress the new key.
+    assert.deepEqual(j.checks.requirements_completed, ['PILOT-04']);
+    assert.equal(j.passed, false);
+  });
+});
