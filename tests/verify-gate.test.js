@@ -950,3 +950,411 @@ describe('milestone-coverage classification (D-15)', () => {
     assert.ok(!ids.includes('OK-01'), 'a satisfied requirement is not a finding');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan 05: harvestCommitHashes, runGate and cmdVerifyGate
+//
+// Plan 04 decided what one verb result MEANS. This block covers what happens when all
+// thirteen are driven at once: that every verb runs at its correct scope, that none of them
+// is ever handed an empty required argument (T-23-02, which would process.exit(1) mid-run),
+// that the resolved phase directory cannot escape .planning (T-23-06), and that thirteen
+// nested captureVerb calls leave fs.writeSync exactly as they found it (T-23-01).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GATE_PHASE = '23-gate';
+const SEVERITIES = ['pass', 'warning', 'error', 'not_applicable', 'not_yet'];
+
+const gatePlans = () => ([
+  { name: '23-01-PLAN.md', content: validPlanContent({ phase: GATE_PHASE, plan: '01', wave: 0 }) },
+  { name: '23-02-PLAN.md', content: validPlanContent({ phase: GATE_PHASE, plan: '02', wave: 1 }) },
+]);
+
+const gateSummaries = () => ([
+  { name: '23-01-SUMMARY.md', content: summaryContent({ phase: GATE_PHASE, plan: '01', requirementsCompleted: ['FIX-01'] }) },
+  { name: '23-02-SUMMARY.md', content: summaryContent({ phase: GATE_PHASE, plan: '02', requirementsCompleted: ['FIX-01'] }) },
+]);
+
+const buildGateFixture = (over = {}) => buildPlanningFixture({
+  phase: GATE_PHASE,
+  plans: gatePlans(),
+  summaries: gateSummaries(),
+  verification: verificationContent({ phase: GATE_PHASE }),
+  security: securityContent({ phase: GATE_PHASE, threatsOpen: 0 }),
+  requirements: requirementsContent({ entries: [{ id: 'FIX-01', checked: true, phase: 'Phase 23' }] }),
+  ...over,
+});
+
+/** Build a fixture, hand it to fn, and always remove it. */
+const withGateFixture = (over, fn) => {
+  const root = buildGateFixture(over);
+  try { return fn(root); } finally { cleanupFixture(root); }
+};
+
+/** A SUMMARY carrying a Task Commits section plus hex-looking words outside it. */
+const summaryWithCommits = ({ inside = [], outside = [], trailingSection = true } = {}) => {
+  const lines = [
+    '---',
+    'status: PASS',
+    'requirements-completed: [FIX-01]',
+    '---',
+    '',
+    '# Fixture summary',
+    '',
+    '## Accomplishments',
+    '',
+  ];
+  for (const h of outside) lines.push(`Prose mentioning ${h} well outside any commit section.`);
+  lines.push('', '## Task Commits', '');
+  for (const h of inside) lines.push(`1. Task - \`${h}\` (feat: something)`);
+  if (trailingSection) {
+    lines.push('', '## Self-Check: PASSED', '');
+    for (const h of outside) lines.push(`Also ${h} after the section closed.`);
+  }
+  lines.push('');
+  return lines.join('\n');
+};
+
+describe('harvestCommitHashes', () => {
+  it('is exported as a function', () => {
+    assert.equal(typeof verify.harvestCommitHashes, 'function');
+  });
+
+  it('returns only the hashes inside the Task Commits section', () => {
+    withGateFixture({
+      summaries: [{
+        name: '23-01-SUMMARY.md',
+        content: summaryWithCommits({
+          inside: ['aaaaaaa', 'bbbbbbb'],
+          outside: ['ccccccc', 'ddddddd'],
+        }),
+      }],
+    }, (root) => {
+      const got = verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['23-01-SUMMARY.md']);
+      assert.deepEqual(got, ['aaaaaaa', 'bbbbbbb']);
+    });
+  });
+
+  it('stops at the next level-two heading and keeps document order', () => {
+    withGateFixture({
+      summaries: [{
+        name: '23-01-SUMMARY.md',
+        content: summaryWithCommits({ inside: ['1111111', '2222222', '3333333'], outside: ['9999999'] }),
+      }],
+    }, (root) => {
+      const got = verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['23-01-SUMMARY.md']);
+      assert.deepEqual(got, ['1111111', '2222222', '3333333']);
+    });
+  });
+
+  it('deduplicates across SUMMARY files', () => {
+    withGateFixture({
+      summaries: [
+        { name: '23-01-SUMMARY.md', content: summaryWithCommits({ inside: ['abcdef1', 'abcdef2'] }) },
+        { name: '23-02-SUMMARY.md', content: summaryWithCommits({ inside: ['abcdef2', 'abcdef3'] }) },
+      ],
+    }, (root) => {
+      const got = verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['23-01-SUMMARY.md', '23-02-SUMMARY.md']);
+      assert.deepEqual(got, ['abcdef1', 'abcdef2', 'abcdef3']);
+    });
+  });
+
+  it('caps the harvest, bounding the git subprocesses a crafted document can provoke', () => {
+    const many = [];
+    for (let i = 0; i < 40; i += 1) many.push(String(1000000 + i));
+    withGateFixture({
+      summaries: [{ name: '23-01-SUMMARY.md', content: summaryWithCommits({ inside: many }) }],
+    }, (root) => {
+      const got = verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['23-01-SUMMARY.md']);
+      assert.equal(got.length, 20, 'default cap is 20 hashes');
+      assert.equal(got[0], '1000000');
+      const capped = verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['23-01-SUMMARY.md'], 5);
+      assert.equal(capped.length, 5);
+    });
+  });
+
+  it('returns an empty array when no SUMMARY has a Task Commits section', () => {
+    withGateFixture({}, (root) => {
+      const got = verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['23-01-SUMMARY.md', '23-02-SUMMARY.md']);
+      assert.deepEqual(got, []);
+    });
+  });
+
+  it('tolerates a missing file and an empty file list without throwing', () => {
+    withGateFixture({}, (root) => {
+      assert.deepEqual(verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, ['does-not-exist.md']), []);
+      assert.deepEqual(verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, []), []);
+      assert.deepEqual(verify.harvestCommitHashes(root, `.planning/phases/${GATE_PHASE}`, null), []);
+    });
+  });
+});
+
+describe('runGate', () => {
+  it('is exported as a function', () => {
+    assert.equal(typeof verify.runGate, 'function');
+  });
+
+  it('drives every one of the thirteen verbs and rolls them up into thirteen rows', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, '23');
+      assert.equal(r.found, true);
+      assert.equal(r.schema, 'verify-gate');
+      assert.equal(r.phase_dir, `.planning/phases/${GATE_PHASE}`);
+      const seen = new Set(r.verbs.map((v) => v.verb));
+      for (const v of verify.GATE_VERBS) {
+        assert.ok(seen.has(v), `every gate verb must produce at least one row: ${v}`);
+      }
+      assert.equal(r.rollup.length, 13);
+      assert.deepEqual(r.rollup.map((x) => x.verb), verify.GATE_VERBS);
+    });
+  });
+
+  it('counts every invocation exactly once', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, '23');
+      const sum = SEVERITIES.reduce((acc, s) => acc + r.counts[s], 0);
+      assert.equal(sum, r.verbs.length, 'the five severity counts must sum to the invocation count');
+      assert.equal(r.counts.total, r.verbs.length);
+    });
+  });
+
+  it('assigns every row one of the five known severities', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, '23');
+      for (const row of r.verbs) {
+        assert.ok(SEVERITIES.includes(row.severity), `unknown severity ${row.severity} on ${row.verb}`);
+        assert.equal(typeof row.detail, 'string');
+        assert.ok(Array.isArray(row.findings));
+      }
+    });
+  });
+
+  it('scopes each verb: seven on the phase, four per PLAN, one per SUMMARY', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, '23');
+      const scopeOf = (v) => r.rollup.find((x) => x.verb === v).scope;
+      assert.equal(scopeOf('phase-completeness'), 'phase');
+      assert.equal(scopeOf('milestone-coverage'), 'phase');
+      assert.equal(scopeOf('commits'), 'phase');
+      for (const v of ['plan-structure', 'references', 'artifacts', 'key-links']) {
+        assert.equal(scopeOf(v), 'plan', `${v} iterates PLAN files`);
+        assert.equal(r.verbs.filter((x) => x.verb === v).length, 2, `${v} runs once per PLAN`);
+        assert.deepEqual(
+          r.verbs.filter((x) => x.verb === v).map((x) => x.target),
+          ['23-01-PLAN.md', '23-02-PLAN.md'],
+        );
+      }
+      assert.equal(scopeOf('verify-summary'), 'summary');
+      assert.deepEqual(
+        r.verbs.filter((x) => x.verb === 'verify-summary').map((x) => x.target),
+        ['23-01-SUMMARY.md', '23-02-SUMMARY.md'],
+      );
+    });
+  });
+
+  it('passes a healthy fixture phase and never reports not_run', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, '23');
+      const errs = r.verbs.filter((x) => x.severity === 'error');
+      assert.deepEqual(errs.map((e) => `${e.verb}: ${e.detail}`), [], 'a clean fixture phase must produce zero errors');
+      assert.equal(r.counts.error, 0);
+      assert.equal(r.verdict, 'pass');
+      assert.notEqual(r.verdict, 'not_run');
+    });
+  });
+
+  it('fails when a verb reports an error, and the verdict follows counts.error', () => {
+    withGateFixture({
+      verification: verificationContent({ phase: GATE_PHASE, status: 'PASS' }),
+    }, (root) => {
+      const r = verify.runGate(root, '23');
+      const pv = r.verbs.find((x) => x.verb === 'phase-verified');
+      assert.equal(pv.severity, 'error', 'status PASS is the J1 defect, not a pass');
+      assert.ok(r.counts.error > 0);
+      assert.equal(r.verdict, 'fail');
+    });
+  });
+
+  it('returns the not-found shape for an unknown phase instead of throwing', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, 'nope');
+      assert.equal(r.found, false);
+      assert.equal(r.error, 'Phase not found');
+      assert.equal(r.phase, 'nope');
+    });
+  });
+
+  it('refuses a traversal argument rather than resolving outside .planning (T-23-06)', () => {
+    withGateFixture({}, (root) => {
+      for (const bad of ['../../etc', '../..', '/etc', '.planning/../..']) {
+        const r = verify.runGate(root, bad);
+        assert.equal(r.found, false, `${bad} must not resolve to a phase`);
+        assert.ok(!r.rollup, 'a refused argument produces no verb results at all');
+      }
+    });
+  });
+
+  it('leaves fs.writeSync identical after driving all thirteen verbs (T-23-01)', () => {
+    withGateFixture({}, (root) => {
+      const before = fs.writeSync;
+      verify.runGate(root, '23');
+      assert.equal(fs.writeSync, before, 'thirteen nested captures must all restore fd-1');
+    });
+  });
+
+  it('writes nothing to stdout of its own accord', () => {
+    withGateFixture({}, (root) => {
+      const captured = verify.captureVerb(() => { verify.runGate(root, '23'); });
+      assert.equal(captured.ok, false);
+      assert.equal(captured.error, 'verb produced no output', 'runGate must not call output()');
+    });
+  });
+
+  it('marks commits not_applicable rather than calling the verb with an empty array (T-23-02)', () => {
+    withGateFixture({}, (root) => {
+      // cmdVerifyCommits calls error() -> process.exit(1) on an empty hash array. If the guard
+      // regressed, this test process would die here and the whole run would fail loudly.
+      const r = verify.runGate(root, '23');
+      const row = r.verbs.find((x) => x.verb === 'commits');
+      assert.equal(row.severity, 'not_applicable');
+      assert.match(row.detail, /Task Commits/);
+    });
+  });
+
+  it('survives a phase with zero SUMMARY files', () => {
+    withGateFixture({ summaries: [] }, (root) => {
+      const r = verify.runGate(root, '23');
+      assert.equal(r.found, true);
+      assert.equal(r.verbs.filter((x) => x.verb === 'verify-summary').length, 0);
+      const row = r.rollup.find((x) => x.verb === 'verify-summary');
+      assert.equal(row.targets, 0);
+      assert.equal(row.severity, 'not_applicable');
+      assert.equal(r.verbs.find((x) => x.verb === 'commits').severity, 'not_applicable');
+    });
+  });
+
+  it('survives a phase with zero PLAN files', () => {
+    withGateFixture({ plans: [], summaries: [] }, (root) => {
+      const r = verify.runGate(root, '23');
+      assert.equal(r.found, true);
+      assert.equal(r.rollup.length, 13);
+      for (const v of ['plan-structure', 'references', 'artifacts', 'key-links']) {
+        const row = r.rollup.find((x) => x.verb === v);
+        assert.equal(row.targets, 0, `${v} has no targets`);
+        assert.equal(row.severity, 'not_applicable');
+      }
+    });
+  });
+
+  it('runs commits once for the whole phase when hashes are present', () => {
+    withGateFixture({
+      summaries: [{ name: '23-01-SUMMARY.md', content: summaryWithCommits({ inside: ['abc1234', 'def5678'] }) }],
+    }, (root) => {
+      const r = verify.runGate(root, '23');
+      const rows = r.verbs.filter((x) => x.verb === 'commits');
+      assert.equal(rows.length, 1, 'commits runs once, not once per SUMMARY');
+      assert.equal(rows[0].scope, 'phase');
+      // Neither hash is in the fixture repo, which the classifier records as a warning.
+      assert.equal(rows[0].severity, 'warning');
+      assert.equal(rows[0].findings.length, 2);
+    });
+  });
+
+  it('rolls the worst severity per verb up into the rollup row', () => {
+    withGateFixture({
+      summaries: [
+        { name: '23-01-SUMMARY.md', content: summaryContent({ phase: GATE_PHASE, plan: '01', requirementsCompleted: ['FIX-01'] }) },
+        { name: '23-02-SUMMARY.md', content: summaryContent({ phase: GATE_PHASE, plan: '02', requirementsCompleted: null }) },
+      ],
+    }, (root) => {
+      const r = verify.runGate(root, '23');
+      const row = r.rollup.find((x) => x.verb === 'verify-summary');
+      assert.equal(row.targets, 2);
+      assert.equal(row.severity, 'error', 'one erroring target makes the rollup row an error');
+      assert.equal(row.counts.error, 1);
+      assert.equal(row.counts.pass, 1);
+      assert.ok(row.findings.some((f) => /requirements-completed/.test(f)));
+    });
+  });
+
+  it('carries the phase identity and a timestamp the record can quote', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.runGate(root, '23');
+      assert.equal(r.phase, '23');
+      assert.equal(r.archived, null);
+      assert.match(r.generated_at, /^\d{4}-\d{2}-\d{2}T/);
+    });
+  });
+});
+
+describe('runGate against the archived v5.0 Phase 19', { skip: !hasCco }, () => {
+  it('resolves the archived directory and tags the milestone', () => {
+    const r = verify.runGate(CCO_ROOT, '19');
+    assert.equal(r.found, true);
+    assert.equal(r.phase_dir, CCO_PHASE_19);
+    assert.equal(r.archived, 'v5.0');
+    assert.equal(r.rollup.length, 13);
+  });
+
+  it('does not fail an archived phase on inputs a later command owns', () => {
+    const r = verify.runGate(CCO_ROOT, '19');
+    const sev = (v) => r.rollup.find((x) => x.verb === v).severity;
+    assert.notEqual(sev('threats-clear'), 'error', 'SECURITY.md absence is not a record defect');
+    assert.equal(sev('ui-reviewed'), 'not_applicable', 'no v5.0 phase has a UI-REVIEW.md');
+  });
+
+  it('leaves fs.writeSync identical after a real archived run', () => {
+    const before = fs.writeSync;
+    verify.runGate(CCO_ROOT, '19');
+    assert.equal(fs.writeSync, before);
+  });
+});
+
+describe('cmdVerifyGate', () => {
+  it('is exported as a function', () => {
+    assert.equal(typeof verify.cmdVerifyGate, 'function');
+  });
+
+  it('emits exactly one JSON document through output()', () => {
+    withGateFixture({}, (root) => {
+      const captured = verify.captureVerb(() => { verify.cmdVerifyGate(root, '23', {}, false); });
+      assert.equal(captured.ok, true, 'the gate must produce one parseable JSON document');
+      assert.equal(captured.json.schema, 'verify-gate');
+      assert.equal(captured.json.rollup.length, 13);
+    });
+  });
+
+  it('honours --raw by emitting the bare verdict', () => {
+    withGateFixture({}, (root) => {
+      const before = fs.writeSync;
+      const chunks = [];
+      fs.writeSync = function (fd, data, ...rest) {
+        if (fd === 1) { chunks.push(String(data)); return String(data).length; }
+        return before.call(fs, fd, data, ...rest);
+      };
+      try { verify.cmdVerifyGate(root, '23', {}, true); } finally { fs.writeSync = before; }
+      assert.equal(chunks.join(''), 'pass');
+    });
+  });
+
+  it('emits not_found in raw mode for an unresolvable phase', () => {
+    withGateFixture({}, (root) => {
+      const before = fs.writeSync;
+      const chunks = [];
+      fs.writeSync = function (fd, data, ...rest) {
+        if (fd === 1) { chunks.push(String(data)); return String(data).length; }
+        return before.call(fs, fd, data, ...rest);
+      };
+      try { verify.cmdVerifyGate(root, 'nope', {}, true); } finally { fs.writeSync = before; }
+      assert.equal(chunks.join(''), 'not_found');
+    });
+  });
+
+  it('accepts and ignores the options slot Plan 06 fills', () => {
+    withGateFixture({}, (root) => {
+      const a = verify.captureVerb(() => { verify.cmdVerifyGate(root, '23', {}, false); });
+      const b = verify.captureVerb(() => { verify.cmdVerifyGate(root, '23', { write: true }, false); });
+      assert.equal(a.ok && b.ok, true);
+      assert.deepEqual(a.json.rollup.map((r) => r.severity), b.json.rollup.map((r) => r.severity));
+    });
+  });
+});
