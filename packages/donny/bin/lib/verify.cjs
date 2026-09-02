@@ -937,6 +937,124 @@ function writeRecordsFile(cwd, gate, opts) {
   return path.relative(cwd, target).split(path.sep).join('/');
 }
 
+/** The five per-verb severities a Verb Results row may carry. Anything else is an error. */
+const RECORDS_SEVERITIES = ['pass', 'warning', 'error', 'not_applicable', 'not_yet'];
+
+/**
+ * Re-derive a phase's record-gate verdict from its NN-RECORDS.md body table (D-11).
+ *
+ * This is the audit-phase A6 ENFORCING GATE pattern (workflows/audit-phase.md:138-148) applied
+ * to the record gate: the frontmatter `status` the writer emitted is reported as `declared` and
+ * is never trusted. The Verb Results table is authoritative, exactly as the Threat Register
+ * table is authoritative over `threats_open` in threatRegisterStatus.
+ *
+ * Three non-pass states, all distinct and none of which may read as a pass:
+ *   absent file           -> { present: false, verdict: 'not_run' }   (D-10, GATE-02)
+ *   present, no table     -> { present: true, has_table: false, verdict: 'not_run' }
+ *   present, table has an 'error' row -> derived 'fail'
+ *
+ * The 'present but unparseable equals not proven' rule is deliberate and is copied from
+ * has_register: false -> treat as NOT clear (audit-phase.md:148).
+ *
+ * @param {string} cwd project root
+ * @param {string} phaseArg phase number, id or directory name
+ */
+function readRecordsVerdict(cwd, phaseArg) {
+  const absent = (why) => ({
+    present: false,
+    has_table: false,
+    verdict: 'not_run',
+    derived: null,
+    declared: null,
+    consistent: null,
+    counts: { pass: 0, warning: 0, error: 0, not_applicable: 0, not_yet: 0 },
+    file: null,
+    detail: why + ' The record gate has not run for this phase: not_run, which is not a pass.',
+  });
+
+  // Resolution goes through findPhaseInternal and the same planningRoot containment check
+  // runGate applies (T-23-06). A raw path is never accepted.
+  const info = findPhaseInternal(cwd, phaseArg);
+  if (!info || !info.found) return absent('Phase not found.');
+  const rootAbs = path.resolve(planningRoot(cwd));
+  const phaseAbs = path.resolve(cwd, info.directory);
+  if (phaseAbs !== rootAbs && !phaseAbs.startsWith(rootAbs + path.sep)) {
+    return absent('Resolved phase directory escapes .planning.');
+  }
+
+  // Detection by glob, matching audit-phase.md:69's *-SECURITY.md State A / State B check.
+  let files = [];
+  try {
+    files = fs.readdirSync(phaseAbs).filter(f => /-RECORDS\.md$/i.test(f) || f === 'RECORDS.md').sort();
+  } catch {
+    return absent('Phase directory unreadable.');
+  }
+  if (files.length === 0) return absent('No *-RECORDS.md in the phase directory.');
+
+  const rel = path.relative(cwd, path.join(phaseAbs, files[files.length - 1])).split(path.sep).join('/');
+  const content = safeReadFile(path.join(phaseAbs, files[files.length - 1])) || '';
+  const declaredRaw = extractFrontmatter(content).status;
+  const declared = (typeof declaredRaw === 'string' && declaredRaw.trim() !== '') ? declaredRaw.trim() : null;
+
+  const table = recordsTable(content, RECORDS_VERB_RESULTS_RE);
+  const sevIdx = table ? table.header.findIndex(c => /^severity$/i.test(c)) : -1;
+  if (!table || sevIdx === -1 || table.data.length === 0) {
+    const why = !table
+      ? 'has no ## Verb Results section'
+      : (sevIdx === -1 ? 'has a ## Verb Results table with no Severity column' : 'has an empty ## Verb Results table');
+    return {
+      present: true,
+      has_table: false,
+      verdict: 'not_run',
+      derived: null,
+      declared,
+      consistent: null,
+      counts: { pass: 0, warning: 0, error: 0, not_applicable: 0, not_yet: 0 },
+      file: rel,
+      detail: `${rel} ${why}, so nothing was proven: not_run, which is not a pass`
+        + (declared ? ` (its frontmatter declares '${declared}', which carries no authority here).` : '.'),
+    };
+  }
+
+  const counts = { pass: 0, warning: 0, error: 0, not_applicable: 0, not_yet: 0 };
+  const unknown = [];
+  for (const cells of table.data) {
+    const sev = String(cells[sevIdx] || '').trim().toLowerCase();
+    if (RECORDS_SEVERITIES.includes(sev)) {
+      counts[sev] += 1;
+    } else {
+      // An unreadable severity must never fall through to clean: it is scored as an error and
+      // the row is named, so a truncated or hand-mangled cell is loud rather than silent.
+      counts.error += 1;
+      unknown.push(`${cells[0] || 'row'}: unrecognised severity '${cells[sevIdx] || ''}'`);
+    }
+  }
+
+  const derived = counts.error > 0 ? 'fail' : 'pass';
+  const consistent = declared === null ? null : declared.toLowerCase() === derived;
+  const parts = [
+    `${rel}: ${table.data.length} verb row(s) re-derive '${derived}'`,
+    `(${counts.error} error, ${counts.warning} warning, ${counts.pass} pass,`
+      + ` ${counts.not_yet} not_yet, ${counts.not_applicable} not_applicable).`,
+  ];
+  if (unknown.length) parts.push(`Unrecognised severities scored as errors: ${unknown.join('; ')}.`);
+  if (consistent === false) {
+    parts.push(`The frontmatter declares '${declared}' and disagrees; the table wins (D-11).`);
+  }
+
+  return {
+    present: true,
+    has_table: true,
+    verdict: derived,
+    derived,
+    declared,
+    consistent,
+    counts,
+    file: rel,
+    detail: parts.join(' '),
+  };
+}
+
 /**
  * CLI wrapper for the record gate: donny-tools.cjs verify gate <phase> [--write|--read].
  *
@@ -954,6 +1072,13 @@ function writeRecordsFile(cwd, gate, opts) {
  */
 function cmdVerifyGate(cwd, phaseArg, options, raw) {
   if (!phaseArg) { error('phase required: verify gate <phase>'); }
+  // --read is handled first and returns before any checker runs, so it wins over --write and
+  // a read can never mutate the audit trail it is reporting on.
+  if (options && options.read) {
+    const rec = readRecordsVerdict(cwd, phaseArg);
+    output(rec, raw, rec.verdict);
+    return;
+  }
   const result = runGate(cwd, phaseArg);
   let emitted = result;
   if (options && options.write && result.found) {
@@ -2396,6 +2521,7 @@ module.exports = {
   runGate,
   renderRecordsMd,
   writeRecordsFile,
+  readRecordsVerdict,
   cmdVerifyGate,
   splitTableRow,
   isSeparatorRow,
