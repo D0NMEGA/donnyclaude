@@ -1452,3 +1452,104 @@ describe('verify gate CLI', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Real-artifact calibration
+//
+// The fixture suite pins SEMANTICS: does the classifier say the right thing about a known
+// input. It cannot pin CALIBRATION: does the gate stay quiet on artifacts that are actually
+// fine. A fixture with two clean plans will never reveal that `artifacts` failed 51 of 54
+// checks on real work. This project's own recorded scar is a clean 98-of-98 suite that hid
+// three HIGH defects at roughly 37 percent mutation survival, so a green fixture suite is
+// necessary and not sufficient.
+//
+// MEASURED 2026-09-02, donnyclaude at 0a1c1be, claudecodeoptimized at 22e2963.
+// Three consecutive runs per phase produced identical counts.
+//
+//   phase  verdict  pass  warning  error  not_applicable  not_yet  total
+//   19     pass       9     16       0          2            1       28
+//   20     fail      12     10       3          2            1       28
+//   21     fail      15     15       5          2            1       38
+//   22     pass      11     14       0          2            1       28
+//
+// Every one of the eight errors is the SAME finding, and it is a real record defect rather
+// than a classifier miscalibration: 20-01/02/03 and 21-01/02/03/04/05 carry FOUR '---' lines,
+// so extractFrontmatter takes the LAST pair (frontmatter.cjs:16-17), the real block is
+// shadowed, and the file parses to ZERO frontmatter keys. Seven of the eight visibly contain
+// a `requirements-completed:` line that no checker can see; 21-04 has none at all. This
+// survived Phase 22's repair pass, which fixed the milestone-coverage symptom (20-04 and
+// 21-06 do parse, and carry the PILOT ids, so coverage reads 10/10) without removing the
+// decorative body rules on the other eight files.
+//
+// So the ceiling is NOT raised to absorb these. They are the drift the milestone exists to
+// catch, the gate reproduces them deterministically, and the two phases nobody disputes are
+// healthy (19 and 22) come back with exactly zero errors.
+const CEILING = { 19: 0, 20: 3, 21: 5, 22: 0 };
+
+const CCO_ARCHIVE = resolve(CCO_ROOT, '.planning/milestones/v5.0-phases');
+const hasArchive = fs.existsSync(CCO_ARCHIVE);
+
+describe('real-artifact calibration', { skip: !hasArchive }, () => {
+  for (const phase of Object.keys(CEILING)) {
+    describe(`archived v5.0 phase ${phase}`, () => {
+      it('stays at or below the measured error ceiling', () => {
+        const r = verify.runGate(CCO_ROOT, phase);
+        assert.equal(r.found, true);
+        assert.ok(
+          r.counts.error <= CEILING[phase],
+          `phase ${phase}: ${r.counts.error} error(s), ceiling ${CEILING[phase]}\n` +
+            r.verbs.filter((x) => x.severity === 'error')
+              .map((x) => `  ${x.verb} ${x.target || ''}: ${x.detail}`).join('\n'),
+        );
+      });
+
+      it('still runs all thirteen checkers on real data', () => {
+        const r = verify.runGate(CCO_ROOT, phase);
+        assert.equal(r.rollup.length, 13);
+        assert.deepEqual(r.rollup.map((x) => x.verb), verify.GATE_VERBS);
+      });
+
+      it('assigns only known severities, so no unclassified string reaches a record', () => {
+        const r = verify.runGate(CCO_ROOT, phase);
+        assert.ok(r.verbs.every((x) => SEVERITIES.includes(x.severity)));
+        assert.ok(r.rollup.every((x) => SEVERITIES.includes(x.severity)));
+        assert.equal(SEVERITIES.reduce((a, s) => a + r.counts[s], 0), r.counts.total);
+      });
+
+      it('emits a payload small enough to stay one JSON document', () => {
+        const r = verify.runGate(CCO_ROOT, phase);
+        // output() diverts anything over 50000 chars to a temp file and writes '@file:...'
+        // instead (core.cjs:186-193), which would break every consumer that parses stdout.
+        assert.ok(JSON.stringify(r, null, 2).length < 50000);
+      });
+    });
+  }
+
+  it('reports zero errors on the two archived phases nobody disputes are healthy', () => {
+    for (const phase of ['19', '22']) {
+      const r = verify.runGate(CCO_ROOT, phase);
+      assert.equal(r.counts.error, 0, `phase ${phase} must be quiet`);
+      assert.equal(r.verdict, 'pass');
+    }
+  });
+
+  it('attributes every archived-phase error to the shadowed-frontmatter defect', () => {
+    // Pins the CAUSE, not only the count. A new class of error appearing on a frozen archive
+    // could otherwise slip in under the ceiling while the counts still looked familiar, which
+    // is what Plan 09's replay has to be able to rule out.
+    for (const phase of ['20', '21']) {
+      const errs = verify.runGate(CCO_ROOT, phase).verbs.filter((x) => x.severity === 'error');
+      assert.equal(errs.length, CEILING[phase]);
+      for (const e of errs) {
+        assert.equal(e.verb, 'verify-summary');
+        assert.match(e.detail, /requirements-completed missing from SUMMARY frontmatter/);
+      }
+    }
+  });
+
+  it('keeps the archive byte-untouched, since the gate only ever reads (D-18)', () => {
+    const before = fs.readdirSync(CCO_ARCHIVE).sort();
+    for (const phase of Object.keys(CEILING)) verify.runGate(CCO_ROOT, phase);
+    assert.deepEqual(fs.readdirSync(CCO_ARCHIVE).sort(), before);
+  });
+});
