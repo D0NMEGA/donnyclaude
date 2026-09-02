@@ -41,6 +41,7 @@ sensibly when a key is absent:
 - `workflow.discuss_mode` - `"discuss"` (full questioning) or `"assumptions"` (surface assumptions to confirm) (default `"discuss"`)
 - `workflow.use_worktrees` - parallel executors run in worktree isolation (default `true`)
 - `workflow.nyquist_validation` - validation research during plan-phase (default `true`)
+- `workflow.record_gate` - run the deterministic record checkers at phase close and on `/donny-audit-phase` (default `true`)
 - `workflow.ui_phase` - generate UI-SPEC.md for frontend phases (default `true`)
 - `workflow.ui_safety_gate` - prompt to run /donny-ui-phase before frontend phases (default `true`)
 - `workflow.ui_review` - retroactive UI visual audit (/donny-ui-review) after frontend phases (default `true`)
@@ -51,8 +52,9 @@ sensibly when a key is absent:
 </step>
 
 <step name="present_settings">
-Present the settings in **four small groups** (progressive disclosure). Pre-select each option to the
-current value read above so the user only changes what they want. Each group is one AskUserQuestion call.
+Present the settings in **five small groups** (progressive disclosure). Pre-select each option to the
+current value read above so the user only changes what they want. Each group is one AskUserQuestion call,
+and no group carries more than four questions.
 
 **Group 1 - Model & agents:**
 ```
@@ -98,15 +100,15 @@ AskUserQuestion([
   { header: "Nyquist", question: "Enable Nyquist Validation? (researches test coverage during planning)", multiSelect: false, options: [
       { label: "Yes (Recommended)", description: "Research automated test coverage; add validation requirements; block approval if tasks lack automated verify" },
       { label: "No", description: "Skip validation research. Good for rapid prototyping or no-test phases" } ] },
+  { header: "Records", question: "Enable the record gate? (deterministic record checks at phase close and on /donny-audit-phase)", multiSelect: false, options: [
+      { label: "Yes (Recommended)", description: "Run the thirteen verify checkers over the phase's own planning artifacts. No model call, and advisory - a failure is recorded, never blocking" },
+      { label: "No", description: "Skip the record checks. /donny-audit-phase --records then exits saying the gate is disabled" } ] },
   { header: "UI Phase", question: "Enable UI Phase? (generates UI-SPEC.md for frontend phases)", multiSelect: false, options: [
       { label: "Yes (Recommended)", description: "Generate UI design contracts before planning frontend phases" },
       { label: "No", description: "Skip UI-SPEC generation. Good for backend-only or API phases" } ] },
   { header: "UI Gate", question: "Enable UI Safety Gate? (prompts to run /donny-ui-phase before frontend phases)", multiSelect: false, options: [
       { label: "Yes (Recommended)", description: "plan-phase asks to run /donny-ui-phase first when frontend indicators are detected" },
-      { label: "No", description: "No prompt - plan-phase proceeds without a UI-SPEC check" } ] },
-  { header: "Research Qs", question: "Research best practices before asking questions? (web search during init and discuss-phase)", multiSelect: false, options: [
-      { label: "No (Recommended)", description: "Ask questions directly. Faster, fewer tokens" },
-      { label: "Yes", description: "Search the web for best practices before each question group. More informed, more tokens" } ] }
+      { label: "No", description: "No prompt - plan-phase proceeds without a UI-SPEC check" } ] }
 ])
 ```
 
@@ -122,7 +124,16 @@ AskUserQuestion([
       { label: "Per Milestone", description: "Branch per milestone (donny/{version}-{name})" } ] },
   { header: "Ctx Warnings", question: "Enable context window warnings? (advisory when context fills up)", multiSelect: false, options: [
       { label: "Yes (Recommended)", description: "Warn when context usage exceeds 65%. Helps avoid losing work" },
-      { label: "No", description: "Disable warnings. Allows reaching auto-compact naturally. Good for long unattended runs" } ] },
+      { label: "No", description: "Disable warnings. Allows reaching auto-compact naturally. Good for long unattended runs" } ] }
+])
+```
+
+**Group 5 - Research behaviour:**
+```
+AskUserQuestion([
+  { header: "Research Qs", question: "Research best practices before asking questions? (web search during init and discuss-phase)", multiSelect: false, options: [
+      { label: "No (Recommended)", description: "Ask questions directly. Faster, fewer tokens" },
+      { label: "Yes", description: "Search the web for best practices before each question group. More informed, more tokens" } ] },
   { header: "Browser", question: "Allow browser research? (research agents open a real Chrome via the Playwright MCP for JS-gated pages)", multiSelect: false, options: [
       { label: "Yes (Recommended)", description: "Research agents may open the browser when HTTP and Context7 are not enough. Configure the Playwright MCP headless to avoid a visible window" },
       { label: "No", description: "HTTP-only research; never opens a browser" } ] }
@@ -147,6 +158,7 @@ Merge the answers into existing config.json (merge, not replace):
     "verifier": true/false,
     "auto_advance": true/false,
     "nyquist_validation": true/false,
+    "record_gate": true/false,
     "ui_phase": true/false,
     "ui_safety_gate": true/false,
     "text_mode": true/false,
@@ -204,6 +216,7 @@ Display:
 | Discuss Mode         | {Discuss/Assumptions} |
 | Worktrees            | {On/Off} |
 | Nyquist Validation   | {On/Off} |
+| Record Gate          | {On/Off} |
 | UI Phase             | {On/Off} |
 | UI Safety Gate       | {On/Off} |
 | Research Before Qs   | {On/Off} |
@@ -226,8 +239,9 @@ Quick commands:
 
 <success_criteria>
 - [ ] Current config read (including text_mode and discuss_mode)
-- [ ] User presented with all 15 settings across four grouped prompts (progressive disclosure, no single long blast)
+- [ ] User presented with all 17 settings across five grouped prompts (progressive disclosure, no single long blast)
 - [ ] text_mode and discuss_mode are settable interactively and shown in the confirmation
+- [ ] record_gate is read, presented and written, so /donny-audit-phase's "enable via /donny-settings" is not a dead end
 - [ ] Config updated with model_profile, workflow, git, and hooks sections (merge, not replace)
 - [ ] User offered to save as global defaults (~/.donny/defaults.json), defaults include text_mode/discuss_mode
 - [ ] Changes confirmed to the user
