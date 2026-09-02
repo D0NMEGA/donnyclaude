@@ -9,6 +9,61 @@ const { safeReadFile, loadConfig, normalizePhaseName, escapeRegex, execGit, find
 const { extractFrontmatter, parseMustHavesBlock } = require('./frontmatter.cjs');
 const { writeStateMd } = require('./state.cjs');
 
+/**
+ * Run one cmdVerify* function in-process and capture the JSON it writes to fd 1.
+ *
+ * Why this exists: every shipped verb ends in output() (core.cjs:178-200), which writes with
+ * fs.writeSync(1, data) and deliberately does NOT call process.exit(). In-process composition
+ * is therefore safe, but each verb's JSON would land on the caller's own stdout. This
+ * intercepts fd-1 writes for the duration of a single call and restores the original in a
+ * finally, so a throwing verb can never leave fs.writeSync patched - a leaked patch would
+ * silently swallow all later stdout in the process.
+ *
+ * Pattern source: bin/donny-tools.cjs:301-333 (the --pick interception), including its
+ * handling of the '@file:' overflow payload output() writes past 50000 chars
+ * (core.cjs:186-193).
+ *
+ * Errors are returned, not thrown: this helper backs an advisory gate (D-02), so one bad verb
+ * must degrade to a recorded result rather than abort the run. Nothing is swallowed - the
+ * thrown message is carried out in `error`.
+ *
+ * @param {Function} fn zero-arg thunk that invokes exactly one cmdVerify* function
+ * @returns {{ok: true, json: object} | {ok: false, raw?: string, error?: string}}
+ */
+function captureVerb(fn) {
+  const origWriteSync = fs.writeSync;
+  const chunks = [];
+  fs.writeSync = function (fd, data, ...rest) {
+    if (fd === 1) { chunks.push(String(data)); return String(data).length; }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  let threw = null;
+  try {
+    fn();
+  } catch (e) {
+    threw = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+  }
+  if (threw) {
+    return { ok: false, raw: chunks.join(''), error: String((threw && threw.message) || threw) };
+  }
+  let s = chunks.join('');
+  if (s.startsWith('@file:')) {
+    try {
+      s = fs.readFileSync(s.slice(6), 'utf-8');
+    } catch (e) {
+      return { ok: false, raw: s, error: 'overflow file unreadable: ' + e.message };
+    }
+  }
+  if (s === '') return { ok: false, raw: '', error: 'verb produced no output' };
+  try {
+    return { ok: true, json: JSON.parse(s) };
+  } catch {
+    return { ok: false, raw: s, error: 'unparseable verb output' };
+  }
+}
+
 function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   if (!summaryPath) {
     error('summary-path required');
@@ -1406,6 +1461,7 @@ function cmdVerifySchemaDrift(cwd, phaseArg, skipFlag, raw) {
 }
 
 module.exports = {
+  captureVerb,
   cmdVerifySummary,
   cmdVerifyPlanStructure,
   validatePlanGraph,
