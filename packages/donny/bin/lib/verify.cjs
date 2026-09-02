@@ -421,6 +421,293 @@ function filterCoverageToPhase(coverage, phaseArg) {
     return got !== null && got === want;
   });
 }
+/**
+ * Collect commit hashes from the '## Task Commits' section of each SUMMARY in a phase.
+ *
+ * A-02: cmdVerifyCommits takes an ARRAY OF HASHES, not a path, so it cannot be looped over
+ * PLAN files the way D-13 grouped it. Restricting the harvest to the '## Task Commits'
+ * section (rather than the whole document, as cmdVerifySummary does at verify.cjs:477-479)
+ * keeps hex-looking prose words out of the list, which matters because an unverifiable hash
+ * becomes a recorded warning that a reader then has to dismiss by hand.
+ *
+ * Section extraction is index-based (search + slice), not a lazy quantifier with a lookahead,
+ * so there is no catastrophic-backtracking path over an operator-authored document of
+ * arbitrary size (T-23-07). The result is capped, which bounds the number of `git cat-file`
+ * subprocesses a crafted SUMMARY can provoke.
+ *
+ * @param {string} cwd project root
+ * @param {string} phaseDirRel cwd-relative posix path to the phase directory
+ * @param {string[]} summaryFiles SUMMARY basenames within that directory
+ * @param {number} [cap=20] maximum hashes returned
+ * @returns {string[]} deduplicated hashes in document order
+ */
+function harvestCommitHashes(cwd, phaseDirRel, summaryFiles, cap = 20) {
+  const out = [];
+  const seen = new Set();
+  for (const s of summaryFiles || []) {
+    const md = safeReadFile(path.join(cwd, phaseDirRel, s)) || '';
+    const start = md.search(/##\s*Task Commits\b/i);
+    if (start === -1) continue;
+    const rest = md.slice(start);
+    // Skip the leading '##' before looking for the next level-two heading, so the section's
+    // own heading does not terminate it. '###' subheadings stay inside the section.
+    const nextIdx = rest.slice(2).search(/\n##\s/);
+    const section = nextIdx === -1 ? rest : rest.slice(0, nextIdx + 2);
+    for (const h of (section.match(/\b[0-9a-f]{7,40}\b/g) || [])) {
+      if (seen.has(h)) continue;
+      seen.add(h);
+      out.push(h);
+      if (out.length >= cap) return out;
+    }
+  }
+  return out;
+}
+
+/**
+ * Which scope each gate verb runs at. Exactly one entry per GATE_VERBS name.
+ *
+ * 'phase'   runs once for the whole phase
+ * 'plan'    runs once per *-PLAN.md
+ * 'summary' runs once per *-SUMMARY.md (A-02's sixth per-file verb)
+ *
+ * `commits` is 'phase' on purpose: A-02's correction is that it takes an array of hashes
+ * harvested from every SUMMARY at once, so running it per file would re-check the same
+ * history N times and multiply the git subprocesses for nothing.
+ */
+const GATE_VERB_SCOPE = {
+  'phase-completeness': 'phase',
+  'plan-graph': 'phase',
+  'phase-verified': 'phase',
+  'threats-clear': 'phase',
+  'ui-reviewed': 'phase',
+  'schema-drift': 'phase',
+  'milestone-coverage': 'phase',
+  'plan-structure': 'plan',
+  'references': 'plan',
+  'artifacts': 'plan',
+  'key-links': 'plan',
+  'verify-summary': 'summary',
+  'commits': 'phase',
+};
+
+/** Severity ordering for the rollup, worst first. */
+const GATE_SEVERITY_RANK = { error: 4, warning: 3, not_yet: 2, not_applicable: 1, pass: 0 };
+
+/** Findings shown on a rollup row before the "and N more" tail. Research is explicit that an
+ *  unreadable table is a muted gate, and a rollup row carrying 300 strings is unreadable. The
+ *  full set is never lost: every string stays on its own per-invocation row in `verbs`. */
+const GATE_ROLLUP_FINDINGS_CAP = 10;
+
+/**
+ * Findings kept on one per-invocation row.
+ *
+ * Not in the plan text; added because without it the gate can break its own contract.
+ * output() diverts any payload over 50 000 chars to a temp file and writes '@file:/tmp/...'
+ * instead (core.cjs:186-193), and the gate's headline promise is exactly ONE JSON document on
+ * stdout. Measured 2026-09-02 on this repo: `references` alone contributes 235 findings over
+ * the ten Phase 23 plans, and uncapped rows put Phase 23 at 43 959 chars with six SUMMARYs
+ * still to be written. At 10 the same phase is 32 765 chars, and the four archived v5.0
+ * phases are 19 090 to 24 281.
+ *
+ * Nothing is hidden by this: the row's detail string always states the true count ("N of M
+ * reference(s) did not resolve"), and the tail entry records how many strings were elided.
+ * A record row listing 235 unresolved paths is unreadable anyway, and an unreadable gate is
+ * a muted gate.
+ */
+const GATE_ROW_FINDINGS_CAP = 10;
+
+/** Cap one findings list, appending a tail that states how many were elided. */
+function capFindings(list, cap) {
+  const all = Array.isArray(list) ? list : [];
+  if (all.length <= cap) return all;
+  return all.slice(0, cap).concat([`... and ${all.length - cap} more`]);
+}
+
+/**
+ * Run all thirteen record checkers against one phase and return a single aggregate (GATE-01).
+ *
+ * Pure with respect to stdout: it drives every verb through captureVerb and never calls
+ * output() or error() itself, so the CLI wrapper owns the one write to fd 1. Never exits.
+ *
+ * The two rules that keep it alive for the whole run:
+ *
+ *   1. The phase is resolved ONCE, through findPhaseInternal, and the result is then
+ *      containment-checked against planningRoot (T-23-06). No path is ever built by joining
+ *      the caller's raw argument. findPhaseInternal already returns null for '../../etc';
+ *      the containment check is the second, independent control, and it is what makes Plan
+ *      06's write target safe by construction.
+ *   2. A verb is NEVER invoked with an empty or undefined required argument (T-23-02).
+ *      cmdVerifyCommits calls error() on an empty hash array (verify.cjs:1088) and error() is
+ *      process.exit(1) (core.cjs:202-205), which would kill the gate mid-run with nothing on
+ *      stdout. An empty plans, summaries or hash list means the loop does not run at all and
+ *      the rollup row is not_applicable with targets: 0.
+ *
+ * @param {string} cwd project root, already resolved by donny-tools.cjs
+ * @param {string} phaseArg phase number, id or directory name
+ * @returns {object} the verify-gate aggregate, or a found:false shape
+ */
+function runGate(cwd, phaseArg) {
+  const notFound = (why) => ({
+    schema: 'verify-gate', found: false, error: why, phase: String(phaseArg || ''),
+  });
+
+  const info = findPhaseInternal(cwd, phaseArg);
+  if (!info || !info.found) return notFound('Phase not found');
+
+  // T-23-06. Both .planning/phases/ and .planning/milestones/v*-phases/ sit under
+  // planningRoot, so one check covers current and archived phases alike.
+  const rootAbs = path.resolve(planningRoot(cwd));
+  const phaseAbs = path.resolve(cwd, info.directory);
+  if (phaseAbs !== rootAbs && !phaseAbs.startsWith(rootAbs + path.sep)) {
+    return notFound('Resolved phase directory escapes .planning');
+  }
+
+  // The three incompatible phase-argument conventions, computed once from one resolution
+  // rather than left to each verb's own matcher (schema-drift matches on
+  // entry.name.includes(), so a bare '2' would match 23-record-integrity-and-...).
+  const dir = info.directory;                  // cwd-relative posix: the dir-path group
+  const num = info.phase_number;               // phase-completeness resolves by number
+  const base = dir.split('/').pop();           // schema-drift matches a directory basename
+  const plans = Array.isArray(info.plans) ? info.plans : [];
+  const summaries = Array.isArray(info.summaries) ? info.summaries : [];
+
+  const results = [];
+  const push = (verb, scope, target, fn, opts) => {
+    const c = classifyVerbResult(verb, captureVerb(fn), opts);
+    results.push({
+      verb,
+      scope,
+      target: target || null,
+      severity: c.severity,
+      detail: c.detail,
+      findings: capFindings(c.findings, GATE_ROW_FINDINGS_CAP),
+    });
+  };
+
+  // --- six phase-scoped verbs -------------------------------------------------------------
+  push('phase-completeness', 'phase', null, () => cmdVerifyPhaseCompleteness(cwd, num, false));
+  push('plan-graph', 'phase', null, () => cmdVerifyPlanGraph(cwd, dir, false));
+  push('phase-verified', 'phase', null, () => cmdVerifyPhaseVerified(cwd, dir, false));
+  push('threats-clear', 'phase', null, () => cmdVerifyThreatsClear(cwd, dir, false));
+  push('ui-reviewed', 'phase', null, () => cmdVerifyUiReviewed(cwd, dir, false));
+  push('schema-drift', 'phase', null, () => cmdVerifySchemaDrift(cwd, base, false, false));
+
+  // --- milestone-coverage: capture, then filter, then classify the FILTERED list (D-15) ----
+  const cov = captureVerb(() => cmdVerifyMilestoneCoverage(cwd, false));
+  const filtered = cov.ok ? filterCoverageToPhase(cov.json, num) : [];
+  const covRow = classifyVerbResult('milestone-coverage', cov, { filteredRequirements: filtered });
+  results.push({
+    verb: 'milestone-coverage',
+    scope: 'phase',
+    target: null,
+    severity: covRow.severity,
+    detail: covRow.detail,
+    findings: capFindings(covRow.findings, GATE_ROW_FINDINGS_CAP),
+    requirements: filtered.map((r) => r && r.id).filter(Boolean),
+  });
+
+  // --- four per-PLAN verbs ----------------------------------------------------------------
+  for (const p of plans) {
+    const rel = dir + '/' + p;
+    push('plan-structure', 'plan', p, () => cmdVerifyPlanStructure(cwd, rel, false));
+    push('references', 'plan', p, () => cmdVerifyReferences(cwd, rel, false));
+    push('artifacts', 'plan', p, () => cmdVerifyArtifacts(cwd, rel, false));
+    push('key-links', 'plan', p, () => cmdVerifyKeyLinks(cwd, rel, false));
+  }
+
+  // --- the thirteenth verb, per SUMMARY (A-02; D-16 makes it load-bearing) -----------------
+  for (const s of summaries) {
+    push('verify-summary', 'summary', s, () => cmdVerifySummary(cwd, dir + '/' + s, 2, false));
+  }
+
+  // --- commits: once, and only when there is something to check (T-23-02) -----------------
+  const hashes = harvestCommitHashes(cwd, dir, summaries);
+  if (hashes.length === 0) {
+    results.push({
+      verb: 'commits',
+      scope: 'phase',
+      target: null,
+      severity: 'not_applicable',
+      detail: 'no commit hashes found under any ## Task Commits section',
+      findings: [],
+    });
+  } else {
+    push('commits', 'phase', null, () => cmdVerifyCommits(cwd, hashes, false));
+  }
+
+  // --- counts -----------------------------------------------------------------------------
+  const counts = { pass: 0, warning: 0, error: 0, not_applicable: 0, not_yet: 0, total: 0 };
+  for (const r of results) {
+    // An unmapped severity is deliberately NOT bucketed: the five counts then fail to sum to
+    // total, which the suite asserts, so it surfaces as a loud test failure rather than as a
+    // quietly cleaner-looking record.
+    if (Object.prototype.hasOwnProperty.call(counts, r.severity)) counts[r.severity] += 1;
+    counts.total += 1;
+  }
+
+  // --- rollup: exactly one row per GATE_VERBS name, in GATE_VERBS order (T-23-21) ---------
+  // Eighteen plans times five per-file verbs is ninety rows; a reader who has to scan ninety
+  // rows stops reading, which is the ignorable-gate failure mode this phase exists to end.
+  const rollup = GATE_VERBS.map((verb) => {
+    const scope = GATE_VERB_SCOPE[verb];
+    const rows = results.filter((r) => r.verb === verb);
+    const c = { pass: 0, warning: 0, error: 0, not_applicable: 0, not_yet: 0 };
+    for (const r of rows) {
+      if (Object.prototype.hasOwnProperty.call(c, r.severity)) c[r.severity] += 1;
+    }
+    if (rows.length === 0) {
+      const noun = scope === 'summary' ? 'SUMMARY' : 'PLAN';
+      return {
+        verb, scope, targets: 0, severity: 'not_applicable',
+        detail: `no ${noun} files in the phase, so the check has nothing to run against`,
+        counts: c, findings: [],
+      };
+    }
+    const worst = rows.reduce((a, b) => (GATE_SEVERITY_RANK[b.severity] > GATE_SEVERITY_RANK[a.severity] ? b : a));
+    const label = (r, s) => (rows.length > 1 && r.target ? `${r.target}: ${s}` : s);
+    const findings = [];
+    for (const r of rows) for (const f of r.findings) findings.push(label(r, f));
+    return {
+      verb, scope, targets: rows.length, severity: worst.severity,
+      detail: label(worst, worst.detail),
+      counts: c,
+      findings: capFindings(findings, GATE_ROLLUP_FINDINGS_CAP),
+    };
+  });
+
+  return {
+    schema: 'verify-gate',
+    found: true,
+    phase: num,
+    phase_dir: dir,
+    archived: info.archived || null,
+    generated_at: new Date().toISOString(),
+    // Only ever 'pass' or 'fail'. The third gate state, 'not_run', means the RECORDS.md file
+    // itself is absent (D-10); it is inferred by the reader from that absence and is never
+    // written here.
+    verdict: counts.error > 0 ? 'fail' : 'pass',
+    counts,
+    rollup,
+    verbs: results,
+  };
+}
+
+/**
+ * CLI wrapper for the record gate: donny-tools.cjs verify gate <phase>.
+ *
+ * Signature matches the cmdVerifySchemaDrift(cwd, phaseArg, skipFlag, raw) precedent of one
+ * extra parameter before `raw`. `options` is the slot Plan 06 fills with --write; it is
+ * accepted and ignored here so the dispatch does not have to change again.
+ *
+ * The error() on a missing argument is correct and matches every sibling verb. The rule the
+ * gate must never break is the reverse one: it must never PASS an empty argument to a verb.
+ */
+function cmdVerifyGate(cwd, phaseArg, options, raw) {
+  if (!phaseArg) { error('phase required: verify gate <phase>'); }
+  const result = runGate(cwd, phaseArg);
+  output(result, raw, result.found ? result.verdict : 'not_found');
+}
+
 function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   if (!summaryPath) {
     error('summary-path required');
@@ -1850,6 +2137,9 @@ module.exports = {
   classifyVerbResult,
   filterCoverageToPhase,
   canonPhaseNum,
+  harvestCommitHashes,
+  runGate,
+  cmdVerifyGate,
   cmdVerifySummary,
   cmdVerifyPlanStructure,
   validatePlanGraph,
