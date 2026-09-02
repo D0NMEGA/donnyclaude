@@ -1,7 +1,8 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { execFileSync, execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -2252,5 +2253,220 @@ describe('workflow.record_gate config (GATE-03 / CONFIG-03)', () => {
     const core = fs.readFileSync(resolve(ROOT, 'packages/donny/bin/lib/core.cjs'), 'utf-8');
     assert.ok(!core.includes('security_enforcement'), 'the precedent record_gate follows');
     assert.ok(!core.includes('record_gate'), 'record_gate must follow that precedent');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v5.0 replay (criterion 5)
+//
+// The phase's own proof obligation: if the gate cannot reproduce record drift a real audit
+// already found, it does not do what it claims.
+//
+// The replay runs over the committed pre-repair fixture, never over git history. Phase 22
+// repaired the archive in place (repair commit 79783d0), so running the gate over
+// .planning/milestones/v5.0-phases/ as it stands today is a guaranteed false negative, and
+// reconstructing the pre-repair tree at test time would make the proof depend on that history
+// staying rewritable. Plan 01 performed the extraction once, from f328bee, and committed the
+// result (A-04 half 1).
+//
+// The July 2026-07-03 audit file was overwritten by the 2026-08-31 one, so the findings are
+// asserted against the Phase 22 SUMMARYs that recorded them verbatim (A-04 half 2). Each
+// assertion message names its finding, so a failure reports the audit item that regressed
+// rather than a line number.
+//
+// The control at the bottom is what makes the claim falsifiable: the same two checks run
+// against the REPAIRED archive and must pass. Without it, a gate that failed everything would
+// also "reproduce the drift".
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Content hash of every file in a tree, so the fixture can be proven untouched. */
+function treeHash(dir) {
+  const parts = [];
+  const walk = (d, rel) => {
+    const entries = fs.readdirSync(d, { withFileTypes: true })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const e of entries) {
+      const abs = join(d, e.name);
+      const key = rel ? rel + '/' + e.name : e.name;
+      if (e.isDirectory()) walk(abs, key);
+      else parts.push(key + ' ' + fs.readFileSync(abs, 'utf-8'));
+    }
+  };
+  walk(dir, '');
+  return createHash('sha256').update(parts.join('')).digest('hex');
+}
+
+/** Look a row up by (verb, target). Never by array index: verb ordering is not a contract. */
+const rowFor = (result, verb, target = null) =>
+  result.verbs.find((v) => v.verb === verb && v.target === target);
+
+describe('v5.0 replay (criterion 5)', () => {
+  let scratch;
+  let fixtureHashBefore;
+  let gate19;
+  let gate20;
+
+  before(() => {
+    fixtureHashBefore = treeHash(PRE_ROOT);
+    // Run against a copy, never the fixture in place. The gate is read-only today, but the
+    // fixture is this phase's evidence and circular evidence is no evidence (T-23-38).
+    scratch = join(tmpdir(), 'donny-replay-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    fs.cpSync(PRE_ROOT, scratch, { recursive: true });
+    // git init so execGit behaves deterministically rather than inheriting an ancestor repo.
+    const git = (args) => execFileSync('git', args, { cwd: scratch, stdio: 'ignore' });
+    git(['init', '-q']);
+    git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init']);
+    gate19 = verify.runGate(scratch, '19');
+    gate20 = verify.runGate(scratch, '20');
+  });
+
+  after(() => {
+    if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
+    assert.equal(treeHash(PRE_ROOT), fixtureHashBefore,
+      'the replay must leave tests/fixtures/pre-repair-v5/ byte-unchanged (D-18, T-23-38)');
+  });
+
+  it('resolves both pre-repair phases out of the scratch copy', () => {
+    assert.equal(gate19.found, true);
+    assert.equal(gate20.found, true);
+    assert.equal(gate19.phase_dir, '.planning/phases/19-supervisor-foundation');
+    assert.equal(gate20.phase_dir, '.planning/phases/20-auto-compact-at-60-keystone');
+  });
+
+  it('J1 (22-01-SUMMARY.md): phase-verified fails Phase 19 on the PASS/passed vocabulary', () => {
+    const row = rowFor(gate19, 'phase-verified');
+    assert.equal(row.severity, 'error',
+      'J1: 19-VERIFICATION.md carried status: PASS; the engine lowercases-and-compares to the ' +
+      'literal "passed", so the phase had been silently reading as unverified');
+    assert.match(row.detail, /PASS/,
+      'the finding must name the offending status value, not just report a failure');
+  });
+
+  it('J2 (22-01-SUMMARY.md): verify-summary fails 19-01 and 19-02, whose frontmatter is shadowed', () => {
+    for (const target of ['19-01-SUMMARY.md', '19-02-SUMMARY.md']) {
+      const row = rowFor(gate19, 'verify-summary', target);
+      assert.ok(row, 'no verify-summary row for ' + target);
+      assert.equal(row.severity, 'error',
+        'J2: ' + target + ' already carried requirements-completed in its real top frontmatter, ' +
+        'but a later body pair of --- lines shadowed it (extractFrontmatter reads the LAST block)');
+      assert.ok(row.findings.some((f) => /requirements-completed missing/.test(f)),
+        'J2: ' + target + ' must report the missing-or-shadowed branch');
+    }
+  });
+
+  it('J3 (22-01-SUMMARY.md): verify-summary fails 19-03 and 19-04, which have no such key at all', () => {
+    for (const target of ['19-03-SUMMARY.md', '19-04-SUMMARY.md']) {
+      const row = rowFor(gate19, 'verify-summary', target);
+      assert.ok(row, 'no verify-summary row for ' + target);
+      assert.equal(row.severity, 'error',
+        'J3: ' + target + ' parses cleanly but gained its top-level requirements-completed only ' +
+        'in Phase 22 Task 3; before that the field was simply absent');
+      assert.ok(row.findings.some((f) => /requirements-completed missing/.test(f)),
+        'J3: ' + target + ' must report the missing branch');
+    }
+  });
+
+  it('J4 (22-02-SUMMARY.md): phase-verified fails Phase 20, whose status never parses', () => {
+    const row = rowFor(gate20, 'phase-verified');
+    assert.equal(row.severity, 'error',
+      'J4: 20-VERIFICATION.md had 12 --- lines (10 body horizontal rules shadowing the ' +
+      'frontmatter), so extractFrontmatter read a body block and status parsed to {}');
+    // A different mechanism from J1, and the detail says so: J1 reads a wrong value, J4 reads
+    // no value at all. Asserting the distinction stops the two collapsing into one finding.
+    assert.match(row.detail, /unknown/, 'J4 is the no-value case; J1 is the wrong-value case');
+    assert.doesNotMatch(row.detail, /"PASS"/);
+  });
+
+  it('J5 (22-02-SUMMARY.md): verify-summary fails 20-04 on the empty-list branch', () => {
+    const row = rowFor(gate20, 'verify-summary', '20-04-SUMMARY.md');
+    assert.ok(row, 'no verify-summary row for 20-04-SUMMARY.md');
+    assert.equal(row.severity, 'error',
+      'J5: 20-04-SUMMARY.md carried requirements-completed: [] until Phase 22 filled in ' +
+      '[PILOT-06, PILOT-07]');
+    assert.ok(row.findings.some((f) => /requirements-completed is empty/.test(f)),
+      'J5 must land on the empty branch, which is distinct from J2 and J3');
+    // Distinctness is the point: if empty collapsed onto missing, the fixture would be testing
+    // one branch three times.
+    assert.ok(!row.findings.some((f) => /requirements-completed missing/.test(f)));
+  });
+
+  it('J6 (A-01): a missing SECURITY.md is not_yet on Phase 20, never an error', () => {
+    const row = rowFor(gate20, 'threats-clear');
+    assert.equal(row.severity, 'not_yet',
+      'there is no 20-SECURITY.md at f328bee, and SECURITY.md is written by /donny-audit-phase ' +
+      'after close, so its absence is a not-applicable-yet state rather than a record defect');
+    // Phase 19 does carry one at that commit, which is why the two phases differ here.
+    assert.notEqual(rowFor(gate19, 'threats-clear').severity, 'not_yet');
+  });
+
+  it('fails both pre-repair phases overall', () => {
+    assert.equal(gate19.verdict, 'fail');
+    assert.equal(gate20.verdict, 'fail');
+    assert.ok(gate19.counts.error > 0 && gate20.counts.error > 0);
+  });
+
+  it('attributes every pre-repair error to phase-verified, verify-summary or milestone-coverage', () => {
+    // Pins the CAUSE as well as the count. A new class of error on a frozen fixture would
+    // otherwise pass unnoticed while the replay still looked like it reproduced the drift.
+    const allowed = new Set(['phase-verified', 'verify-summary', 'milestone-coverage']);
+    for (const g of [gate19, gate20]) {
+      for (const e of g.verbs.filter((v) => v.severity === 'error')) {
+        assert.ok(allowed.has(e.verb), 'unexpected error verb ' + e.verb + ': ' + e.detail);
+      }
+    }
+  });
+
+  describe('the control: the same checks on the repaired archive', { skip: !hasCco }, () => {
+    const P19 = '.planning/milestones/v5.0-phases/19-supervisor-foundation';
+
+    it('phase-verified now passes, so J1 is closed and the check is not simply always red', () => {
+      const r = verify.captureVerb(() => verify.cmdVerifyPhaseVerified(CCO_ROOT, P19, false));
+      assert.equal(r.ok, true);
+      assert.equal(r.json.verified, true);
+      assert.equal(r.json.status, 'passed');
+    });
+
+    it('no repaired Phase 19 SUMMARY reports a requirements-completed error, closing J2 and J3', () => {
+      for (const n of ['19-01', '19-02', '19-03', '19-04']) {
+        const r = verify.captureVerb(
+          () => verify.cmdVerifySummary(CCO_ROOT, P19 + '/' + n + '-SUMMARY.md', 2, false),
+        );
+        assert.equal(r.ok, true, 'expected JSON for ' + n);
+        const hits = (r.json.errors || []).filter((e) => /requirements-completed/.test(e));
+        assert.deepEqual(hits, [], n + '-SUMMARY.md still reports ' + JSON.stringify(hits));
+      }
+    });
+
+    it('the repaired Phase 19 comes back completely quiet, which is what makes the replay signal', () => {
+      const r = verify.runGate(CCO_ROOT, '19');
+      assert.equal(r.archived, 'v5.0');
+      assert.equal(r.counts.error, 0);
+      assert.equal(r.verdict, 'pass');
+    });
+
+    it('the repaired Phase 20 closed J4 and J5 but still carries the drift on 20-01..03', () => {
+      // Recorded, not repaired (D-18). Phase 22 closed the symptom milestone-coverage measures
+      // (20-04 parses and carries the PILOT ids, so coverage reads 10/10) without removing the
+      // decorative body rules on the other three. A milestone-wide check structurally cannot
+      // see this; only the per-SUMMARY verb the gate runs at close can. That is a live argument
+      // for GATE-01, and pinning it here means a later repair pass shows up as a test failure
+      // rather than as silence.
+      const r = verify.runGate(CCO_ROOT, '20');
+      assert.equal(rowFor(r, 'phase-verified').severity, 'pass', 'J4 closed');
+      // J5 is closed on the field, not on the row: 20-04 still reports the two known-artifact
+      // findings 23-04 deliberately classifies as warnings (tilde-prefixed paths lifted from the
+      // SUMMARY's own prose, and commits that live in the donnyclaude repo under D-21). The
+      // load-bearing claim is that no requirements-completed finding survives, so that is what
+      // is asserted rather than the row severity.
+      const rc = rowFor(r, 'verify-summary', '20-04-SUMMARY.md');
+      assert.ok(!rc.findings.some((f) => /requirements-completed/.test(f)),
+        'J5 closed: ' + JSON.stringify(rc.findings));
+      assert.match(rc.detail, /no record defect/);
+      const still = r.verbs
+        .filter((v) => v.severity === 'error')
+        .map((v) => v.target)
+        .sort();
+      assert.deepEqual(still, ['20-01-SUMMARY.md', '20-02-SUMMARY.md', '20-03-SUMMARY.md']);
+    });
   });
 });
