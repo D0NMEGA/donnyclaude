@@ -805,3 +805,148 @@ describe('classifyVerbResult: boundary cases', () => {
     assert.equal(got.severity, 'pass');
   });
 });
+
+// ── filterCoverageToPhase (D-15) ────────────────────────────────────────────
+// cmdVerifyMilestoneCoverage takes no phase argument at all (verify.cjs:466) and always
+// reports the whole current milestone, so D-15's per-phase view has to be a post-hoc filter on
+// the returned requirements[] array. requirements[].phase is the resolved phase DIRECTORY NAME
+// when the phase exists on disk and the raw traceability label ("Phase 25") when it does not
+// (verify.cjs:544), so both forms have to reduce to the same thing before they are compared.
+//
+// The hazard this block exists for is T-23-19: a substring filter would make phase 2 match
+// 23-record-integrity-and-the-validation-gate and silently attribute another phase's
+// requirements to this one, inflating or deflating a permanent coverage claim.
+
+const COVERAGE_FIXTURE = readVerbFixture('milestone-coverage').cases[0].output;
+
+describe('filterCoverageToPhase (D-15)', () => {
+  it('reuses the module-level canonPhaseNum rather than a private copy', () => {
+    assert.equal(typeof verify.canonPhaseNum, 'function');
+    assert.equal(verify.canonPhaseNum('23'), '23');
+    assert.equal(verify.canonPhaseNum('02.1'), '2.1');
+    assert.equal(verify.canonPhaseNum('23-record-integrity'), null);
+  });
+
+  it('reduces the recorded milestone payload to this phase, in input order', () => {
+    const got = verify.filterCoverageToPhase(COVERAGE_FIXTURE, '23');
+    assert.deepEqual(got.map((r) => r.id), ['RECORD-03', 'RECORD-04', 'GATE-01', 'GATE-02', 'GATE-03']);
+    assert.equal(COVERAGE_FIXTURE.requirements.length, 23, 'the recorded payload is milestone-wide');
+  });
+
+  it('matches a resolved phase DIRECTORY NAME', () => {
+    const c = { requirements: [{ id: 'A', phase: '23-record-integrity-and-the-validation-gate' }] };
+    assert.deepEqual(verify.filterCoverageToPhase(c, '23').map((r) => r.id), ['A']);
+  });
+
+  it('matches a raw "Phase N" traceability label, and only its own number', () => {
+    const c = { requirements: [{ id: 'B', phase: 'Phase 25' }] };
+    assert.deepEqual(verify.filterCoverageToPhase(c, '25').map((r) => r.id), ['B']);
+    assert.deepEqual(verify.filterCoverageToPhase(c, '23'), []);
+  });
+
+  it('never matches a null phase', () => {
+    const c = { requirements: [{ id: 'C', phase: null }] };
+    assert.deepEqual(verify.filterCoverageToPhase(c, '23'), []);
+    assert.deepEqual(verify.filterCoverageToPhase(c, '0'), []);
+  });
+
+  it('does NOT match phase 2 against a 23- directory (T-23-19, numeric equality)', () => {
+    assert.deepEqual(verify.filterCoverageToPhase(COVERAGE_FIXTURE, '2'), []);
+    const c = { requirements: [{ id: 'A', phase: '23-record-integrity-and-the-validation-gate' }] };
+    assert.deepEqual(verify.filterCoverageToPhase(c, '2'), []);
+    assert.deepEqual(verify.filterCoverageToPhase(c, '3'), []);
+  });
+
+  it('matches a decimal phase directory', () => {
+    const c = { requirements: [{ id: 'D', phase: '02.1-backlog' }, { id: 'E', phase: '02-other' }] };
+    assert.deepEqual(verify.filterCoverageToPhase(c, '02.1').map((r) => r.id), ['D']);
+    assert.deepEqual(verify.filterCoverageToPhase(c, '2').map((r) => r.id), ['E']);
+  });
+
+  it('returns an empty array on an unknown-gate payload, without throwing', () => {
+    const unknown = { gate: 'unknown', error: 'REQUIREMENTS.md not found or empty', counts: {}, requirements: [] };
+    assert.deepEqual(verify.filterCoverageToPhase(unknown, '23'), []);
+    assert.deepEqual(verify.filterCoverageToPhase(null, '23'), []);
+    assert.deepEqual(verify.filterCoverageToPhase({}, '23'), []);
+    assert.deepEqual(verify.filterCoverageToPhase(COVERAGE_FIXTURE, null), []);
+    assert.deepEqual(verify.filterCoverageToPhase(COVERAGE_FIXTURE, 'no-digits-here'), []);
+  });
+
+  it('returns the original entries unmodified and leaves the payload untouched', () => {
+    const before = JSON.stringify(COVERAGE_FIXTURE);
+    const got = verify.filterCoverageToPhase(COVERAGE_FIXTURE, '23');
+    assert.deepEqual(got[0], { id: 'RECORD-03', phase: '23-record-integrity-and-the-validation-gate', status: 'unsatisfied', orphaned: false, needs_checkbox_update: false });
+    assert.equal(JSON.stringify(COVERAGE_FIXTURE), before, 'the filter must not mutate its input');
+  });
+});
+
+// ── milestone-coverage classification (D-15) ────────────────────────────────
+
+describe('milestone-coverage classification (D-15)', () => {
+  const captured = { ok: true, json: { gate: 'gaps_found' } };
+  const classify = (filteredRequirements) =>
+    verify.classifyVerbResult('milestone-coverage', captured, { filteredRequirements });
+  const req = (id, over) => Object.assign(
+    { id, phase: '23-fixture', status: 'satisfied', orphaned: false, needs_checkbox_update: false },
+    over,
+  );
+
+  it('scores the recorded payload filtered to phase 23 as an error', () => {
+    // Driven from the real recording: all five of this phase's requirements are unsatisfied
+    // mid-milestone, which is the state the gate is supposed to report.
+    const got = classify(verify.filterCoverageToPhase(COVERAGE_FIXTURE, '23'));
+    assert.equal(got.severity, 'error');
+    assert.equal(got.findings.length, 5);
+    assert.ok(got.findings.some((f) => f.startsWith('GATE-01')), JSON.stringify(got.findings));
+  });
+
+  it('scores an unsatisfied requirement as an error', () => {
+    assert.equal(classify([req('X', { status: 'unsatisfied' })]).severity, 'error');
+  });
+
+  it('scores an orphaned requirement as an error naming it orphaned', () => {
+    const got = classify([req('Y', { status: 'unsatisfied', orphaned: true })]);
+    assert.equal(got.severity, 'error');
+    assert.match(got.findings[0], /orphaned/);
+  });
+
+  it('scores a partial requirement as a warning', () => {
+    assert.equal(classify([req('Z', { status: 'partial' })]).severity, 'warning');
+  });
+
+  it('scores a satisfied requirement with a stale checkbox as a warning', () => {
+    const got = classify([req('W', { needs_checkbox_update: true })]);
+    assert.equal(got.severity, 'warning');
+    assert.match(got.findings[0], /checkbox/);
+  });
+
+  it('scores an all-satisfied list as a pass', () => {
+    const got = classify([req('A'), req('B')]);
+    assert.equal(got.severity, 'pass');
+    assert.deepEqual(got.findings, []);
+  });
+
+  it('scores an empty filtered list as not_yet (C-9: archived phases have none)', () => {
+    assert.equal(classify([]).severity, 'not_yet');
+    assert.equal(classify(undefined).severity, 'not_yet');
+    const unknownGate = verify.classifyVerbResult(
+      'milestone-coverage',
+      { ok: true, json: { gate: 'unknown' } },
+      { filteredRequirements: [req('A')] },
+    );
+    assert.equal(unknownGate.severity, 'not_yet');
+  });
+
+  it('reports the worst severity present and names every offending id', () => {
+    const got = classify([
+      req('OK-01'),
+      req('PART-01', { status: 'partial' }),
+      req('BAD-01', { status: 'unsatisfied' }),
+      req('STALE-01', { needs_checkbox_update: true }),
+    ]);
+    assert.equal(got.severity, 'error');
+    const ids = got.findings.map((f) => f.split(':')[0]);
+    assert.deepEqual(ids.sort(), ['BAD-01', 'PART-01', 'STALE-01']);
+    assert.ok(!ids.includes('OK-01'), 'a satisfied requirement is not a finding');
+  });
+});
