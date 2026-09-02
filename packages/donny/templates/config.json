@@ -10,6 +10,7 @@
     "security_enforcement": true,
     "security_asvs_level": 1,
     "security_block_on": "high",
+    "record_gate": true,
     "discuss_mode": "discuss",
     "research_before_questions": false
   },
