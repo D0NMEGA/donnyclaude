@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -1355,6 +1356,99 @@ describe('cmdVerifyGate', () => {
       const b = verify.captureVerb(() => { verify.cmdVerifyGate(root, '23', { write: true }, false); });
       assert.equal(a.ok && b.ok, true);
       assert.deepEqual(a.json.rollup.map((r) => r.severity), b.json.rollup.map((r) => r.severity));
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The CLI surface: donny-tools.cjs verify gate <phase>
+//
+// Two of these are load-bearing. JSON.parse over the WHOLE of stdout fails if any verb's
+// output leaked past captureVerb, which is the integration-level proof of T-23-01. And
+// --pick verdict nests the shipped --pick interception (donny-tools.cjs:301-333) around
+// thirteen more fd-1 interceptions, so it fails unless both layers restore.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TOOLS = resolve(ROOT, 'packages/donny/bin/donny-tools.cjs');
+
+/** Run donny-tools in a fixture root and return { status, stdout, stderr }. */
+const runTools = (cwd, argv) => {
+  try {
+    const stdout = execFileSync(process.execPath, [TOOLS, ...argv], { cwd, encoding: 'utf-8' });
+    return { status: 0, stdout, stderr: '' };
+  } catch (e) {
+    return { status: e.status === undefined ? -1 : e.status, stdout: e.stdout || '', stderr: e.stderr || '' };
+  }
+};
+
+describe('verify gate CLI', () => {
+  it('prints exactly one JSON document', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23']);
+      assert.equal(r.status, 0, r.stderr);
+      const doc = JSON.parse(r.stdout);
+      assert.equal(doc.schema, 'verify-gate');
+      assert.equal(doc.rollup.length, 13);
+      assert.equal(doc.verbs.length, doc.counts.total);
+    });
+  });
+
+  it('emits no @file: overflow pointer, so consumers parse stdout directly', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23']);
+      assert.ok(!r.stdout.startsWith('@file:'), 'the gate payload must stay under the output() overflow threshold');
+    });
+  });
+
+  it('honours --raw with the bare verdict and nothing else', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23', '--raw']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, 'pass');
+    });
+  });
+
+  it('honours --pick verdict, proving the two fd-1 interceptions nest', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23', '--pick', 'verdict']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, 'pass');
+    });
+  });
+
+  it('honours --pick counts.error through dot notation', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23', '--pick', 'counts.error']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, '0');
+    });
+  });
+
+  it('exits non-zero with phase required when no phase is given', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate']);
+      assert.notEqual(r.status, 0);
+      assert.match(r.stderr, /phase required/);
+      assert.equal(r.stdout, '');
+    });
+  });
+
+  it('reports an unresolvable phase as JSON rather than exiting', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '77']);
+      assert.equal(r.status, 0, r.stderr);
+      const doc = JSON.parse(r.stdout);
+      assert.equal(doc.found, false);
+      assert.equal(doc.error, 'Phase not found');
+    });
+  });
+
+  it('lists gate among the available verify subcommands', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'bogus-subcommand']);
+      assert.notEqual(r.status, 0);
+      assert.match(r.stderr, /Unknown verify subcommand/);
+      assert.match(r.stderr, /schema-drift, gate/);
     });
   });
 });
