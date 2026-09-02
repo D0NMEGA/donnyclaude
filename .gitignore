@@ -22,3 +22,8 @@ ahol-claude-dry-run.ahol-claude-dry-run.json
 # Python bytecode (pytest runs at repo root)
 __pycache__/
 *.pyc
+
+# Exception: the pre-repair v5.0 test fixture IS a committed .planning/ tree. The rule above
+# has no leading slash, so it matches at any depth and silently skips all 25 extracted files
+# on `git add` - the suite would pass locally while the fixture never lands in the repo.
+!tests/fixtures/**/.planning/

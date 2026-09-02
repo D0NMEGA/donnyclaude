@@ -205,3 +205,70 @@ describe('planning fixture helper', () => {
     assert.deepEqual(Object.keys(parse('shadowed')), []);
   });
 });
+
+// ── Pre-repair v5.0 fixture ─────────────────────────────────────────────────
+// tests/fixtures/pre-repair-v5/ is the Phase 19 and Phase 20 tree as it stood at
+// claudecodeoptimized commit f328bee, the last state before Phase 22 repaired the v5.0
+// record drift in place. Plan 09 replays the gate over it to prove the gate would have
+// caught the July findings, so this block pins that the drift is still present. Every value
+// below was measured against the extracted tree, which was verified byte-identical to
+// f328bee by sha256 across all 25 files at extraction time and again before this was written.
+
+const PRE_ROOT = join(__dirname, 'fixtures', 'pre-repair-v5');
+const PRE_PLANNING = join(PRE_ROOT, '.planning');
+const PRE_19 = join(PRE_PLANNING, 'phases', '19-supervisor-foundation');
+const PRE_20 = join(PRE_PLANNING, 'phases', '20-auto-compact-at-60-keystone');
+
+const readFixture = (dir, name) => fs.readFileSync(join(dir, name), 'utf-8');
+const fenceCount = (text) => text.split('\n').filter(l => l === '---').length;
+
+describe('pre-repair v5 fixture', () => {
+  it('carries all twelve Phase 19 and eleven Phase 20 artifacts plus REQUIREMENTS and ROADMAP', () => {
+    assert.equal(fs.readdirSync(PRE_19).filter(f => f.endsWith('.md')).length, 12);
+    assert.equal(fs.readdirSync(PRE_20).filter(f => f.endsWith('.md')).length, 11);
+    assert.ok(fs.existsSync(join(PRE_PLANNING, 'REQUIREMENTS.md')));
+    assert.ok(fs.existsSync(join(PRE_PLANNING, 'ROADMAP.md')));
+  });
+
+  it('J1: 19-VERIFICATION.md reads `status: PASS`, which the engine does not accept', () => {
+    const fm = extractFrontmatter(readFixture(PRE_19, '19-VERIFICATION.md'));
+    assert.equal(fm.status, 'PASS');
+    // The engine compares against the literal lowercase 'passed', so the phase reads unverified.
+    assert.equal(verify.phaseVerificationVerdict(fm).verified, false);
+  });
+
+  it('J2: 19-01-SUMMARY.md frontmatter is shadowed by a body block and parses to zero keys', () => {
+    const fm = extractFrontmatter(readFixture(PRE_19, '19-01-SUMMARY.md'));
+    assert.equal(Object.keys(fm).length, 0);
+  });
+
+  it('J3: 19-03-SUMMARY.md parses cleanly but has no requirements-completed key', () => {
+    const fm = extractFrontmatter(readFixture(PRE_19, '19-03-SUMMARY.md'));
+    // Measured 9, not the 6 the 23-01 plan recorded. The extraction is not in doubt: all 25
+    // files sha256-match f328bee, and no SUMMARY in either the pre-repair or the post-repair
+    // tree parses to 6 keys, so the planning-time figure was wrong. The load-bearing half of
+    // the assertion, that requirements-completed is absent, holds exactly as recorded.
+    assert.equal(Object.keys(fm).length, 9);
+    assert.equal(fm['requirements-completed'], undefined);
+  });
+
+  it('J4: 20-VERIFICATION.md has twelve `---` lines, so a body block shadows its frontmatter', () => {
+    assert.equal(fenceCount(readFixture(PRE_20, '20-VERIFICATION.md')), 12);
+  });
+
+  it('J5: 20-04-SUMMARY.md carries the empty requirements-completed case', () => {
+    const lines = readFixture(PRE_20, '20-04-SUMMARY.md').split('\n');
+    assert.ok(lines.includes('requirements-completed: []'),
+      'the literal empty-array line must survive in the fixture');
+  });
+
+  it('J6: 20-SECURITY.md is genuinely absent and was not synthesised', () => {
+    assert.equal(fs.existsSync(join(PRE_20, '20-SECURITY.md')), false);
+  });
+
+  it('MANIFEST.md records provenance and uses no bare `---` rules', () => {
+    const manifest = readFixture(PRE_ROOT, 'MANIFEST.md');
+    assert.equal(fenceCount(manifest), 0, 'MANIFEST.md must contain no bare --- lines');
+    assert.match(manifest, /f328bee/);
+  });
+});
