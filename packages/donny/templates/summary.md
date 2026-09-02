@@ -38,7 +38,8 @@ patterns-established:
   - "Pattern 1: description"
   - "Pattern 2: description"
 
-requirements-completed: []  # REQUIRED - Copy ALL requirement IDs from this plan's `requirements` frontmatter field.
+# REQUIRED - copy ALL requirement IDs from this plan's `requirements` frontmatter field.
+requirements-completed: []
 
 # Metrics
 duration: Xmin
@@ -99,8 +100,6 @@ _Note: TDD tasks may have multiple commits (test -> feat -> refactor)_
 
 [... repeat for each auto-fix ...]
 
----
-
 **Total deviations:** [N] auto-fixed ([breakdown by rule])
 **Impact on plan:** [Brief assessment - e.g., "All auto-fixes necessary for correctness/security. No scope creep."]
 
@@ -124,7 +123,6 @@ None - no external service configuration required.
 [What's ready for next phase]
 [Any blockers or concerns]
 
----
 *Phase: XX-name*
 *Completed: [date]*
 ```
@@ -216,8 +214,6 @@ The one-liner should tell someone what actually shipped.
 - **Verification:** Import succeeds, build passes
 - **Committed in:** def456g (Task 4 commit)
 
----
-
 **Total deviations:** 2 auto-fixed (1 missing critical, 1 blocking)
 **Impact on plan:** Both auto-fixes essential for security and functionality. No scope creep.
 
@@ -228,7 +224,6 @@ The one-liner should tell someone what actually shipped.
 - Auth foundation complete, ready for feature development
 - User registration endpoint needed before public launch
 
----
 *Phase: 01-foundation*
 *Completed: 2025-01-15*
 ```
