@@ -19,6 +19,8 @@ key-decisions:
   - "Decision 1"
 patterns-established:
   - "Pattern 1: description"
+# REQUIRED - copy ALL requirement IDs from this plan's `requirements` frontmatter field.
+requirements-completed: []
 duration: Xmin
 completed: YYYY-MM-DD
 ---

@@ -13,6 +13,8 @@ key-files:
   created: [important files created]
   modified: [important files modified]
 key-decisions: []
+# REQUIRED - copy ALL requirement IDs from this plan's `requirements` frontmatter field.
+requirements-completed: []
 duration: Xmin
 completed: YYYY-MM-DD
 ---

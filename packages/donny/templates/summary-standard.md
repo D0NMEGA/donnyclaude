@@ -14,6 +14,8 @@ key-files:
   modified: [important files modified]
 key-decisions:
   - "Decision 1"
+# REQUIRED - copy ALL requirement IDs from this plan's `requirements` frontmatter field.
+requirements-completed: []
 duration: Xmin
 completed: YYYY-MM-DD
 ---

@@ -83,6 +83,7 @@ function cmdTemplateFill(cwd, templateType, options, raw) {
         'key-files': { created: [], modified: [] },
         'key-decisions': [],
         'patterns-established': [],
+        'requirements-completed': [],
         duration: '[X]min',
         completed: today,
         ...fields,
