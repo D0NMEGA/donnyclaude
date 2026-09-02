@@ -1,5 +1,5 @@
 <purpose>
-Retroactively audit a completed phase across two dimensions: security (threat mitigations recorded in the PLAN.md threat model are actually implemented) and validation (Nyquist test coverage for the phase's requirements). By default both audits run; `--security` or `--validate` narrows to one. Updates SECURITY.md and/or VALIDATION.md.
+Retroactively audit a completed phase across three dimensions: security (threat mitigations recorded in the PLAN.md threat model are actually implemented), validation (Nyquist test coverage for the phase's requirements), and records (the deterministic `verify` checkers run over the phase's own planning artifacts). By default all three run; `--security`, `--validate` or `--records` narrows to one. Updates SECURITY.md, VALIDATION.md and/or NN-RECORDS.md. The record dimension calls no model and never blocks advancement.
 </purpose>
 
 <required_reading>
@@ -24,21 +24,31 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 Parse: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`.
 
 **Scope flags** (from `$ARGUMENTS`):
-- No flag, or `--all` -> run BOTH audits (default).
+- No flag, or `--all` -> run ALL THREE audits (default).
 - `--security` -> security audit only.
 - `--validate` -> validation audit only.
+- `--records` -> record gate only.
 
 ```bash
 SECURITY_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.security_enforcement --raw 2>/dev/null || echo "true")
 NYQUIST_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.nyquist_validation --raw 2>/dev/null || echo "true")
+RECORD_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.record_gate --raw 2>/dev/null || echo "true")
 ```
 
-Resolve `RUN_SECURITY` and `RUN_VALIDATE`:
-- Default scope: `RUN_SECURITY` = (`SECURITY_CFG` != false); `RUN_VALIDATE` = (`NYQUIST_CFG` != false).
-- `--security`: `RUN_VALIDATE`=false. If `SECURITY_CFG` is false, exit - "Security enforcement disabled. Enable via /donny-settings." Else `RUN_SECURITY`=true.
-- `--validate`: `RUN_SECURITY`=false. If `NYQUIST_CFG` is false, exit - "Nyquist validation disabled. Enable via /donny-settings." Else `RUN_VALIDATE`=true.
+The `|| echo "true"` is load-bearing: `config-get` exits 1 on a key the project has never set, so a
+project whose config.json predates the key behaves as if it were `true`.
 
-If both `RUN_SECURITY` and `RUN_VALIDATE` are false (default scope, both configs disabled): exit - "Both security and Nyquist audits are disabled. Enable via /donny-settings."
+Resolve `RUN_SECURITY`, `RUN_VALIDATE` and `RUN_RECORDS`:
+- Default scope: `RUN_SECURITY` = (`SECURITY_CFG` != false); `RUN_VALIDATE` = (`NYQUIST_CFG` != false); `RUN_RECORDS` = (`RECORD_CFG` != false).
+- `--security`: `RUN_VALIDATE`=false, `RUN_RECORDS`=false. If `SECURITY_CFG` is false, exit - "Security enforcement disabled. Enable via /donny-settings or `donny-tools config-set workflow.security_enforcement true`." Else `RUN_SECURITY`=true.
+- `--validate`: `RUN_SECURITY`=false, `RUN_RECORDS`=false. If `NYQUIST_CFG` is false, exit - "Nyquist validation disabled. Enable via /donny-settings or `donny-tools config-set workflow.nyquist_validation true`." Else `RUN_VALIDATE`=true.
+- `--records`: `RUN_SECURITY`=false, `RUN_VALIDATE`=false. If `RECORD_CFG` is false, exit - "Record gate disabled. Enable via /donny-settings or `donny-tools config-set workflow.record_gate true`." Else `RUN_RECORDS`=true.
+
+If all three are false (default scope, all configs disabled): exit - "Security, Nyquist and record audits are all disabled. Enable via /donny-settings."
+
+A narrowing flag is the only way to skip a dimension, and each one says out loud what it turned off.
+The v5.0 record drift came from the opposite arrangement, where the dimension had to be remembered
+INTO the run: phases 19 through 21 ran `--security` alone and nobody noticed the gap for months.
 
 **Phase-executed gate** (shared State C - applies to whichever audits run):
 
@@ -48,7 +58,7 @@ SUMMARY_FILES=$(ls "${PHASE_DIR}"/*-SUMMARY.md 2>/dev/null)
 
 If `SUMMARY_FILES` is empty: exit - "Phase {N} not executed. Run /donny-execute-phase {N} first."
 
-Display banner: `DONNY ► AUDIT PHASE {N}: {name}` (append the active scope: `security + validation`, `security only`, or `validation only`).
+Display banner: `DONNY ► AUDIT PHASE {N}: {name}` (append the active scope, naming exactly the dimensions that will run: `security + validation + records`, `security + records`, `validation + records`, `security + validation`, `security only`, `validation only`, or `records only`).
 
 Track `SECURITY_BLOCKED=false` for the final routing decision.
 
@@ -153,7 +163,7 @@ Returns `{ clear, threats_open, open_ids, declared, consistent, has_register }` 
 
 ## Part B - Validation Audit
 
-**Run this part only if `RUN_VALIDATE` is true.** Otherwise skip to Commit.
+**Run this part only if `RUN_VALIDATE` is true.** Otherwise skip to Part C.
 
 ```bash
 AGENT_SKILLS_NYQ=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" agent-skills donny-nyquist-auditor 2>/dev/null)
@@ -236,16 +246,84 @@ Handle return: `## GAPS FILLED` -> record tests + map updates -> B6. `## PARTIAL
 
 ---
 
+## Part C - Record Gate
+
+**Run this part only if `RUN_RECORDS` is true.** Otherwise skip to Commit.
+
+This is the only LLM-free dimension. No subagent is spawned, no model is called, and the whole
+check is two deterministic CLI calls. It is advisory by construction (D-02): it does not touch
+`SECURITY_BLOCKED` and it never suppresses next-phase routing.
+
+### C1. Detect Input State
+
+```bash
+RECORDS_FILE=$(ls "${PHASE_DIR}"/*-RECORDS.md 2>/dev/null | head -1)
+```
+
+- **State A** (`RECORDS_FILE` non-empty): a prior run exists. The gate re-runs and appends a dated
+  row to the audit trail in that file (D-04). Never skip because a passing record already exists;
+  the verdict is always derived from the CURRENT artifacts.
+- **State B** (`RECORDS_FILE` empty): first run for this phase.
+
+### C2. Run the Gate
+
+```bash
+GATE=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUM}" --write)
+if [[ "$GATE" == @file:* ]]; then GATE=$(cat "${GATE#@file:}"); fi
+```
+
+Exactly one JSON document comes back. Parse `verdict`, `rollup`, `counts` and `records_file`:
+
+- `rollup` is exactly thirteen rows, one per checker: `{ verb, scope, targets, severity, detail, findings }`.
+  Severity is one of `pass`, `warning`, `error`, `not_applicable`, `not_yet`.
+- `counts` totals every checker INVOCATION across every target, not the thirteen rows, so its
+  `total` runs well above 13 on a phase with several plans. Report the rollup, not this.
+- `records_file` is the path `--write` just wrote, always `${PHASE_DIR}/${PADDED_PHASE}-RECORDS.md`.
+
+Report the rollup as a short table - checker, severity, detail - for every row whose severity is
+not `pass`. Do not print all thirteen rows when all thirteen pass; print the counts line and say so.
+
+### C3. ENFORCING GATE (engine-enforced, ADVISORY)
+
+After the record file is written, re-derive the verdict from its own body table rather than trusting
+the frontmatter the writer just emitted. This is the same discipline A6 applies to `threats_open`:
+
+```bash
+RECORD_VERDICT=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUM}" --read --raw)
+RECORD_DETAIL=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUM}" --read)
+```
+
+`--read` runs no checkers; it parses the `## Verb Results` table in `NN-RECORDS.md` and returns
+`{ present, has_table, verdict, derived, declared, consistent, counts, file, detail }`. Decide what
+to report from this, not from what C2 printed:
+
+- `verdict: pass` -> report `[records] gate passed`.
+- `verdict: fail` -> report `[records] {counts.error} checker error(s)` and list them. Do NOT set
+  `SECURITY_BLOCKED` and do NOT suppress routing. The record dimension is advisory (D-02).
+- `verdict: not_run` -> the file is absent or its table is unparseable. Report
+  `[records] NOT RUN - no parseable record gate result for this phase`. A missing run never reads as
+  a pass (D-10, GATE-02).
+- `consistent: false` -> the frontmatter verdict disagrees with the body table. The TABLE WINS.
+  Report both values so the disagreement is visible.
+
+---
+
 ## Commit
 
 ```bash
 # Validation only: stage any generated test files first.
 [ -n "{generated_test_files}" ] && git add {test_files} && git commit -m "test(phase-${PHASE}): add Nyquist validation tests"
 
-node "$HOME/.claude/donny/bin/donny-tools.cjs" commit "docs(phase-${PHASE}): audit security and validation"
+node "$HOME/.claude/donny/bin/donny-tools.cjs" commit "docs(phase-${PHASE}): audit security, validation and records"
 ```
 
-(Scope the commit message to whichever audits ran: `audit security`, `audit validation`, or `audit security and validation`.)
+(Scope the commit message to whichever audits ran: `audit security`, `audit validation`, `audit records`,
+`audit security and records`, `audit validation and records`, `audit security and validation`, or
+`audit security, validation and records`.)
+
+`commit` with no `--files` stages `.planning/` wholesale, so `${PHASE_DIR}/*-RECORDS.md` is already
+included when `RUN_RECORDS` ran. Do not narrow the staging to a file list to pick it up - that would drop
+the SECURITY.md and VALIDATION.md written by the other two dimensions.
 
 ---
 
@@ -266,22 +344,35 @@ DONNY ► PHASE {N} SECURITY BLOCKED
 DONNY ► PHASE {N} AUDIT COMPLETE
 [security] threats_open: 0 - all threats have dispositions.
 [validation] {M} automated, {K} manual-only.
+[records] verdict: {RECORD_VERDICT} - {counts.error} errors, {counts.warning} warnings, {counts.not_yet} not-yet.
 ▶ /donny-verify-work {N}        run UAT
 ▶ /donny-audit-milestone ${DONNY_WS}   when the milestone is done
 ```
+
+The `[records]` line appears only when `RUN_RECORDS` was true, and its counts come from the C3
+`--read` result, so they describe the thirteen rows of the record's own table rather than the
+per-invocation totals C2 printed.
+
+The record dimension never sets `SECURITY_BLOCKED`. A failing record gate is reported and recorded,
+and routing proceeds (D-02). Nothing in this dimension may sit on the critical path of an unattended
+run.
 
 Show only the lines for the audits that ran. Display the `/clear` reminder.
 
 </process>
 
 <success_criteria>
-- [ ] Scope resolved from flags (default both; `--security`/`--validate` narrow) and config gates
-- [ ] Disabled-and-narrowed or both-disabled cases exit cleanly
+- [ ] Scope resolved from flags (default all three; `--security`/`--validate`/`--records` narrow) and config gates
+- [ ] Disabled-and-narrowed or all-disabled cases exit cleanly
 - [ ] Shared phase-executed gate (no SUMMARY -> exit)
 - [ ] Security: input state detected, threat register built, classified, user gate, auditor spawned, SECURITY.md created/updated
 - [ ] Security: auditor output written as `${PADDED_PHASE}-SECURITY.md` (bare-name guard applied) so State-A re-runs work
 - [ ] Security: threats_open > 0 BLOCKS advancement (no next-phase routing emitted)
 - [ ] Validation: input state detected, requirement map + test infra built, gaps classified, user gate, auditor spawned, VALIDATION.md created/updated, test files committed separately
 - [ ] Combined run records the validation result even when security blocks
+- [ ] Records: input state detected (State A re-run appends, State B first run)
+- [ ] Records: `verify gate {N} --write` run and `NN-RECORDS.md` written to the phase directory
+- [ ] Records: verdict re-derived via `--read`; a `consistent: false` disagreement reports both values and the table wins
+- [ ] Records: a failing or not-run record gate never blocks routing
 - [ ] Results reflect only the audits that ran, with routing
 </success_criteria>
