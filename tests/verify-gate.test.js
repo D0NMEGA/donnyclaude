@@ -1767,3 +1767,226 @@ describe('audit trail append (D-04)', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-11 / D-10 / GATE-02: reading a record back.
+//
+// The verdict is re-derived from the isolated '## Verb Results' table on every read. The
+// frontmatter status is reported as `declared` and never trusted, which is the A6 ENFORCING
+// GATE pattern audit-phase already applies to open threats. Absence and unparseability are
+// the same state, `not_run`, and neither may ever read as a pass.
+//
+// Every variant below is built from real renderRecordsMd output and then mutated, so these
+// exercise the shape the gate actually writes rather than a hand-written approximation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Render a record from a real gate run, with the gate result and render opts overridable. */
+const recordFor = (over = {}, opts = {}) => {
+  const root = buildGateFixture({});
+  try {
+    return verify.renderRecordsMd({ ...verify.runGate(root, '23'), ...over }, opts);
+  } finally { cleanupFixture(root); }
+};
+
+/** Apply fn to every line inside one '## ' section, leaving the rest of the document alone. */
+const inSection = (md, heading, fn) => {
+  const lines = md.split('\n');
+  const start = lines.findIndex((l) => l.trim() === heading);
+  if (start === -1) return md;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) { if (/^##\s/.test(lines[i])) { end = i; break; } }
+  return lines.map((l, i) => (i > start && i < end ? fn(l) : l)).join('\n');
+};
+
+const dropSection = (md, heading) => {
+  const lines = md.split('\n');
+  const start = lines.findIndex((l) => l.trim() === heading);
+  if (start === -1) return md;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) { if (/^##\s/.test(lines[i])) { end = i; break; } }
+  return lines.slice(0, start).concat(lines.slice(end)).join('\n');
+};
+
+const setVerbSeverity = (md, verb, sev) => inSection(md, '## Verb Results', (l) => {
+  if (!l.startsWith(`| ${verb} |`)) return l;
+  const c = cellsOf(l);
+  c[3] = sev;
+  return '| ' + c.join(' | ') + ' |';
+});
+
+const failingRecord = () => setVerbSeverity(recordFor(), 'phase-completeness', 'error')
+  .replace(/^status: pass$/m, 'status: fail')
+  .replace(/^errors: 0$/m, 'errors: 1');
+
+describe('readRecordsVerdict (D-11 / D-10 / GATE-02)', () => {
+  it('is exported as a function', () => {
+    assert.equal(typeof verify.readRecordsVerdict, 'function');
+  });
+
+  it('reads not_run when the phase has no *-RECORDS.md', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.present, false);
+      assert.equal(r.verdict, 'not_run');
+      assert.equal(r.derived, null);
+      assert.notEqual(r.verdict, 'pass');
+    });
+  });
+
+  it('reads not_run for a phase that does not resolve at all', () => {
+    withGateFixture({}, (root) => {
+      for (const bad of ['nope', '../../etc', '/etc']) {
+        const r = verify.readRecordsVerdict(root, bad);
+        assert.equal(r.verdict, 'not_run', `${bad} must not read as a pass`);
+        assert.equal(r.derived, null);
+      }
+    });
+  });
+
+  it('derives pass from a table with no error rows, and reports it consistent', () => {
+    withGateFixture({ records: recordFor() }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.present, true);
+      assert.equal(r.has_table, true);
+      assert.equal(r.derived, 'pass');
+      assert.equal(r.declared, 'pass');
+      assert.equal(r.consistent, true);
+      assert.equal(r.verdict, 'pass');
+      assert.equal(r.counts.error, 0);
+      assert.match(r.file, /-RECORDS\.md$/);
+    });
+  });
+
+  it('derives fail from a single error row', () => {
+    withGateFixture({ records: failingRecord() }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.derived, 'fail');
+      assert.equal(r.verdict, 'fail');
+      assert.equal(r.counts.error, 1);
+      assert.equal(r.consistent, true);
+    });
+  });
+
+  it('lets the table win over a hand-edited frontmatter verdict', () => {
+    // The entire point of D-11: someone edits `status: fail` to `status: pass` and the
+    // re-derivation is unmoved, reporting the disagreement rather than silently ignoring it.
+    const tampered = failingRecord().replace(/^status: fail$/m, 'status: pass');
+    withGateFixture({ records: tampered }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.derived, 'fail');
+      assert.equal(r.declared, 'pass');
+      assert.equal(r.consistent, false);
+      assert.equal(r.verdict, 'fail');
+      assert.match(r.detail, /table wins/i);
+    });
+  });
+
+  it('reads not_run when the Verb Results table is gone, never a pass', () => {
+    const truncated = dropSection(recordFor(), '## Verb Results');
+    withGateFixture({ records: truncated }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.present, true);
+      assert.equal(r.has_table, false);
+      assert.equal(r.verdict, 'not_run');
+      assert.equal(r.derived, null);
+      assert.notEqual(r.verdict, 'pass');
+    });
+  });
+
+  it('never counts the Audit Trail Verdict column or the Findings Severity column', () => {
+    // Deliberately adversarial and not a shape a real run produces: a passing rollup beside a
+    // Findings table full of `error` rows and a prior trail row reading `fail`. If the section
+    // isolation regressed, this reads fail, which is the miscount threatRegisterStatus's
+    // heading isolation exists to prevent (T-23-24).
+    const base = recordFor();
+    const gateRoot = buildGateFixture({});
+    let md;
+    try {
+      const gate = verify.runGate(gateRoot, '23');
+      md = verify.renderRecordsMd(
+        { ...gate, verbs: gate.verbs.map((v) => ({ ...v, severity: 'error', findings: ['a failing finding'] })) },
+        { trail: [['2026-01-01', '13', '5', '0', '0', '0', 'fail', 'an earlier failing run']] },
+      );
+    } finally { cleanupFixture(gateRoot); }
+    assert.match(md, /\| error \|/, 'the Findings table must actually carry error rows');
+    assert.match(md, /\| fail \|/, 'the trail must actually carry a failing verdict');
+    assert.equal(headings(md).length, headings(base).length);
+    withGateFixture({ records: md }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.derived, 'pass', 'only the Verb Results table may drive the verdict');
+      assert.equal(r.counts.error, 0);
+    });
+  });
+
+  it('counts an unrecognised severity as an error rather than letting it read clean', () => {
+    withGateFixture({ records: setVerbSeverity(recordFor(), 'plan-graph', 'probably-fine') }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.derived, 'fail');
+      assert.equal(r.counts.error, 1);
+      assert.match(r.detail, /plan-graph|unrecognised|unknown/i);
+    });
+  });
+
+  it('locates the Severity column by header name, not by a hardcoded index', () => {
+    // A column inserted ahead of Severity must not shift the read onto the wrong cell.
+    const shifted = inSection(recordFor(), '## Verb Results', (l) => {
+      if (!l.trim().startsWith('|')) return l;
+      const c = cellsOf(l);
+      if (c[0] === 'Verb') return '| Run | ' + c.join(' | ') + ' |';
+      if (/^[-: ]+$/.test(c[0])) return '| --- | ' + c.join(' | ') + ' |';
+      return '| x | ' + c.join(' | ') + ' |';
+    });
+    withGateFixture({ records: shifted }, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.equal(r.has_table, true, 'a shifted table must still parse');
+      // Reading a hardcoded index 3 would land on Targets, whose values are not severities,
+      // and every row would then count as an unrecognised-severity error.
+      assert.equal(r.derived, 'pass');
+      assert.equal(r.counts.error, 0);
+      assert.equal(r.counts.pass + r.counts.warning + r.counts.error
+        + r.counts.not_yet + r.counts.not_applicable, 13);
+    });
+  });
+});
+
+describe('GATE-02 not-run is never a pass', () => {
+  it('says so in the detail, so a consumer reading only that cannot confuse the two', () => {
+    withGateFixture({}, (root) => {
+      const r = verify.readRecordsVerdict(root, '23');
+      assert.match(r.detail, /not_run/);
+      assert.match(r.detail, /not a pass/i);
+    });
+  });
+
+  it('exposes the three-value vocabulary through the CLI without running a checker', () => {
+    withGateFixture({}, (root) => {
+      const before = runTools(root, ['verify', 'gate', '23', '--read', '--raw']);
+      assert.equal(before.status, 0, before.stderr);
+      assert.equal(before.stdout, 'not_run');
+      assert.equal(fs.readdirSync(join(root, '.planning/phases/23-gate')).some((f) => /-RECORDS\.md$/.test(f)), false);
+
+      runTools(root, ['verify', 'gate', '23', '--write']);
+      const after = runTools(root, ['verify', 'gate', '23', '--read', '--raw']);
+      assert.equal(after.stdout, 'pass');
+    });
+  });
+
+  it('lets --read win over --write, so a read can never mutate the trail', () => {
+    withGateFixture({}, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23', '--read', '--write', '--raw']);
+      assert.equal(r.stdout, 'not_run');
+      assert.equal(fs.readdirSync(join(root, '.planning/phases/23-gate')).some((f) => /-RECORDS\.md$/.test(f)), false);
+    });
+  });
+
+  it('emits the full readRecordsVerdict shape as JSON without --raw', () => {
+    withGateFixture({ records: recordFor() }, (root) => {
+      const r = runTools(root, ['verify', 'gate', '23', '--read']);
+      const doc = JSON.parse(r.stdout);
+      assert.equal(doc.present, true);
+      assert.equal(doc.derived, 'pass');
+      assert.equal(doc.consistent, true);
+      assert.ok(!('rollup' in doc), '--read must not run the checkers');
+    });
+  });
+});
