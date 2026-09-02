@@ -1086,6 +1086,83 @@ node "$HOME/.claude/donny/bin/donny-tools.cjs" commit "docs(phase-{X}): evolve P
 **Skip this step if** `.planning/PROJECT.md` does not exist.
 </step>
 
+<step name="record_gate">
+
+**Run the deterministic record checkers over this phase's own planning artifacts.**
+
+This step sits here, after `verify_phase_goal` has created VERIFICATION.md, deliberately. An
+earlier slot (for example inside `aggregate_results`) would run before VERIFICATION.md exists, so
+`phase-verified` would report `missing` on every healthy phase forever, and an always-red gate is
+an ignored gate.
+
+The gate is ADVISORY. It never blocks phase advancement, never sets a blocking flag, and never
+suppresses routing. A failure is loud here and permanent in the record, and the run continues.
+
+```bash
+RECORD_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.record_gate --raw 2>/dev/null || echo "true")
+```
+
+If `RECORD_CFG` is `false`: skip this step entirely and emit nothing.
+
+Otherwise run the gate and write the record:
+
+```bash
+GATE=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUMBER}" --write)
+if [[ "$GATE" == @file:* ]]; then GATE=$(cat "${GATE#@file:}"); fi
+```
+
+Exactly one JSON document comes back. `--write` is what creates
+`${PHASE_DIR}/${PADDED_PHASE}-RECORDS.md`; the same call without the flag writes nothing.
+
+Then re-derive the verdict from the written record's own body table rather than trusting the
+frontmatter that was just emitted. This is the ENFORCING GATE discipline A6 applies to
+`threats_open` in `workflows/audit-phase.md`, and the same re-derivation its Part C3 performs:
+
+```bash
+RECORD_VERDICT=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUMBER}" --read --raw)
+RECORD_JSON=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify gate "${PHASE_NUMBER}" --read)
+```
+
+Parse `counts`, `consistent` and `file` from `RECORD_JSON`. Those counts describe the record's own
+results table. The `counts` inside `GATE` total every checker invocation across every target
+instead, which is a much larger and different number, so report the ones from `RECORD_JSON`.
+
+Compose `RECORD_GATE_LINE` for the routing output in `offer_next`:
+
+- `RECORD_VERDICT` is `pass`:
+  ```
+  Records: gate passed ({counts.warning} warnings, {counts.not_yet} not-yet) - {file}
+  ```
+- `RECORD_VERDICT` is `fail`:
+  ```
+  ! Record gate: {counts.error} checker error(s) - {file}
+    /donny-audit-phase {PHASE} --records ${DONNY_WS} - re-run and review
+  ```
+  List each failing checker as `{verb} ({target}): {detail}`.
+- `RECORD_VERDICT` is `not_run`:
+  ```
+  ! Record gate: NOT RUN - no parseable record for this phase
+    /donny-audit-phase {PHASE} --records ${DONNY_WS}
+  ```
+  A missing run never reads as a pass (D-10, GATE-02).
+- `consistent` is `false`: append
+  ```
+    (record frontmatter says {declared}, its results table says {derived} - the table wins)
+  ```
+
+Commit the record with the phase-completion docs:
+
+```bash
+node "$HOME/.claude/donny/bin/donny-tools.cjs" commit "docs(phase-{X}): record gate results" --files {phase_dir}/*-RECORDS.md
+```
+
+**Do NOT** set any blocking variable, do not stop, and do not alter auto-advance behaviour based on
+`RECORD_VERDICT`. Nothing in this step may sit on the critical path of an unattended run.
+
+**Done when:** Record gate run after verification, `NN-RECORDS.md` written, verdict re-derived and
+surfaced in routing (advisory, never blocking).
+</step>
+
 <step name="offer_next">
 
 **Exception:** If `gaps_found`, the `verify_phase_goal` step already presents the gap-closure path (`/donny-plan-phase {X} --gaps`). No additional routing needed - skip auto-advance.
@@ -1105,6 +1182,7 @@ After verification passes and roadmap is updated, return completion status to pa
 Phase: ${PHASE_NUMBER} - ${PHASE_NAME}
 Plans: ${completed_count}/${total_count}
 Verification: {Passed | Gaps Found}
+Records: {RECORD_VERDICT}
 
 [Include aggregate_results output]
 ```
@@ -1144,13 +1222,20 @@ Read and follow `$HOME/.claude/donny/workflows/transition.md`, passing through t
 ```
 ## ✓ Phase {X}: {Name} Complete
 
+{RECORD_GATE_LINE}
+
 /donny-progress ${DONNY_WS} - see updated roadmap
 /donny-discuss-phase {next} ${DONNY_WS} - discuss next phase before planning
 /donny-plan-phase {next} ${DONNY_WS} - plan next phase
 /donny-execute-phase {next} ${DONNY_WS} - execute next phase
 ```
 
-Only suggest the commands listed above. Do not invent or hallucinate command names.
+Only suggest the commands listed above, plus the `/donny-audit-phase {PHASE} --records ${DONNY_WS}`
+that `{RECORD_GATE_LINE}` carries on a failing or not-run gate. Do not invent or hallucinate command
+names.
+
+Emit the `Records:` line and `{RECORD_GATE_LINE}` only when the `record_gate` step actually ran.
+When `RECORD_CFG` is `false` both are empty and neither block prints anything for them.
 </step>
 
 </process>
