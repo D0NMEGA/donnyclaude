@@ -1553,3 +1553,217 @@ describe('real-artifact calibration', { skip: !hasArchive }, () => {
     assert.deepEqual(fs.readdirSync(CCO_ARCHIVE).sort(), before);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECORD-04: the NN-RECORDS.md artifact the gate writes.
+//
+// The regression this block exists for is C-12. extractFrontmatter collects every '---'
+// pair in a document and keeps the LAST one (frontmatter.cjs:16-17), so a body using '---'
+// as a decorative section rule makes the file's own frontmatter unreadable. The shipped
+// templates/SECURITY.md has exactly that defect and parses to zero keys, and eight archived
+// v5.0 SUMMARYs carry it too. An artifact that carried the bug it exists to catch would be
+// worthless, so "exactly two '---' lines" is asserted on the template, on rendered output,
+// and on rendered output whose every dynamic string deliberately contains '---'.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RECORDS_TEMPLATE = resolve(ROOT, 'packages/donny/templates/RECORDS.md');
+const RECORDS_FM_KEYS = [
+  'status', 'agent', 'phase', 'slug', 'verbs_run',
+  'errors', 'warnings', 'not_yet', 'not_applicable', 'passed', 'created',
+];
+
+const headings = (text) => text.split(/\r?\n/).filter((l) => /^##\s/.test(l)).map((l) => l.trim());
+
+const sectionLines = (text, heading) => {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((l) => l.trim() === heading);
+  if (start === -1) return [];
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^##\s/.test(lines[i])) { end = i; break; }
+  }
+  return lines.slice(start + 1, end);
+};
+
+/** Data rows of the one markdown table inside a '## ' section, header and rule dropped. */
+const dataRows = (text, heading) => {
+  const rows = sectionLines(text, heading).filter((l) => l.trim().startsWith('|'));
+  return rows.slice(1).filter((l) => !/^\|[\s:|-]+\|$/.test(l.trim()));
+};
+
+const cellsOf = (row) => row.split('|').slice(1, -1).map((c) => c.trim());
+
+const NASTY = 'a detail containing\n---\na bare rule, a | pipe, a \r return and ' + 'x'.repeat(400);
+
+/** A gate result whose every dynamic string is hostile to the table and to the parser. */
+const hostileGate = (gate) => ({
+  ...gate,
+  rollup: gate.rollup.map((r) => ({ ...r, detail: NASTY, findings: [NASTY, NASTY] })),
+  verbs: gate.verbs.map((v) => ({ ...v, severity: 'error', detail: NASTY, findings: [NASTY] })),
+});
+
+describe('RECORDS.md rendering (RECORD-04)', () => {
+  it('ships a template that carries exactly two --- lines', () => {
+    const md = fs.readFileSync(RECORDS_TEMPLATE, 'utf-8');
+    assert.equal(fenceCount(md), 2, 'the template must not use --- as a section rule');
+  });
+
+  it('ships a template that parses back to complete frontmatter, unlike templates/SECURITY.md', () => {
+    const md = fs.readFileSync(RECORDS_TEMPLATE, 'utf-8');
+    const fm = extractFrontmatter(md);
+    for (const k of RECORDS_FM_KEYS) assert.ok(k in fm, `template frontmatter is missing ${k}`);
+    assert.equal(fm.status, 'pass');
+    // The counter-example, asserted so the difference is recorded rather than assumed.
+    const sec = fs.readFileSync(resolve(ROOT, 'packages/donny/templates/SECURITY.md'), 'utf-8');
+    assert.equal(Object.keys(extractFrontmatter(sec)).length, 0, 'C-12: SECURITY.md still parses to zero keys');
+  });
+
+  it('exports renderRecordsMd and writeRecordsFile', () => {
+    assert.equal(typeof verify.renderRecordsMd, 'function');
+    assert.equal(typeof verify.writeRecordsFile, 'function');
+  });
+
+  it('renders exactly two --- lines', () => {
+    withGateFixture({}, (root) => {
+      const out = verify.renderRecordsMd(verify.runGate(root, '23'), {});
+      assert.equal(fenceCount(out), 2);
+    });
+  });
+
+  it('renders exactly two --- lines even when every detail string contains one', () => {
+    withGateFixture({}, (root) => {
+      const out = verify.renderRecordsMd(hostileGate(verify.runGate(root, '23')), {});
+      assert.equal(fenceCount(out), 2, 'a --- inside a detail must never reach column 0');
+      assert.ok(!/\n\s*---/.test(out.slice(out.indexOf('\n---\n') + 5)), 'no body line may open with ---');
+      assert.equal(Object.keys(extractFrontmatter(out)).length >= RECORDS_FM_KEYS.length, true);
+    });
+  });
+
+  it('sanitizes every interpolated value: no newline, escaped pipe, truncated at 200', () => {
+    withGateFixture({}, (root) => {
+      const out = verify.renderRecordsMd(hostileGate(verify.runGate(root, '23')), {});
+      assert.ok(!out.includes('x'.repeat(210)), 'a long detail must be truncated');
+      assert.ok(out.includes('...'), 'truncation must be visible');
+      for (const line of out.split('\n')) {
+        if (!line.trim().startsWith('|')) continue;
+        for (const c of cellsOf(line)) {
+          assert.ok(c.length <= 210, `table cell too long (${c.length}): ${c.slice(0, 40)}`);
+          assert.ok(!/(^|[^\\])\|/.test(c), 'an unescaped pipe would break the table');
+        }
+      }
+    });
+  });
+
+  it('renders the same ## headings as the template, in the same order', () => {
+    withGateFixture({}, (root) => {
+      const tpl = headings(fs.readFileSync(RECORDS_TEMPLATE, 'utf-8'));
+      const out = headings(verify.renderRecordsMd(verify.runGate(root, '23'), {}));
+      assert.deepEqual(out, tpl, 'the template must describe the file the code actually writes');
+      assert.ok(tpl.includes('## Record Gate Audit Trail'));
+    });
+  });
+
+  it('renders frontmatter whose status is the gate verdict', () => {
+    withGateFixture({}, (root) => {
+      const gate = verify.runGate(root, '23');
+      const fm = extractFrontmatter(verify.renderRecordsMd(gate, {}));
+      for (const k of RECORDS_FM_KEYS) assert.ok(k in fm, `rendered frontmatter is missing ${k}`);
+      assert.equal(fm.status, gate.verdict);
+      assert.equal(fm.phase, '23-gate');
+      assert.equal(fm.slug, 'gate');
+      assert.equal(Number(fm.verbs_run), 13);
+      assert.match(fm.created, /^\d{4}-\d{2}-\d{2}$/);
+    });
+  });
+
+  it('renders one Verb Results row per GATE_VERBS entry, in GATE_VERBS order', () => {
+    withGateFixture({}, (root) => {
+      const out = verify.renderRecordsMd(verify.runGate(root, '23'), {});
+      const rows = dataRows(out, '## Verb Results');
+      assert.equal(rows.length, 13);
+      assert.deepEqual(rows.map((r) => cellsOf(r)[0]), verify.GATE_VERBS);
+    });
+  });
+
+  it('renders frontmatter counts that agree with the Verb Results table', () => {
+    withGateFixture({}, (root) => {
+      const out = verify.renderRecordsMd(verify.runGate(root, '23'), {});
+      const fm = extractFrontmatter(out);
+      const sev = dataRows(out, '## Verb Results').map((r) => cellsOf(r)[3]);
+      assert.equal(Number(fm.errors), sev.filter((s) => s === 'error').length);
+      assert.equal(Number(fm.warnings), sev.filter((s) => s === 'warning').length);
+      assert.equal(Number(fm.passed), sev.filter((s) => s === 'pass').length);
+      assert.equal(
+        Number(fm.errors) + Number(fm.warnings) + Number(fm.passed)
+          + Number(fm.not_yet) + Number(fm.not_applicable),
+        Number(fm.verbs_run),
+      );
+    });
+  });
+
+  it('writes <paddedPhase>-RECORDS.md into the resolved phase directory and returns its relative path', () => {
+    withGateFixture({}, (root) => {
+      const gate = verify.runGate(root, '23');
+      const rel = verify.writeRecordsFile(root, gate, {});
+      assert.equal(rel, '.planning/phases/23-gate/23-RECORDS.md');
+      const md = fs.readFileSync(join(root, rel), 'utf-8');
+      assert.equal(fenceCount(md), 2);
+      assert.equal(extractFrontmatter(md).status, gate.verdict);
+    });
+  });
+
+  it('refuses to write when the gate did not resolve a phase', () => {
+    withGateFixture({}, (root) => {
+      assert.equal(verify.writeRecordsFile(root, verify.runGate(root, 'nope'), {}), null);
+      assert.equal(verify.writeRecordsFile(root, null, {}), null);
+    });
+  });
+
+  it('exports the markdown table helpers rather than growing a second pipe splitter', () => {
+    assert.equal(typeof verify.splitTableRow, 'function');
+    assert.equal(typeof verify.isSeparatorRow, 'function');
+    assert.deepEqual(verify.splitTableRow('| a | b |'), ['a', 'b']);
+    assert.equal(verify.isSeparatorRow(['---', ':---:']), true);
+  });
+});
+
+describe('audit trail append (D-04)', () => {
+  it('appends a dated run rather than replacing the history', () => {
+    withGateFixture({}, (root) => {
+      const gate = verify.runGate(root, '23');
+      const rel = verify.writeRecordsFile(root, gate, { runBy: 'first run' });
+      const first = fs.readFileSync(join(root, rel), 'utf-8');
+      const firstRows = dataRows(first, '## Record Gate Audit Trail');
+      assert.equal(firstRows.length, 1);
+
+      verify.writeRecordsFile(root, verify.runGate(root, '23'), { runBy: 'second run' });
+      const second = fs.readFileSync(join(root, rel), 'utf-8');
+      const secondRows = dataRows(second, '## Record Gate Audit Trail');
+      assert.equal(secondRows.length, 2, 'D-04: a re-close appends, never replaces');
+      assert.equal(secondRows[0], firstRows[0], 'the prior row must survive byte-identical');
+      assert.match(secondRows[0], /first run/);
+      assert.match(secondRows[1], /second run/);
+    });
+  });
+
+  it('replaces the Verb Results table rather than duplicating it', () => {
+    withGateFixture({}, (root) => {
+      const rel = verify.writeRecordsFile(root, verify.runGate(root, '23'), {});
+      verify.writeRecordsFile(root, verify.runGate(root, '23'), {});
+      const md = fs.readFileSync(join(root, rel), 'utf-8');
+      assert.equal(dataRows(md, '## Verb Results').length, 13, 'the current verdict reflects current artifacts');
+      assert.equal(fenceCount(md), 2);
+      assert.equal(headings(md).length, 4);
+    });
+  });
+
+  it('never skips a run because a passing record already exists', () => {
+    withGateFixture({}, (root) => {
+      const rel = verify.writeRecordsFile(root, verify.runGate(root, '23'), { runBy: 'run one' });
+      assert.equal(extractFrontmatter(fs.readFileSync(join(root, rel), 'utf-8')).status, 'pass');
+      verify.writeRecordsFile(root, verify.runGate(root, '23'), { runBy: 'run two' });
+      const rows = dataRows(fs.readFileSync(join(root, rel), 'utf-8'), '## Record Gate Audit Trail');
+      assert.equal(rows.length, 2);
+    });
+  });
+});
