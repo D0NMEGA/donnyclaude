@@ -81,6 +81,7 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
         files_created: { checked: 0, found: 0, missing: [] },
         commits_exist: false,
         self_check: 'not_found',
+        requirements_completed: null,
       },
       errors: ['SUMMARY.md not found'],
     };
@@ -144,6 +145,27 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
     }
   }
 
+  // --- Check 5: requirements-completed (D-16, RECORD-03) ---
+  // cmdVerifyMilestoneCoverage gates requirement credit on Array.isArray(rc). Using the
+  // identical predicate here makes the two checks agree by construction: anything this check
+  // accepts, the coverage engine will also read.
+  //
+  // Three failing states, not two. Besides "missing" and "empty", a SUMMARY can carry the key
+  // in a form that parses as a STRING (a trailing inline comment defeats the endsWith(']')
+  // test at frontmatter.cjs:55) or can have its whole frontmatter shadowed by a body '---'
+  // pair (extractFrontmatter takes the LAST block, frontmatter.cjs:16-17). Both look correct
+  // to a human reader and are invisible to every checker, which is the July J2 defect.
+  const fm = extractFrontmatter(content);
+  const rcRaw = fm['requirements-completed'];
+  const requirementsCompleted = Array.isArray(rcRaw) ? rcRaw : null;
+  if (requirementsCompleted === null) {
+    errors.push(rcRaw === undefined
+      ? 'requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)'
+      : 'requirements-completed is not a YAML list (a trailing inline comment makes it parse as a string)');
+  } else if (requirementsCompleted.length === 0) {
+    errors.push('requirements-completed is empty');
+  }
+
   if (missing.length > 0) errors.push('Missing files: ' + missing.join(', '));
   if (!commitsExist && hashes.length > 0) errors.push('Referenced commit hashes not found in git history');
   if (selfCheck === 'failed') errors.push('Self-check section indicates failure');
@@ -153,9 +175,13 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
     files_created: { checked: filesToCheck.length, found: filesToCheck.length - missing.length, missing },
     commits_exist: commitsExist,
     self_check: selfCheck,
+    requirements_completed: requirementsCompleted,
   };
 
-  const passed = missing.length === 0 && selfCheck !== 'failed';
+  const passed = missing.length === 0
+    && selfCheck !== 'failed'
+    && requirementsCompleted !== null
+    && requirementsCompleted.length > 0;
   const result = { passed, checks, errors };
   output(result, raw, passed ? 'passed' : 'failed');
 }

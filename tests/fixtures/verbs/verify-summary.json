@@ -19,7 +19,10 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-04"
+          ]
         },
         "errors": [
           "Missing files: autopilot/bridge.py, $TMPDIR/claude-ctx-{id}.json"
@@ -42,7 +45,10 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-03"
+          ]
         },
         "errors": [
           "Missing files: autopilot/registry.py, ~/.claude/hooks/cco-autopilot-register.js",
@@ -66,7 +72,10 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "failed"
+          "self_check": "failed",
+          "requirements_completed": [
+            "PILOT-05"
+          ]
         },
         "errors": [
           "Missing files: autopilot/runner.py, autopilot/idempotency.py",
@@ -91,7 +100,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-01",
+            "PILOT-02"
+          ]
         },
         "errors": [
           "Missing files: ~/.zshrc, autopilot/__main__.py",
@@ -115,9 +128,11 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: autopilot/action.py, autopilot/config.py"
         ]
       }
@@ -138,9 +153,11 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "failed"
+          "self_check": "failed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: autopilot/action.py, autopilot/config.py",
           "Self-check section indicates failure"
         ]
@@ -162,9 +179,11 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "failed"
+          "self_check": "failed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: ~/Developer/cc-autopilot/autopilot/daemon.py, ~/.claude/.autopilot/config.json",
           "Self-check section indicates failure"
         ]
@@ -186,7 +205,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-06",
+            "PILOT-07"
+          ]
         },
         "errors": [
           "Missing files: ~/Developer/cc-autopilot/INSTALL.md, ~/.claude/.autopilot/config.json",
@@ -210,9 +233,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: tests/test_limits.py, tests/test_resume.py",
           "Referenced commit hashes not found in git history"
         ]
@@ -234,9 +259,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: autopilot/limits.py, autopilot/pending.py",
           "Referenced commit hashes not found in git history"
         ]
@@ -258,9 +285,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "failed"
+          "self_check": "failed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: ~/.claude/hooks/cco-autopilot-limit.js, ~/.claude/.autopilot/limits.d/{session_id}.json",
           "Referenced commit hashes not found in git history",
           "Self-check section indicates failure"
@@ -283,9 +312,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: autopilot/daemon.py, tests/test_daemon.py",
           "Referenced commit hashes not found in git history"
         ]
@@ -307,9 +338,11 @@
             ]
           },
           "commits_exist": false,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": null
         },
         "errors": [
+          "requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)",
           "Missing files: ~/Developer/cc-autopilot/autopilot/daemon.py, ~/.claude/.autopilot/limits.d",
           "Referenced commit hashes not found in git history"
         ]
@@ -330,7 +363,12 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-08",
+            "PILOT-09",
+            "PILOT-10"
+          ]
         },
         "errors": [
           "Missing files: ~/.zshrc"
@@ -353,7 +391,14 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-01",
+            "PILOT-02",
+            "PILOT-03",
+            "PILOT-04",
+            "PILOT-05"
+          ]
         },
         "errors": [
           "Missing files: .planning/phases/19-supervisor-foundation/19-VERIFICATION.md, .planning/phases/19-supervisor-foundation/19-01-SUMMARY.md"
@@ -376,7 +421,14 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-06",
+            "PILOT-07",
+            "PILOT-08",
+            "PILOT-09",
+            "PILOT-10"
+          ]
         },
         "errors": [
           "Missing files: .planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md, .planning/phases/20-auto-compact-at-60-keystone/20-04-SUMMARY.md"
@@ -398,7 +450,14 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-06",
+            "PILOT-07",
+            "PILOT-08",
+            "PILOT-09",
+            "PILOT-10"
+          ]
         },
         "errors": [
           "Missing files: ~/.zshrc"
@@ -421,7 +480,19 @@
             ]
           },
           "commits_exist": true,
-          "self_check": "passed"
+          "self_check": "passed",
+          "requirements_completed": [
+            "PILOT-01",
+            "PILOT-02",
+            "PILOT-03",
+            "PILOT-04",
+            "PILOT-05",
+            "PILOT-06",
+            "PILOT-07",
+            "PILOT-08",
+            "PILOT-09",
+            "PILOT-10"
+          ]
         },
         "errors": [
           "Missing files: .planning/phases/20-auto-compact-at-60-keystone/20-LEDGER.jsonl, .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-LEDGER.jsonl"
@@ -441,7 +512,8 @@
             "missing": []
           },
           "commits_exist": false,
-          "self_check": "not_found"
+          "self_check": "not_found",
+          "requirements_completed": null
         },
         "errors": [
           "SUMMARY.md not found"
