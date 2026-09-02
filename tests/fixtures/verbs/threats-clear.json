@@ -1,0 +1,69 @@
+{
+  "verb": "threats-clear",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19 archived",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation",
+      "output": {
+        "clear": true,
+        "threats_open": 0,
+        "open_ids": [],
+        "declared": null,
+        "consistent": true,
+        "has_register": true,
+        "phase": "19-supervisor-foundation"
+      }
+    },
+    {
+      "label": "20 archived",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone",
+      "output": {
+        "clear": true,
+        "threats_open": 0,
+        "open_ids": [],
+        "declared": 0,
+        "consistent": true,
+        "has_register": true,
+        "phase": "20-auto-compact-at-60-keystone"
+      }
+    },
+    {
+      "label": "21 archived",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement",
+      "output": {
+        "clear": true,
+        "threats_open": 0,
+        "open_ids": [],
+        "declared": 0,
+        "consistent": true,
+        "has_register": true,
+        "phase": "21-usage-aware-resume-cc-continue-retirement"
+      }
+    },
+    {
+      "label": "22 archived",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure",
+      "output": {
+        "clear": true,
+        "threats_open": 0,
+        "open_ids": [],
+        "declared": 0,
+        "consistent": true,
+        "has_register": true,
+        "phase": "22-audit-gap-closure"
+      }
+    },
+    {
+      "label": "empty phase",
+      "source": "synthetic",
+      "output": {
+        "clear": false,
+        "status": "missing",
+        "error": "No SECURITY.md in phase",
+        "phase": "99-empty"
+      }
+    }
+  ]
+}

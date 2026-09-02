@@ -1,0 +1,541 @@
+{
+  "verb": "key-links",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-01-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "autopilot/bridge.py",
+            "to": "$TMPDIR/claude-ctx-{session_id}.json",
+            "via": "json.load of the file located by tempfile.gettempdir()",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/bridge.py::is_stale",
+            "to": "now - bridge['timestamp'] > 60",
+            "via": "injectable now() for deterministic tests",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "19-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-02-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 3,
+        "links": [
+          {
+            "from": "~/.claude/hooks/cco-autopilot-register.js",
+            "to": "~/.claude/.autopilot/registry.d/{session_id}.json",
+            "via": "atomic write (temp + rename) of $TMUX_PANE + stdin session_id/cwd",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/registry.py::resolve_pane",
+            "to": "the per-session registry record",
+            "via": "lookup keyed on session_id (never session name)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/registry.py::reconcile",
+            "to": "tmux list-panes + bridge freshness",
+            "via": "prune entries whose pane is gone or whose bridge is stale/absent (D-10)",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "19-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-03-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 4,
+        "links": [
+          {
+            "from": "autopilot/daemon.py::poll_once",
+            "to": "bridge.discover_sessions + bridge.is_stale + registry.resolve_pane + registry.reconcile",
+            "via": "the composed observe-only detect loop",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/daemon.py",
+            "to": "the JSONL action log",
+            "via": "one json.dumps()+newline append per evaluated session",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/runner.py::build_cco_dream_argv",
+            "to": "~/.claude/bin/cco-dream",
+            "via": "subprocess argv list (never shell=True), never --dangerously-skip-permissions",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/daemon.py::evaluate_session",
+            "to": "idempotency.already_fired",
+            "via": "fire-once-per-crossing guard before logging would_compact",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "19-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-04-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 3,
+        "links": [
+          {
+            "from": "~/.zshrc claude()",
+            "to": "tmux new-session … claude",
+            "via": "session-per-claude wrapper with NO_TMUX/$TMUX bypass (D-04/D-05)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "~/Library/LaunchAgents/com.user.ccautopilot.plist",
+            "to": "python -m autopilot (absolute interpreter + absolute PATH)",
+            "via": "ProgramArguments + RunAtLoad + KeepAlive",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "SessionStart hook (cco-autopilot-register.js)",
+            "to": "a real %N pane id in the registry",
+            "via": "$TMUX_PANE inherited inside the wrapped tmux session (D-11 — empirically verified here)",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-01-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 3,
+        "links": [
+          {
+            "from": "tests/test_action.py",
+            "to": "autopilot.action (skeleton)",
+            "via": "from autopilot import action",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "tests/test_config.py",
+            "to": "autopilot.config (skeleton)",
+            "via": "from autopilot import config",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "tests/conftest.py::fake_tmux",
+            "to": "the injected run seam (mirrors registry.tmux_live_panes stub)",
+            "via": "a run(argv,...) that captures argv and returns settable stdout per subcommand",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-02-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 4,
+        "links": [
+          {
+            "from": "autopilot/action.py::send_compact",
+            "to": "tmux send-keys (the %N pane)",
+            "via": "run(send_keys_literal_argv) -> sleep(ENTER_SETTLE_SECS) -> run(send_keys_enter_argv) — an argv LIST, never shell=True",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/action.py::is_pane_idle",
+            "to": "tmux capture-pane -p -t %N",
+            "via": "capture the pane tail, look for the ❯ idle marker (fail-closed on error/non-zero)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/action.py::compact_marker_present",
+            "to": "$TMPDIR/claude-ctx-{id}-nudged.json",
+            "via": "os.path.exists + freshness (mtime within STALE window) — the D-12 dedupe read",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/config.py::act_enabled",
+            "to": "~/.claude/.autopilot/config.json",
+            "via": "json.load; safe default False on (OSError, ValueError) or absent 'act' key",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-03-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 4,
+        "links": [
+          {
+            "from": "autopilot/daemon.py::evaluate_session",
+            "to": "action.send_compact(session_id, pane, tmpdir=…, run=run)",
+            "via": "the act branch of decision-ladder step 5 (only when act=True and used>=threshold and not already armed)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/daemon.py::evaluate_session",
+            "to": "idempotency.record_fired",
+            "via": "arm-on-send — record_fired ONLY after send_compact returns SENT (D-05); observe-only still arms on the would_compact decision",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/daemon.py::evaluate_session (step 4)",
+            "to": "idempotency.clear_fired",
+            "via": "re-arm ONLY when used < REARM_BELOW_PCT (45), not <60 (D-07)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/daemon.py::main",
+            "to": "config.act_enabled(config_path)",
+            "via": "each poll iteration reads the toggle and passes act into poll_once (D-10 — no reload to flip)",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-04-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "INSTALL.md act-mode section",
+            "via": "the documented opt-in the daemon reads each poll (D-10)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "INSTALL.md Phase-20 live gate",
+            "to": "the §6 Phase-19 OPERATOR RESIDUAL (live >=60% crossing)",
+            "via": "the exact gate this phase discharges — one /compact lands, used_pct drops, no other pane touched (D-09)",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-01-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 3,
+        "links": [
+          {
+            "from": "tests/test_limits.py",
+            "to": "autopilot.limits (skeleton)",
+            "via": "from autopilot import limits",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "tests/test_resume.py",
+            "to": "autopilot.pending + autopilot.action.send_resume (skeletons) + daemon resume ladder (future)",
+            "via": "from autopilot import pending, action, daemon",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "tests/test_composition.py",
+            "to": "autopilot/runner.py (byte-unchanged boundary)",
+            "via": "hashlib.md5 of runner.py == the pinned pre-work value",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-02-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 3,
+        "links": [
+          {
+            "from": "autopilot/limits.py",
+            "to": "stdlib zoneinfo.ZoneInfo",
+            "via": "IANA reset-time resolution + ZoneInfoNotFoundError fail-closed",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/action.py::send_resume",
+            "to": "the LOCKED send-keys form (is_pane_idle + ENTER_SETTLE_SECS + separate Enter)",
+            "via": "reuse of the Phase-20 action constants, no runner.py import",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "autopilot/pending.py",
+            "to": "atomic on-disk state (temp file + os.replace)",
+            "via": "the idempotency.py durability pattern",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-03-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "~/.claude/settings.json hooks.StopFailure",
+            "to": "~/.claude/hooks/cco-autopilot-limit.js",
+            "via": "node command with matcher rate_limit",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "cco-autopilot-limit.js marker",
+            "to": "~/.claude/.autopilot/limits.d/{session_id}.json (daemon reads in 21-05)",
+            "via": "atomic temp-write-then-rename, same shape as conftest write_limit_marker",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-04-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "daemon.poll_once",
+            "to": "registry.reconcile output",
+            "via": "the reconciled dict is passed into evaluate_session (records=...), not discarded",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "daemon._append_events",
+            "to": "the rolled archive <log>.1",
+            "via": "os.replace when the file exceeds LOG_MAX_BYTES, keep 2",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-05-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-05-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "daemon resume ladder",
+            "to": "autopilot.limits.parse_limit_message + autopilot.pending + autopilot.action.send_resume + config.continuation_for",
+            "via": "composition of the 21-02 building blocks (no new parser/keystroke code here)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "daemon resume fire",
+            "to": "the reconciled registry (D-11) + capture-pane self-cancel",
+            "via": "pane-gone -> resume_pane_gone; banner-gone -> resume_cancelled",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-06-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-06-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "INSTALL.md retirement section",
+            "to": "~/Library/LaunchAgents/retired/com.user.cc_continue_once.plist",
+            "via": "launchctl bootout + mv to retired/ + the documented restore one-liner",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "REQUIREMENTS.md PILOT-10",
+            "to": "PILOT-08/09 proven (the resume gate)",
+            "via": "the D-13 re-gate",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-01-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "19-VERIFICATION.md status field",
+            "to": "phaseVerificationVerdict -> requirementCoverageStatus",
+            "via": "frontmatter status == passed",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "19-0x-SUMMARY.md requirements-completed",
+            "to": "allSummaryReqs set (global) -> summaryListed=true",
+            "via": "extractFrontmatter reads the last '---...---' pair, which after de-shadow is the real frontmatter",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-02-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 3,
+        "links": [
+          {
+            "from": "20-VERIFICATION.md status (after de-shadow)",
+            "to": "phaseVerificationVerdict -> coverage PILOT-06/07",
+            "via": "frontmatter status == passed",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "20-04-SUMMARY requirements-completed",
+            "to": "allSummaryReqs -> summaryListed for PILOT-06/07",
+            "via": "extractFrontmatter (20-04 is single-block)",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "21-VERIFICATION.md status",
+            "to": "coverage PILOT-08/09/10 (21-06-SUMMARY already lists them)",
+            "via": "frontmatter status == passed",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-03-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 1,
+        "links": [
+          {
+            "from": "launchctl kickstart -k gui/501/com.user.ccautopilot",
+            "to": "new daemon process start time",
+            "via": "process relaunch; start-time > daemon.py mtime (2026-07-03T11:31:19)",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-04-PLAN.md",
+      "output": {
+        "all_verified": false,
+        "verified": 0,
+        "total": 2,
+        "links": [
+          {
+            "from": "repaired 19/20/21 artifacts (plans 22-01/02)",
+            "to": "verify milestone-coverage gate=passed",
+            "via": "status passed + requirements-completed readable for all 10 ids",
+            "verified": false,
+            "detail": "Source file not found"
+          },
+          {
+            "from": "enumerated git add paths",
+            "to": "one scoped commit",
+            "via": "explicit path list (never git add -A) + secret scan",
+            "verified": false,
+            "detail": "Source file not found"
+          }
+        ]
+      }
+    },
+    {
+      "label": "plan whose must_haves has no key_links block",
+      "source": "synthetic",
+      "output": {
+        "error": "No must_haves.key_links found in frontmatter",
+        "path": ".planning/phases/99-bare/99-01-PLAN.md"
+      }
+    }
+  ]
+}

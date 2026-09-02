@@ -1,0 +1,740 @@
+{
+  "verb": "milestone-coverage",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "current milestone, read while recording phase 19",
+      "source": ".planning/REQUIREMENTS.md",
+      "output": {
+        "gate": "gaps_found",
+        "counts": {
+          "satisfied": 0,
+          "partial": 0,
+          "unsatisfied": 23,
+          "orphaned": 18
+        },
+        "requirements": [
+          {
+            "id": "RECORD-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-04",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-01",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-02",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-01",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-02",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-03",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-03",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-04",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-05",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-01",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-02",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-03",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-04",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-05",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-06",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-07",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-08",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "current milestone, read while recording phase 20",
+      "source": ".planning/REQUIREMENTS.md",
+      "output": {
+        "gate": "gaps_found",
+        "counts": {
+          "satisfied": 0,
+          "partial": 0,
+          "unsatisfied": 23,
+          "orphaned": 18
+        },
+        "requirements": [
+          {
+            "id": "RECORD-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-04",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-01",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-02",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-01",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-02",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-03",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-03",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-04",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-05",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-01",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-02",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-03",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-04",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-05",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-06",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-07",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-08",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "current milestone, read while recording phase 21",
+      "source": ".planning/REQUIREMENTS.md",
+      "output": {
+        "gate": "gaps_found",
+        "counts": {
+          "satisfied": 0,
+          "partial": 0,
+          "unsatisfied": 23,
+          "orphaned": 18
+        },
+        "requirements": [
+          {
+            "id": "RECORD-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-04",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-01",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-02",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-01",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-02",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-03",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-03",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-04",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-05",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-01",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-02",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-03",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-04",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-05",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-06",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-07",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-08",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "current milestone, read while recording phase 22",
+      "source": ".planning/REQUIREMENTS.md",
+      "output": {
+        "gate": "gaps_found",
+        "counts": {
+          "satisfied": 0,
+          "partial": 0,
+          "unsatisfied": 23,
+          "orphaned": 18
+        },
+        "requirements": [
+          {
+            "id": "RECORD-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "RECORD-04",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-01",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-02",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "GATE-03",
+            "phase": "23-record-integrity-and-the-validation-gate",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-01",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-02",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CONFIG-03",
+            "phase": "Phase 24",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-01",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-02",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-03",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-04",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "SEAM-05",
+            "phase": "Phase 25",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-01",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-02",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-03",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-04",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-05",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-06",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-07",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "CRITIC-08",
+            "phase": "Phase 26",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "fixture REQUIREMENTS with one covered and one orphaned requirement",
+      "source": "synthetic",
+      "output": {
+        "gate": "gaps_found",
+        "counts": {
+          "satisfied": 0,
+          "partial": 0,
+          "unsatisfied": 2,
+          "orphaned": 1
+        },
+        "requirements": [
+          {
+            "id": "FIX-01",
+            "phase": "99-bare",
+            "status": "unsatisfied",
+            "orphaned": false,
+            "needs_checkbox_update": false
+          },
+          {
+            "id": "FIX-02",
+            "phase": "Phase 98",
+            "status": "unsatisfied",
+            "orphaned": true,
+            "needs_checkbox_update": false
+          }
+        ]
+      }
+    }
+  ]
+}

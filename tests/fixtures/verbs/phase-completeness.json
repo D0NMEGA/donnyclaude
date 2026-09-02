@@ -1,0 +1,77 @@
+{
+  "verb": "phase-completeness",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19 archived",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation",
+      "output": {
+        "complete": true,
+        "phase": "19",
+        "plan_count": 4,
+        "summary_count": 4,
+        "incomplete_plans": [],
+        "orphan_summaries": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    {
+      "label": "20 archived",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone",
+      "output": {
+        "complete": true,
+        "phase": "20",
+        "plan_count": 4,
+        "summary_count": 4,
+        "incomplete_plans": [],
+        "orphan_summaries": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    {
+      "label": "21 archived",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement",
+      "output": {
+        "complete": true,
+        "phase": "21",
+        "plan_count": 6,
+        "summary_count": 6,
+        "incomplete_plans": [],
+        "orphan_summaries": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    {
+      "label": "22 archived",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure",
+      "output": {
+        "complete": true,
+        "phase": "22",
+        "plan_count": 4,
+        "summary_count": 4,
+        "incomplete_plans": [],
+        "orphan_summaries": [],
+        "errors": [],
+        "warnings": []
+      }
+    },
+    {
+      "label": "empty phase",
+      "source": "synthetic",
+      "output": {
+        "complete": true,
+        "phase": "99",
+        "plan_count": 0,
+        "summary_count": 0,
+        "incomplete_plans": [],
+        "orphan_summaries": [],
+        "errors": [],
+        "warnings": []
+      }
+    }
+  ]
+}

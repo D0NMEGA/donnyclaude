@@ -1,0 +1,56 @@
+{
+  "verb": "schema-drift",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19 archived",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation",
+      "output": {
+        "drift_detected": false,
+        "blocking": false,
+        "message": "Phase directory not found: 19-supervisor-foundation"
+      }
+    },
+    {
+      "label": "20 archived",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone",
+      "output": {
+        "drift_detected": false,
+        "blocking": false,
+        "message": "Phase directory not found: 20-auto-compact-at-60-keystone"
+      }
+    },
+    {
+      "label": "21 archived",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement",
+      "output": {
+        "drift_detected": false,
+        "blocking": false,
+        "message": "Phase directory not found: 21-usage-aware-resume-cc-continue-retirement"
+      }
+    },
+    {
+      "label": "22 archived",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure",
+      "output": {
+        "drift_detected": false,
+        "blocking": false,
+        "message": "Phase directory not found: 22-audit-gap-closure"
+      }
+    },
+    {
+      "label": "live (non-archived) fixture phase",
+      "source": "synthetic",
+      "output": {
+        "drift_detected": false,
+        "blocking": false,
+        "schema_files": [],
+        "orms": [],
+        "unpushed_orms": [],
+        "message": "",
+        "skipped": false
+      }
+    }
+  ]
+}

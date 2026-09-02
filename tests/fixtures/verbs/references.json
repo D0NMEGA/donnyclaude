@@ -1,0 +1,568 @@
+{
+  "verb": "references",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-01-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/get-shit-done/workflows/execute-plan.md",
+          "$HOME/.claude/get-shit-done/templates/summary.md",
+          ".planning/phases/19-supervisor-foundation/19-CONTEXT.md",
+          ".planning/phases/19-supervisor-foundation/19-RESEARCH.md",
+          ".planning/phases/19-supervisor-foundation/19-VALIDATION.md",
+          "tests/conftest.py",
+          "autopilot/bridge.py",
+          "autopilot/__init__.py",
+          "tests/test_bridge.py",
+          "tests/test_registry.py",
+          "tests/test_daemon.py",
+          "tests/test_runner.py",
+          "~/Developer/cc-autopilot/autopilot/__init__.py",
+          "~/Developer/cc-autopilot/tests/conftest.py",
+          "grep -a 'tempfile.gettempdir' ~/Developer/cc-autopilot/tests/conftest.py",
+          "~/Developer/cc-autopilot/autopilot/bridge.py",
+          "grep -a 'STALE_SECONDS = 60' ~/Developer/cc-autopilot/autopilot/bridge.py",
+          "grep -aE '\"\\.\\.\"|\\\\.\\\\.' ~/Developer/cc-autopilot/autopilot/bridge.py",
+          "grep -a 'except (OSError, ValueError)' ~/Developer/cc-autopilot/autopilot/bridge.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/bridge.py",
+          "$TMPDIR/claude-ctx-*.json",
+          ".planning/phases/19-supervisor-foundation/19-01-SUMMARY.md"
+        ],
+        "total": 25
+      }
+    },
+    {
+      "label": "19-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-02-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/get-shit-done/workflows/execute-plan.md",
+          "$HOME/.claude/get-shit-done/templates/summary.md",
+          ".planning/phases/19-supervisor-foundation/19-CONTEXT.md",
+          ".planning/phases/19-supervisor-foundation/19-RESEARCH.md",
+          ".planning/phases/19-supervisor-foundation/19-VALIDATION.md",
+          "autopilot/registry.py",
+          "~/.claude/.autopilot/registry.d/{session_id}.json",
+          "registry.d/<sessionId>.json.<pid>.tmp",
+          "~/.claude/hooks/cco-autopilot-register.js",
+          "~/.claude/hooks/cco-autopilot-deregister.js",
+          "grep -aE 'renameSync|\\.tmp' ~/.claude/hooks/cco-autopilot-register.js",
+          "grep -aE '/\\[/\\\\\\\\\\]|\\\\.\\\\.' ~/.claude/hooks/cco-autopilot-register.js",
+          "grep -ac 'process.exit(0)' ~/.claude/hooks/cco-autopilot-register.js",
+          "registry.d/testsess19.json",
+          "grep -ai 'transcript\\|message\\|content' ~/.claude/hooks/cco-autopilot-register.js",
+          "grep -ac 'cco-cerebrum-recall\\|cco-instinct-observe' ~/.claude/settings.json",
+          "registry.d/*.json",
+          "~/Developer/cc-autopilot/autopilot/registry.py",
+          "grep -a 'list-panes' ~/Developer/cc-autopilot/autopilot/registry.py",
+          "grep -ac 'except (OSError' ~/Developer/cc-autopilot/autopilot/registry.py",
+          "grep -a 'dangerously-skip-permissions' ~/Developer/cc-autopilot/autopilot/registry.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/registry.py",
+          ".planning/phases/19-supervisor-foundation/19-02-SUMMARY.md"
+        ],
+        "total": 26
+      }
+    },
+    {
+      "label": "19-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-03-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/get-shit-done/workflows/execute-plan.md",
+          "$HOME/.claude/get-shit-done/templates/summary.md",
+          ".planning/phases/19-supervisor-foundation/19-CONTEXT.md",
+          ".planning/phases/19-supervisor-foundation/19-RESEARCH.md",
+          ".planning/phases/19-supervisor-foundation/19-VALIDATION.md",
+          "autopilot/runner.py",
+          "autopilot/idempotency.py",
+          "state/<session_id>.json",
+          "~/Developer/cc-autopilot/autopilot/runner.py",
+          "grep -a 'dangerously-skip-permissions' ~/Developer/cc-autopilot/autopilot/runner.py",
+          "grep -a 'cco-dream' ~/Developer/cc-autopilot/autopilot/runner.py",
+          "~/Developer/cc-autopilot/autopilot/idempotency.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/runner.py ~/Developer/cc-autopilot/autopilot/idempotency.py",
+          "autopilot/daemon.py",
+          "log_path = ~/Developer/cc-autopilot/logs/autopilot.jsonl",
+          "~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -a 'send-keys\\|dangerously-skip-permissions' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -a 'except Exception as' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -aR 'send-keys' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          ".planning/phases/19-supervisor-foundation/19-03-SUMMARY.md"
+        ],
+        "total": 24
+      }
+    },
+    {
+      "label": "19-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-04-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/get-shit-done/workflows/execute-plan.md",
+          "$HOME/.claude/get-shit-done/templates/summary.md",
+          ".planning/phases/19-supervisor-foundation/19-CONTEXT.md",
+          ".planning/phases/19-supervisor-foundation/19-RESEARCH.md",
+          ".planning/phases/19-supervisor-foundation/19-VALIDATION.md",
+          "autopilot/__main__.py",
+          "~/Developer/cc-autopilot/autopilot/__main__.py",
+          "~/Developer/cc-autopilot/INSTALL.md",
+          "grep -aE 'except\\s*:' ~/Developer/cc-autopilot/autopilot/__main__.py",
+          "~/Library/LaunchAgents/com.user.ccautopilot.plist",
+          "/Users/d0nmega/Developer/cc-autopilot/logs/daemon.out",
+          "…/daemon.err",
+          "plutil -lint ~/Library/LaunchAgents/com.user.ccautopilot.plist",
+          "~/.claude/.autopilot/registry.d/<session>.json",
+          "launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.user.ccautopilot.plist",
+          "~/Developer/cc-autopilot/logs/daemon.err",
+          "logs/autopilot.jsonl",
+          "launchctl bootstrap gui/$UID …ccautopilot.plist",
+          ".planning/phases/19-supervisor-foundation/19-04-SUMMARY.md"
+        ],
+        "total": 22
+      }
+    },
+    {
+      "label": "20-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-01-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-CONTEXT.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-RESEARCH.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-VALIDATION.md",
+          "~/Developer/cc-autopilot/autopilot/action.py",
+          "~/Developer/cc-autopilot/autopilot/config.py",
+          "grep -c 'COMPACT_TEXT = \"/compact\"' ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c '276f' …/action.py",
+          "grep -c 'DEFAULT_CONFIG_PATH' ~/Developer/cc-autopilot/autopilot/config.py",
+          "grep -c 'def act_enabled' …/config.py",
+          "grep -c 'cco-dream\\|runner\\|dangerously-skip-permissions' ~/Developer/cc-autopilot/autopilot/action.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/action.py ~/Developer/cc-autopilot/autopilot/config.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' ~/Developer/cc-autopilot/autopilot/action.py",
+          "tests/conftest.py",
+          "tests/test_action.py",
+          "tests/test_config.py",
+          "grep -ac 'def fake_tmux' ~/Developer/cc-autopilot/tests/conftest.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' ~/Developer/cc-autopilot/tests/conftest.py ~/Developer/cc-autopilot/tests/test_action.py ~/Developer/cc-autopilot/tests/test_config.py",
+          "ruff check ~/Developer/cc-autopilot/tests/test_action.py ~/Developer/cc-autopilot/tests/test_config.py ~/Developer/cc-autopilot/tests/conftest.py",
+          "ruff check ~/Developer/cc-autopilot/tests/test_daemon.py",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-01-SUMMARY.md"
+        ],
+        "total": 25
+      }
+    },
+    {
+      "label": "20-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-02-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 2,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-CONTEXT.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-RESEARCH.md",
+          "grep -c 'def send_compact\\|def is_pane_idle\\|def compact_marker_present' ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c 'NotImplementedError' …/action.py",
+          "grep -c 'cco-dream\\|import.*runner\\|dangerously-skip-permissions' ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c 'shell=True' ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c 'except (OSError, ValueError)' …/action.py",
+          "grep -aE 'except\\s*:' …/action.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c 'NotImplementedError' ~/Developer/cc-autopilot/autopilot/config.py",
+          "grep -c 'except (OSError, ValueError)' …/config.py",
+          "grep -c 'isinstance(.*dict)' ~/Developer/cc-autopilot/autopilot/config.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/config.py",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-02-SUMMARY.md"
+        ],
+        "total": 18
+      }
+    },
+    {
+      "label": "20-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-03-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 2,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-CONTEXT.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-RESEARCH.md",
+          "autopilot/daemon.py",
+          "grep -c 'action.send_compact' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -n 'record_fired\\|send_compact\\|== action.SENT' …/daemon.py",
+          "grep -aE 'except\\s*:' …/daemon.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'REARM_BELOW_PCT = 45' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'used < rearm_below' …/daemon.py",
+          "grep -c 'config.act_enabled' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -n 'config.act_enabled\\|poll_once(' …/daemon.py",
+          "grep -c 'self-test' ~/Developer/cc-autopilot/autopilot/__main__.py",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-03-SUMMARY.md"
+        ],
+        "total": 17
+      }
+    },
+    {
+      "label": "20-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-04-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 2,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-CONTEXT.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-RESEARCH.md",
+          "~/.claude/.autopilot/config.json",
+          "autopilot/action.py",
+          "autopilot/config.py",
+          "echo '{\"act\": true}' > ~/.claude/.autopilot/config.json",
+          "grep -ac 'Phase 20' ~/Developer/cc-autopilot/INSTALL.md",
+          "grep -ac 'config.json' ~/Developer/cc-autopilot/INSTALL.md",
+          "grep -ac 'send-keys' …/INSTALL.md",
+          "cat \"$(getconf DARWIN_USER_TEMP_DIR)\"/claude-ctx-<that-session-id>.json",
+          "~/Developer/cc-autopilot/logs/autopilot.jsonl",
+          "grep -acE 'DISCHARGED|OPERATOR RESIDUAL' ~/Developer/cc-autopilot/INSTALL.md",
+          ".planning/phases/20-auto-compact-at-60-keystone/20-04-SUMMARY.md"
+        ],
+        "total": 17
+      }
+    },
+    {
+      "label": "21-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-01-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-CONTEXT.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-RESEARCH.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-VALIDATION.md",
+          "~/Developer/cc-autopilot/autopilot/limits.py",
+          "~/Developer/cc-autopilot/autopilot/pending.py",
+          "~/Developer/cc-autopilot/autopilot/config.py",
+          "~/Developer/cc-autopilot/autopilot/action.py",
+          "~/Developer/cc-autopilot/tests/conftest.py",
+          "limits_dir/{session_id}.json",
+          "grep -c 'def parse_limit_message' ~/Developer/cc-autopilot/autopilot/limits.py",
+          "grep -c '_EXCLUDE_MARKERS' …/limits.py",
+          "grep -c 'not your usage limit' …/limits.py",
+          "grep -c 'DEFAULT_PENDING_DIR' …/pending.py",
+          "grep -c 'DEFAULT_CONTINUATION = \"usage limit reset, continue\"' ~/Developer/cc-autopilot/autopilot/config.py",
+          "grep -c 'def continuation_for' …/config.py",
+          "grep -c 'def act_enabled' …/config.py",
+          "grep -c 'def send_resume' ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c 'def send_compact' …/action.py",
+          "grep -c 'cco-dream\\|runner\\|dangerously-skip' …/action.py",
+          "grep -c 'def write_limit_marker' ~/Developer/cc-autopilot/tests/conftest.py",
+          "grep -c 'def limits_dir' …/conftest.py",
+          "grep -c 'def pending_dir' …/conftest.py",
+          "grep -c 'pane_content_by' …/conftest.py",
+          "grep -c 'def write_nudge_marker' …/conftest.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' ~/Developer/cc-autopilot/autopilot/limits.py ~/Developer/cc-autopilot/autopilot/pending.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/limits.py ~/Developer/cc-autopilot/autopilot/pending.py ~/Developer/cc-autopilot/autopilot/config.py ~/Developer/cc-autopilot/autopilot/action.py ~/Developer/cc-autopilot/tests/conftest.py",
+          "tests/test_limits.py",
+          "tests/test_resume.py",
+          "grep -ac 'not your usage limit' …/test_limits.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' ~/Developer/cc-autopilot/tests/test_limits.py ~/Developer/cc-autopilot/tests/test_resume.py",
+          "ruff check ~/Developer/cc-autopilot/tests/test_limits.py ~/Developer/cc-autopilot/tests/test_resume.py",
+          "tests/test_reconcile_wiring.py",
+          "tests/test_log_rotation.py",
+          "tests/test_composition.py",
+          "grep -ac 'def test_reconcile_drops_dead_pane_from_decisions' ~/Developer/cc-autopilot/tests/test_reconcile_wiring.py",
+          "grep -ac 'def test_append_events_rotates_at_cap' ~/Developer/cc-autopilot/tests/test_log_rotation.py",
+          "grep -ac 'max_bytes' …/test_log_rotation.py",
+          "grep -ac 'EXPECTED_RUNNER_PY_MD5 = \"31d8cb769878b169575e53b434f85c34\"' ~/Developer/cc-autopilot/tests/test_composition.py",
+          "ruff check ~/Developer/cc-autopilot/tests/test_reconcile_wiring.py ~/Developer/cc-autopilot/tests/test_log_rotation.py ~/Developer/cc-autopilot/tests/test_composition.py",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-01-SUMMARY.md"
+        ],
+        "total": 45
+      }
+    },
+    {
+      "label": "21-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-02-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 2,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-CONTEXT.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-RESEARCH.md",
+          "autopilot/limits.py",
+          "grep -c 'raise NotImplementedError' ~/Developer/cc-autopilot/autopilot/limits.py",
+          "grep -c 'ZoneInfoNotFoundError' ~/Developer/cc-autopilot/autopilot/limits.py",
+          "grep -c 'except:' ~/Developer/cc-autopilot/autopilot/limits.py",
+          "ruff check …/limits.py",
+          "grep -cE 'import (dateutil|pytz|tzdata)' ~/Developer/cc-autopilot/autopilot/limits.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' ~/Developer/cc-autopilot/autopilot/limits.py",
+          "autopilot/pending.py",
+          "grep -c 'raise NotImplementedError' ~/Developer/cc-autopilot/autopilot/pending.py",
+          "grep -c 'os.replace' …/pending.py",
+          "grep -c 'except:' …/pending.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/pending.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' …/pending.py",
+          "autopilot/config.py",
+          "autopilot/action.py",
+          "grep -c 'def continuation_for' ~/Developer/cc-autopilot/autopilot/config.py",
+          "grep -c 'def act_enabled' …/config.py",
+          "grep -c 'raise NotImplementedError' …/config.py",
+          "grep -c 'def send_resume' ~/Developer/cc-autopilot/autopilot/action.py",
+          "grep -c 'raise NotImplementedError' …/action.py",
+          "grep -cE 'cco-dream|runner|dangerously-skip' …/action.py",
+          "grep -c '\"-l\"' ~/Developer/cc-autopilot/autopilot/action.py",
+          "ruff check ~/Developer/cc-autopilot/autopilot/config.py ~/Developer/cc-autopilot/autopilot/action.py",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-02-SUMMARY.md"
+        ],
+        "total": 30
+      }
+    },
+    {
+      "label": "21-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-03-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 1,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-CONTEXT.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-RESEARCH.md",
+          "node --check ~/.claude/hooks/cco-autopilot-limit.js",
+          "grep -c '\\[/\\\\\\\\\\\\\\\\\\]|' ~/.claude/hooks/cco-autopilot-limit.js",
+          "grep -c 'session_id' ~/.claude/hooks/cco-autopilot-limit.js",
+          "grep -c 'renameSync' ~/.claude/hooks/cco-autopilot-limit.js",
+          "grep -c 'last_assistant_message' ~/.claude/hooks/cco-autopilot-limit.js",
+          "grep -ac 'cco-autopilot-limit.js' ~/.claude/settings.json",
+          "grep -ac 'rate_limit' ~/.claude/settings.json",
+          "grep -ac 'cco-autopilot-register.js' ~/.claude/settings.json",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-03-SUMMARY.md"
+        ],
+        "total": 14
+      }
+    },
+    {
+      "label": "21-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-04-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 1,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-CONTEXT.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-RESEARCH.md",
+          "grep -c 'records is not None' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'records=reconciled' …/daemon.py",
+          "grep -c 'reconciled = ' …/daemon.py",
+          "grep -c 'except:' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "ruff check …/daemon.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' …/daemon.py",
+          "grep -c 'LOG_MAX_BYTES' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'max_bytes' …/daemon.py",
+          "grep -c 'os.replace' …/daemon.py",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-04-SUMMARY.md"
+        ],
+        "total": 15
+      }
+    },
+    {
+      "label": "21-05-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-05-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 1,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-CONTEXT.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-RESEARCH.md",
+          "grep -c 'def read_limit_markers' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'def detect_limits' …/daemon.py",
+          "grep -c 'DEFAULT_LIMITS_DIR' …/daemon.py",
+          "grep -c 'limit_detected_unparsed' …/daemon.py",
+          "grep -c '\"resume_waiting\"' …/daemon.py",
+          "grep -c '\"limit_detected\"' …/daemon.py",
+          "grep -c 'limits.parse_limit_message' …/daemon.py",
+          "grep -c 'pending.write_pending' …/daemon.py",
+          "grep -c 'is_stale' …/daemon.py",
+          "grep -c 'except:' …/daemon.py",
+          "ruff check …/daemon.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' …/daemon.py",
+          "grep -c 'def fire_resumes' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c '\"resume_sent\"' …/daemon.py",
+          "grep -c 'action.send_resume' …/daemon.py",
+          "grep -c 'config.continuation_for' …/daemon.py",
+          "grep -c 'pending.clear_pending' …/daemon.py",
+          "grep -cE 'runner|cco-dream|dangerously-skip|claude -p' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'if not act' …/daemon.py",
+          "grep -c 'detect_limits(' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'fire_resumes(' …/daemon.py",
+          "grep -c 'limits_dir' …/daemon.py",
+          "grep -c 'pending_dir' …/daemon.py",
+          "grep -c 'except:' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -c 'except Exception' …/daemon.py",
+          "LC_ALL=C grep -c '[^\\x00-\\x7f]' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-05-SUMMARY.md"
+        ],
+        "total": 32
+      }
+    },
+    {
+      "label": "21-06-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-06-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 3,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-CONTEXT.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-RESEARCH.md",
+          "grep -c 'superseded-by-native' .planning/REQUIREMENTS.md",
+          "grep -c 'PILOT-08/09\\|PILOT-08, PILOT-09\\|PILOT-08 and PILOT-09\\|08/09' .planning/REQUIREMENTS.md",
+          "grep -ac 'Phase 21' ~/Developer/cc-autopilot/INSTALL.md",
+          "grep -ac 'resume_sent' …/INSTALL.md",
+          "grep -ac 'live simulation gate' …/INSTALL.md",
+          "echo '{\"act\": true}' > ~/.claude/.autopilot/config.json",
+          "echo '{\"act\": false}' > ~/.claude/.autopilot/config.json",
+          "grep -acE 'DISCHARGED|OPERATOR RESIDUAL' ~/Developer/cc-autopilot/INSTALL.md",
+          "test -f ~/Library/LaunchAgents/retired/com.user.cc_continue_once.plist",
+          "test ! -e ~/Library/LaunchAgents/com.user.cc_continue_once.plist",
+          "test -f ~/.local/bin/cc_continue_final.sh",
+          "grep -ac 'retired/' ~/Developer/cc-autopilot/INSTALL.md",
+          ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-06-SUMMARY.md"
+        ],
+        "total": 20
+      }
+    },
+    {
+      "label": "22-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-01-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 0,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/22-audit-gap-closure/22-CONTEXT.md",
+          ".planning/v5.0-MILESTONE-AUDIT.md",
+          "grep -c '^status: PASS$' .planning/phases/19-supervisor-foundation/19-VERIFICATION.md",
+          "grep -c '^verdict: passed$' .planning/phases/19-supervisor-foundation/19-VERIFICATION.md",
+          "grep -c '^---$' .planning/phases/19-supervisor-foundation/19-01-SUMMARY.md",
+          "grep -c '^---$' .planning/phases/19-supervisor-foundation/19-02-SUMMARY.md",
+          "grep -q 'phase: 19-supervisor-foundation' .planning/phases/19-supervisor-foundation/19-01-SUMMARY.md",
+          "grep -q '## Self-Check' .planning/phases/19-supervisor-foundation/19-01-SUMMARY.md",
+          "grep -q 'Next Phase Readiness' .planning/phases/19-supervisor-foundation/19-01-SUMMARY.md",
+          "grep -c '^---$' .planning/phases/19-supervisor-foundation/19-03-SUMMARY.md",
+          "grep -c '^---$' .planning/phases/19-supervisor-foundation/19-04-SUMMARY.md",
+          ".planning/phases/22-audit-gap-closure/22-01-SUMMARY.md"
+        ],
+        "total": 14
+      }
+    },
+    {
+      "label": "22-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-02-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 1,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/22-audit-gap-closure/22-CONTEXT.md",
+          ".planning/v5.0-MILESTONE-AUDIT.md",
+          "grep -c '^---$' .planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md",
+          "grep -q '### Observable Truths' .planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md",
+          "grep -q '### Gaps Summary' .planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md",
+          "grep -q 'Amendment 2026-07-03' .planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md",
+          "grep -q 'superseded-by-native' .planning/phases/20-auto-compact-at-60-keystone/20-HUMAN-UAT.md",
+          "grep -c 'result: \\[pending\\]' .planning/phases/20-auto-compact-at-60-keystone/20-HUMAN-UAT.md",
+          "grep -q 'Amendment 2026-07-03' .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-VERIFICATION.md",
+          "grep -c 'result: \\[pending\\]' .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-HUMAN-UAT.md",
+          "grep -q 'passed -- keep, operator decision 2026-07-03' .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-HUMAN-UAT.md",
+          "grep -q 'passed: 1' .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-HUMAN-UAT.md",
+          "grep -q 'pending: 2' .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-HUMAN-UAT.md",
+          "grep -c '^---$' .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-VERIFICATION.md",
+          ".planning/phases/22-audit-gap-closure/22-02-SUMMARY.md"
+        ],
+        "total": 18
+      }
+    },
+    {
+      "label": "22-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-03-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 0,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/22-audit-gap-closure/22-CONTEXT.md",
+          ".planning/v5.0-MILESTONE-AUDIT.md",
+          "~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -cE '^- \\[ \\] \\*\\*PILOT-(06|07|08|09|10)\\*\\*' .planning/REQUIREMENTS.md",
+          "grep -cE '^- \\[x\\] \\*\\*PILOT-(0[1-9]|10)\\*\\*' .planning/REQUIREMENTS.md",
+          "grep -c 'PILOT-06..09 are proven' .planning/ROADMAP.md",
+          "grep -q '6 plans (4 waves) -- all complete' .planning/ROADMAP.md",
+          "grep -c '0/10 formally confirmed' .planning/ROADMAP.md",
+          "grep -q 'formally confirmed' .planning/ROADMAP.md",
+          "stat -f %m ~/Developer/cc-autopilot/autopilot/daemon.py",
+          "grep -q 'RESUME_GRACE_SECS = 60' ~/Developer/cc-autopilot/autopilot/daemon.py",
+          ".planning/phases/22-audit-gap-closure/22-03-SUMMARY.md"
+        ],
+        "total": 14
+      }
+    },
+    {
+      "label": "22-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-04-PLAN.md",
+      "output": {
+        "valid": false,
+        "found": 0,
+        "missing": [
+          "$HOME/.claude/donny/workflows/execute-plan.md",
+          "$HOME/.claude/donny/templates/summary.md",
+          ".planning/phases/22-audit-gap-closure/22-CONTEXT.md",
+          ".planning/v5.0-MILESTONE-AUDIT.md",
+          "grep -n '\"_auto_chain_active\"' .planning/config.json",
+          "node \"$HOME/.claude/donny/bin/donny-tools.cjs\" security scan-secrets .planning/phases/20-auto-compact-at-60-keystone/20-LEDGER.jsonl .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-LEDGER.jsonl",
+          "grep -q '\"_auto_chain_active\": false' .planning/config.json",
+          "git status --porcelain .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-LEDGER.jsonl",
+          "git status --porcelain .planning/config.json",
+          ".planning/phases/22-audit-gap-closure/22-04-SUMMARY.md"
+        ],
+        "total": 10
+      }
+    },
+    {
+      "label": "clean fixture plan",
+      "source": "synthetic",
+      "output": {
+        "valid": true,
+        "found": 0,
+        "missing": [],
+        "total": 0
+      }
+    }
+  ]
+}

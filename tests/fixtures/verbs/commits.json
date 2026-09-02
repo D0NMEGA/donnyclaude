@@ -1,0 +1,33 @@
+{
+  "verb": "commits",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "one real HEAD hash and one bogus hash",
+      "source": "claudecodeoptimized git history",
+      "output": {
+        "all_valid": false,
+        "valid": [
+          "c19165c"
+        ],
+        "invalid": [
+          "deadbee"
+        ],
+        "total": 2
+      }
+    },
+    {
+      "label": "bogus hash only",
+      "source": "synthetic",
+      "output": {
+        "all_valid": false,
+        "valid": [],
+        "invalid": [
+          "deadbee"
+        ],
+        "total": 1
+      }
+    }
+  ]
+}

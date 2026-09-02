@@ -1,0 +1,834 @@
+{
+  "verb": "plan-structure",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-01-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [
+          "Task 'Task 1: Package skeleton + Wave 0 fixtures + RED stubs for all PILOT modules' missing <files>",
+          "Task 'Task 2: bridge.py — reader + live-session discovery + 60s staleness gate (PILOT-04)' missing <files>"
+        ],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: Package skeleton + Wave 0 fixtures + RED stubs for all PILOT modules",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: bridge.py — reader + live-session discovery + 60s staleness gate (PILOT-04)",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "19-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-02-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [
+          "Task 'Task 1: SessionStart + SessionEnd registry hooks (metadata-only, atomic, reversible)' missing <files>",
+          "Task 'Task 2: Register the two hooks in settings.json (reversible, with backup)' missing <files>",
+          "Task 'Task 3: registry.py — reader + session_id→pane resolver + liveness reconcile (D-10)' missing <files>"
+        ],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: SessionStart + SessionEnd registry hooks (metadata-only, atomic, reversible)",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Register the two hooks in settings.json (reversible, with backup)",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: registry.py — reader + session_id→pane resolver + liveness reconcile (D-10)",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "19-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-03-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [
+          "Task 'Task 1: runner.py (cco-dream seam) + idempotency.py (restart-surviving fire-once state)' missing <files>",
+          "Task 'Task 2: daemon.py — observe-only detect loop + JSONL action log + decision logic (PILOT-02 core, D-12/D-13/D-14)' missing <files>",
+          "Task 'Task 3: full-suite regression + byte-unchanged cco-dream composition pin' missing <files>"
+        ],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: runner.py (cco-dream seam) + idempotency.py (restart-surviving fire-once state)",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: daemon.py — observe-only detect loop + JSONL action log + decision logic (PILOT-02 core, D-12/D-13/D-14)",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: full-suite regression + byte-unchanged cco-dream composition pin",
+            "hasFiles": false,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "19-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-04-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: tmux install + the claude() tmux wrapper (extends the existing wrapper) + daemon entry point",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: com.user.ccautopilot.plist — RunAtLoad + KeepAlive + sparse-env hardening (PILOT-02 lifecycle)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: LIVE integration gate — D-11 $TMUX_PANE empirical, launchd lifecycle, multi-session no-mis-routing, the cco-dream probe",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "20-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-01-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Importable skeletons — action.py + config.py (LOCKED constants + NotImplementedError bodies)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: conftest fixtures + test_action.py + test_config.py (RED for PILOT-06 + T-20-05)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: Append the act-path integration tests to test_daemon.py (RED for PILOT-06/07)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "20-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-02-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: Implement action.py — argv builders + fail-closed idle guard + marker dedupe + send_compact",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Implement config.py — the act toggle with a safe-default-off (D-10)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "20-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-03-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: evaluate_session act branch (arm-on-send, idle/marker outcomes) + poll_once act threading",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: <45% hysteresis re-arm (D-07) + main() reads the act toggle each poll (D-10 production wiring)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "20-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-04-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: Append the Phase-20 act-mode section to INSTALL.md (enablement, mechanism, reversibility)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: D-09 LIVE end-to-end gate — the send-keys -> /compact round-trip on the real binary",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "21-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-01-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Skeleton modules (limits.py, pending.py) + skeleton extensions (config.continuation_for, action.send_resume) + conftest fixtures",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: test_limits.py (PILOT-08 parser F1-F9 + excludes) + test_resume.py (PILOT-09 pending + resume ladder) - RED",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: test_reconcile_wiring.py (D-11 RED) + test_log_rotation.py (D-12 RED) + runner.py byte-unchanged pin",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "21-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-02-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Implement limits.py - the reset-time parser + limit classifier (PILOT-08)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Implement pending.py - durable pending-resume state (PILOT-09/D-08)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: Implement config.continuation_for (D-04) + action.send_resume (D-05)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "21-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-03-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: Create the StopFailure marker hook ~/.claude/hooks/cco-autopilot-limit.js",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Register the StopFailure(rate_limit) hook in ~/.claude/settings.json (additive, reversible)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "21-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-04-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: D-11 - poll_once consumes the reconciled records (fix the mis-route window)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: D-12 - size-capped rotation in _append_events (keep 2)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "21-05-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-05-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Detection half - read markers, parse reset, write pending / log limit_detected(_unparsed)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Fire half - resume_sent / resume_pane_gone / resume_cancelled / busy / observe-only",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: Wire detect+fire into poll_once and prove the full suite green + boundary byte-unchanged",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "21-06-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-06-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Amend REQUIREMENTS.md (D-13) + append the Phase-21 INSTALL.md record (docs, gates left unchecked)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: D-15 live simulation gate - synthetic limit banner -> detect -> parse -> wait -> one resume_sent",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: Retire com.user.cc_continue_once (reversibly) + flip CC_TMUX default-on - gated on Task 2",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "user_setup",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "22-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-01-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Fix 19-VERIFICATION status vocabulary (PASS -> passed)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: De-shadow 19-01 and 19-02 SUMMARYs (their PILOT ids are already present but hidden)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: Add requirements-completed to 19-03 (PILOT-05) and 19-04 (PILOT-01, PILOT-02)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "22-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-02-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: Phase 20 -- de-shadow + status->passed + PILOT-06/07 in 20-04 + UAT supersession",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Phase 21 -- status->passed + close CC_TMUX (item 3) + keep items 1-2 pending",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "22-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-03-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 3,
+        "tasks": [
+          {
+            "name": "Task 1: Flip REQUIREMENTS.md checkboxes PILOT-06..10 to [x]",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Correct ROADMAP.md drift (Phase 21 plan count, SC-4 D-13 wording, v5.0 progress line)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 3: Kickstart the live ccautopilot daemon and prove it runs current code",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "22-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-04-PLAN.md",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 2,
+        "tasks": [
+          {
+            "name": "Task 1: Run the coverage gate; require passed 10/10 (self-correct if not)",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          },
+          {
+            "name": "Task 2: Git hygiene -- verify config flag, secret-scan, scoped commit",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "status",
+          "agent",
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "clean fixture plan",
+      "source": "synthetic",
+      "output": {
+        "valid": true,
+        "errors": [],
+        "warnings": [],
+        "task_count": 1,
+        "tasks": [
+          {
+            "name": "Task 1: the fixture task",
+            "hasFiles": true,
+            "hasAction": true,
+            "hasVerify": true,
+            "hasDone": true
+          }
+        ],
+        "frontmatter_fields": [
+          "phase",
+          "plan",
+          "type",
+          "wave",
+          "depends_on",
+          "files_modified",
+          "autonomous",
+          "requirements",
+          "must_haves"
+        ]
+      }
+    },
+    {
+      "label": "file that does not exist",
+      "source": "synthetic",
+      "output": {
+        "error": "File not found",
+        "path": ".planning/phases/99-bare/99-99-PLAN.md"
+      }
+    }
+  ]
+}

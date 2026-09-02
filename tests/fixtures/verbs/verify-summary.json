@@ -1,0 +1,452 @@
+{
+  "verb": "verify-summary",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19-01-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-01-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/bridge.py",
+              "$TMPDIR/claude-ctx-{id}.json"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: autopilot/bridge.py, $TMPDIR/claude-ctx-{id}.json"
+        ]
+      }
+    },
+    {
+      "label": "19-02-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-02-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/registry.py",
+              "~/.claude/hooks/cco-autopilot-register.js"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: autopilot/registry.py, ~/.claude/hooks/cco-autopilot-register.js",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "19-03-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-03-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/runner.py",
+              "autopilot/idempotency.py"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "failed"
+        },
+        "errors": [
+          "Missing files: autopilot/runner.py, autopilot/idempotency.py",
+          "Referenced commit hashes not found in git history",
+          "Self-check section indicates failure"
+        ]
+      }
+    },
+    {
+      "label": "19-04-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-04-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "~/.zshrc",
+              "autopilot/__main__.py"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: ~/.zshrc, autopilot/__main__.py",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "20-01-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-01-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/action.py",
+              "autopilot/config.py"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: autopilot/action.py, autopilot/config.py"
+        ]
+      }
+    },
+    {
+      "label": "20-02-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-02-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/action.py",
+              "autopilot/config.py"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "failed"
+        },
+        "errors": [
+          "Missing files: autopilot/action.py, autopilot/config.py",
+          "Self-check section indicates failure"
+        ]
+      }
+    },
+    {
+      "label": "20-03-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-03-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "~/Developer/cc-autopilot/autopilot/daemon.py",
+              "~/.claude/.autopilot/config.json"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "failed"
+        },
+        "errors": [
+          "Missing files: ~/Developer/cc-autopilot/autopilot/daemon.py, ~/.claude/.autopilot/config.json",
+          "Self-check section indicates failure"
+        ]
+      }
+    },
+    {
+      "label": "20-04-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-04-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "~/Developer/cc-autopilot/INSTALL.md",
+              "~/.claude/.autopilot/config.json"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: ~/Developer/cc-autopilot/INSTALL.md, ~/.claude/.autopilot/config.json",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "21-01-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-01-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "tests/test_limits.py",
+              "tests/test_resume.py"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: tests/test_limits.py, tests/test_resume.py",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "21-02-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-02-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/limits.py",
+              "autopilot/pending.py"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: autopilot/limits.py, autopilot/pending.py",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "21-03-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-03-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "~/.claude/hooks/cco-autopilot-limit.js",
+              "~/.claude/.autopilot/limits.d/{session_id}.json"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "failed"
+        },
+        "errors": [
+          "Missing files: ~/.claude/hooks/cco-autopilot-limit.js, ~/.claude/.autopilot/limits.d/{session_id}.json",
+          "Referenced commit hashes not found in git history",
+          "Self-check section indicates failure"
+        ]
+      }
+    },
+    {
+      "label": "21-04-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-04-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "autopilot/daemon.py",
+              "tests/test_daemon.py"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: autopilot/daemon.py, tests/test_daemon.py",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "21-05-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-05-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              "~/Developer/cc-autopilot/autopilot/daemon.py",
+              "~/.claude/.autopilot/limits.d"
+            ]
+          },
+          "commits_exist": false,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: ~/Developer/cc-autopilot/autopilot/daemon.py, ~/.claude/.autopilot/limits.d",
+          "Referenced commit hashes not found in git history"
+        ]
+      }
+    },
+    {
+      "label": "21-06-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-06-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 1,
+            "missing": [
+              "~/.zshrc"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: ~/.zshrc"
+        ]
+      }
+    },
+    {
+      "label": "22-01-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-01-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              ".planning/phases/19-supervisor-foundation/19-VERIFICATION.md",
+              ".planning/phases/19-supervisor-foundation/19-01-SUMMARY.md"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: .planning/phases/19-supervisor-foundation/19-VERIFICATION.md, .planning/phases/19-supervisor-foundation/19-01-SUMMARY.md"
+        ]
+      }
+    },
+    {
+      "label": "22-02-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-02-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              ".planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md",
+              ".planning/phases/20-auto-compact-at-60-keystone/20-04-SUMMARY.md"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: .planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md, .planning/phases/20-auto-compact-at-60-keystone/20-04-SUMMARY.md"
+        ]
+      }
+    },
+    {
+      "label": "22-03-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-03-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 1,
+            "missing": [
+              "~/.zshrc"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: ~/.zshrc"
+        ]
+      }
+    },
+    {
+      "label": "22-04-SUMMARY.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-04-SUMMARY.md",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": true,
+          "files_created": {
+            "checked": 2,
+            "found": 0,
+            "missing": [
+              ".planning/phases/20-auto-compact-at-60-keystone/20-LEDGER.jsonl",
+              ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-LEDGER.jsonl"
+            ]
+          },
+          "commits_exist": true,
+          "self_check": "passed"
+        },
+        "errors": [
+          "Missing files: .planning/phases/20-auto-compact-at-60-keystone/20-LEDGER.jsonl, .planning/phases/21-usage-aware-resume-cc-continue-retirement/21-LEDGER.jsonl"
+        ]
+      }
+    },
+    {
+      "label": "summary path that does not exist",
+      "source": "synthetic",
+      "output": {
+        "passed": false,
+        "checks": {
+          "summary_exists": false,
+          "files_created": {
+            "checked": 0,
+            "found": 0,
+            "missing": []
+          },
+          "commits_exist": false,
+          "self_check": "not_found"
+        },
+        "errors": [
+          "SUMMARY.md not found"
+        ]
+      }
+    }
+  ]
+}

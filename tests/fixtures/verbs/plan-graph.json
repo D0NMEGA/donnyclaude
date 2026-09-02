@@ -1,0 +1,94 @@
+{
+  "verb": "plan-graph",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19 archived",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation",
+      "output": {
+        "valid": true,
+        "plans": [
+          "19-01",
+          "19-02",
+          "19-03",
+          "19-04"
+        ],
+        "dangling": [],
+        "wave_violations": [],
+        "cycles": [],
+        "schema": "plan-graph",
+        "phase": "19-supervisor-foundation"
+      }
+    },
+    {
+      "label": "20 archived",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone",
+      "output": {
+        "valid": true,
+        "plans": [
+          "20-01",
+          "20-02",
+          "20-03",
+          "20-04"
+        ],
+        "dangling": [],
+        "wave_violations": [],
+        "cycles": [],
+        "schema": "plan-graph",
+        "phase": "20-auto-compact-at-60-keystone"
+      }
+    },
+    {
+      "label": "21 archived",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement",
+      "output": {
+        "valid": true,
+        "plans": [
+          "21-01",
+          "21-02",
+          "21-03",
+          "21-04",
+          "21-05",
+          "21-06"
+        ],
+        "dangling": [],
+        "wave_violations": [],
+        "cycles": [],
+        "schema": "plan-graph",
+        "phase": "21-usage-aware-resume-cc-continue-retirement"
+      }
+    },
+    {
+      "label": "22 archived",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure",
+      "output": {
+        "valid": true,
+        "plans": [
+          "22-01",
+          "22-02",
+          "22-03",
+          "22-04"
+        ],
+        "dangling": [],
+        "wave_violations": [],
+        "cycles": [],
+        "schema": "plan-graph",
+        "phase": "22-audit-gap-closure"
+      }
+    },
+    {
+      "label": "empty phase",
+      "source": "synthetic",
+      "output": {
+        "valid": true,
+        "plans": [],
+        "dangling": [],
+        "wave_violations": [],
+        "cycles": [],
+        "schema": "plan-graph",
+        "phase": "99-empty"
+      }
+    }
+  ]
+}

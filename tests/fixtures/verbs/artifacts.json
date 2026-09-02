@@ -1,0 +1,639 @@
+{
+  "verb": "artifacts",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-01-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 3,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/tests/conftest.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/bridge.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_bridge.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "19-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-02-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 3,
+        "artifacts": [
+          {
+            "path": "~/.claude/hooks/cco-autopilot-register.js",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/.claude/hooks/cco-autopilot-deregister.js",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/registry.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "19-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-03-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 3,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/daemon.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/runner.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/idempotency.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "19-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation/19-04-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 4,
+        "artifacts": [
+          {
+            "path": "~/Library/LaunchAgents/com.user.ccautopilot.plist",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/.zshrc",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/__main__.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/INSTALL.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-01-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 6,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_action.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_config.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_daemon.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/action.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/config.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/conftest.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-02-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 2,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/action.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/config.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-03-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 1,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/daemon.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "20-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone/20-04-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 1,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/INSTALL.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-01-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 8,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/limits.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/pending.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_limits.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_resume.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_reconcile_wiring.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_log_rotation.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/test_composition.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/tests/conftest.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-02-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 4,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/limits.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/pending.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/config.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/action.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-03-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 2,
+        "artifacts": [
+          {
+            "path": "~/.claude/hooks/cco-autopilot-limit.js",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/.claude/settings.json",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-04-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 1,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/daemon.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-05-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-05-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 1,
+        "artifacts": [
+          {
+            "path": "~/Developer/cc-autopilot/autopilot/daemon.py",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "21-06-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement/21-06-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 2,
+        "artifacts": [
+          {
+            "path": ".planning/REQUIREMENTS.md",
+            "exists": true,
+            "issues": [
+              "Missing pattern: superseded-by-native"
+            ],
+            "passed": false
+          },
+          {
+            "path": "~/Developer/cc-autopilot/INSTALL.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-01-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-01-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 5,
+        "artifacts": [
+          {
+            "path": ".planning/phases/19-supervisor-foundation/19-VERIFICATION.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/19-supervisor-foundation/19-01-SUMMARY.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/19-supervisor-foundation/19-02-SUMMARY.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/19-supervisor-foundation/19-03-SUMMARY.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/19-supervisor-foundation/19-04-SUMMARY.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-02-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-02-PLAN.md",
+      "output": {
+        "all_passed": false,
+        "passed": 0,
+        "total": 5,
+        "artifacts": [
+          {
+            "path": ".planning/phases/20-auto-compact-at-60-keystone/20-VERIFICATION.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/20-auto-compact-at-60-keystone/20-04-SUMMARY.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/20-auto-compact-at-60-keystone/20-HUMAN-UAT.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-VERIFICATION.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          },
+          {
+            "path": ".planning/phases/21-usage-aware-resume-cc-continue-retirement/21-HUMAN-UAT.md",
+            "exists": false,
+            "issues": [
+              "File not found"
+            ],
+            "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-03-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-03-PLAN.md",
+      "output": {
+        "all_passed": true,
+        "passed": 2,
+        "total": 2,
+        "artifacts": [
+          {
+            "path": ".planning/REQUIREMENTS.md",
+            "exists": true,
+            "issues": [],
+            "passed": true
+          },
+          {
+            "path": ".planning/ROADMAP.md",
+            "exists": true,
+            "issues": [],
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "label": "22-04-PLAN.md",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure/22-04-PLAN.md",
+      "output": {
+        "all_passed": true,
+        "passed": 1,
+        "total": 1,
+        "artifacts": [
+          {
+            "path": ".planning/config.json",
+            "exists": true,
+            "issues": [],
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "label": "plan whose must_haves has no artifacts block",
+      "source": "synthetic",
+      "output": {
+        "error": "No must_haves.artifacts found in frontmatter",
+        "path": ".planning/phases/99-bare/99-01-PLAN.md"
+      }
+    }
+  ]
+}

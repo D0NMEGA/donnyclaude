@@ -1,0 +1,57 @@
+{
+  "verb": "ui-reviewed",
+  "recorded_at": "2026-09-02",
+  "recorded_from": "claudecodeoptimized .planning/milestones/v5.0-phases plus synthetic fixture phases",
+  "cases": [
+    {
+      "label": "19 archived",
+      "source": ".planning/milestones/v5.0-phases/19-supervisor-foundation",
+      "output": {
+        "status": "missing",
+        "score": null,
+        "baseline": null,
+        "phase": "19-supervisor-foundation"
+      }
+    },
+    {
+      "label": "20 archived",
+      "source": ".planning/milestones/v5.0-phases/20-auto-compact-at-60-keystone",
+      "output": {
+        "status": "missing",
+        "score": null,
+        "baseline": null,
+        "phase": "20-auto-compact-at-60-keystone"
+      }
+    },
+    {
+      "label": "21 archived",
+      "source": ".planning/milestones/v5.0-phases/21-usage-aware-resume-cc-continue-retirement",
+      "output": {
+        "status": "missing",
+        "score": null,
+        "baseline": null,
+        "phase": "21-usage-aware-resume-cc-continue-retirement"
+      }
+    },
+    {
+      "label": "22 archived",
+      "source": ".planning/milestones/v5.0-phases/22-audit-gap-closure",
+      "output": {
+        "status": "missing",
+        "score": null,
+        "baseline": null,
+        "phase": "22-audit-gap-closure"
+      }
+    },
+    {
+      "label": "empty phase",
+      "source": "synthetic",
+      "output": {
+        "status": "missing",
+        "score": null,
+        "baseline": null,
+        "phase": "99-empty"
+      }
+    }
+  ]
+}
