@@ -86,6 +86,309 @@ function expandHomePath(cwd, p) {
   return path.join(cwd, p);
 }
 
+/**
+ * The thirteen verbs the record gate runs, in the order D-13/A-02 scope them: the seven
+ * phase-scoped verbs first, then the six that iterate a phase's PLAN or SUMMARY files.
+ *
+ * Exported so the classifier, the aggregator and the tests iterate ONE list instead of each
+ * keeping a private copy that can drift.
+ */
+const GATE_VERBS = [
+  'phase-completeness', 'plan-graph', 'phase-verified', 'threats-clear', 'ui-reviewed',
+  'schema-drift', 'milestone-coverage',
+  'plan-structure', 'references', 'artifacts', 'key-links', 'verify-summary', 'commits',
+];
+
+/**
+ * The three cmdVerifySummary error strings that are measurement artifacts, not record defects.
+ *
+ * This list is the reason verify-summary is the ONE verb whose errors[] is partitioned rather
+ * than read whole. Measured by 23-03 across 21 SUMMARYs (the three from phase 23 plus all
+ * eighteen archived v5.0 ones):
+ *
+ *   files_created   fails 21/21. fs.existsSync(path.join(cwd, file)) over paths lifted from
+ *                   the SUMMARY's own prose, with no home expansion, so every '~/'- or
+ *                   '$TMPDIR/'-prefixed path reads as missing. Same class as the unresolved
+ *                   references and artifacts A-03's second half scores as warnings.
+ *   commits_exist   fails 12/21. git cat-file in the CURRENT repo over a /\b[0-9a-f]{7,40}\b/
+ *                   hex-word harvest. Under PROJECT.md D-21 the code commits live in
+ *                   donnyclaude while the SUMMARY lives in claudecodeoptimized, so a
+ *                   CORRECTLY written SUMMARY can never satisfy it. Same reasoning as the
+ *                   `commits` verb's own warning rule: history can be rewritten and the
+ *                   harvest picks up hex-looking noise.
+ *   self_check      fails 7/21. The regex anchors on the FIRST of Self-Check|Verification|
+ *                   Quality Check and then scans everything after it for /fail/i, so a
+ *                   '## Verification' section above the '## Self-Check' gets judged by prose
+ *                   honestly reporting failing tests.
+ *
+ * None of the three is fixed here: HC-5 keeps this plan's blast radius off shipped verbs, and
+ * 23-03 recorded all three deliberately for /donny-review-backlog. What is decided here is
+ * their SEVERITY. Scored as plain errors, verify-summary is red on every SUMMARY this project
+ * has ever written, which is the ignorable-gate failure mode the phase exists to prevent;
+ * scored as passes, the gate stops catching the requirements-completed drift it was built for.
+ * They warn: recorded in full, never silently dropped, and never the reason a phase fails.
+ *
+ * The list is a named allow-list of three strings, never a "the verb was unhappy" catch-all
+ * (T-23-18). Any error string not matched here stays an error, so a check added to
+ * cmdVerifySummary later fails loudly instead of being swallowed.
+ */
+const SUMMARY_ARTIFACT_ERRORS = [
+  { check: 'files_created', re: /^Missing files:/ },
+  { check: 'commits_exist', re: /^Referenced commit hashes not found/ },
+  { check: 'self_check', re: /^Self-check section indicates failure/ },
+];
+
+/**
+ * Classify one captured verb result into a gate severity.
+ *
+ * Severity vocabulary (five values). D-14's intent, "reuse the verbs' own semantics rather than
+ * inventing a second model", survives; its implementation does not, because the uniform
+ * errors[]/warnings[] split exists in only 2 of the 13 functions (C-5). Each rule below is
+ * derived from what that specific verb already returns.
+ *
+ *   'pass'            the verb ran and its verdict is clean
+ *   'warning'         the verb ran and found something worth recording that does not fail
+ *   'error'           the verb ran and found something that fails the gate
+ *   'not_applicable'  the check does not apply to this phase at all (no UI review on a backend
+ *                     phase; no must_haves block in a plan; schema-drift skipped)
+ *   'not_yet'         the input artifact legitimately does not exist YET at this point in the
+ *                     phase lifecycle. This is A-01's "not-applicable-yet": it neither fails
+ *                     nor warns, and it is visibly distinct from 'pass'.
+ *
+ * Do not confuse per-verb 'not_yet' with the gate-level verdict 'not_run' (D-10), which means
+ * the RECORDS.md file itself is absent. 'not_run' is never written into a file; it is only ever
+ * inferred from absence.
+ *
+ * @param {string} verb one of the thirteen names in GATE_VERBS
+ * @param {{ok: boolean, json?: object, raw?: string, error?: string}} captured captureVerb output
+ * @param {{archived?: boolean, phaseNumber?: string, phaseDirBasename?: string, filteredRequirements?: Array}} [opts]
+ * @returns {{verb: string, severity: string, detail: string, findings: string[]}}
+ */
+function classifyVerbResult(verb, captured, opts) {
+  const o = opts || {};
+  const res = (severity, detail, findings) => ({ verb, severity, detail, findings: findings || [] });
+  // Findings are strings in the record, but four verbs report objects (dangling entries, wave
+  // violations, cycles). Serialise rather than let String() render '[object Object]'.
+  const fmt = (a) => (Array.isArray(a) ? a : []).map((x) => (typeof x === 'string' ? x : JSON.stringify(x)));
+  const any = (a) => Array.isArray(a) && a.length > 0;
+
+  // Guard, applied to all thirteen before any per-verb rule (T-23-01). captureVerb returns
+  // rather than throws, so a verb that blew up arrives here as ok:false; scoring it anything
+  // but an error would let a crashed check read as a clean one.
+  if (!captured || captured.ok !== true) {
+    const why = (captured && captured.error) || 'verb produced no parseable output';
+    return { verb, severity: 'error', detail: why, findings: [why] };
+  }
+  const j = captured.json || {};
+
+  switch (verb) {
+    // errors[] = plans with no SUMMARY, warnings[] = SUMMARYs with no plan (verify.cjs:660).
+    // The one verb D-14 cites, and one of only two whose own split is used unchanged.
+    case 'phase-completeness': {
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      if (any(j.errors)) return res('error', fmt(j.errors).join('; '), fmt(j.errors));
+      if (any(j.warnings)) return res('warning', fmt(j.warnings).join('; '), fmt(j.warnings));
+      return res('pass', `${j.plan_count ?? 0} plan(s) and ${j.summary_count ?? 0} summary(ies), all paired`, []);
+    }
+
+    // The other verb carrying a real errors[]/warnings[] split. Measured 0 errors and 8
+    // warnings across all 18 real archived plans, so error severity here is safe: it fires on
+    // a missing required frontmatter field or a task with no <action>, not on cosmetics.
+    case 'plan-structure': {
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      if (any(j.errors)) return res('error', fmt(j.errors).join('; '), fmt(j.errors));
+      if (any(j.warnings)) return res('warning', fmt(j.warnings).join('; '), fmt(j.warnings));
+      return res('pass', `${j.task_count ?? 0} task(s), no structural errors`, []);
+    }
+
+    // The one verb whose errors[] mixes real record defects with known measurement artifacts,
+    // so it is the one array that is PARTITIONED rather than read whole. See
+    // SUMMARY_ARTIFACT_ERRORS above for the three artifact strings, each one's measured miss
+    // rate, and why this is not the uniform read the plan's table prescribed.
+    case 'verify-summary': {
+      const all = fmt(j.errors);
+      const isArtifact = (e) => SUMMARY_ARTIFACT_ERRORS.some((a) => a.re.test(e));
+      const defects = all.filter((e) => !isArtifact(e));
+      const artifactual = all.filter(isArtifact);
+      const named = SUMMARY_ARTIFACT_ERRORS.filter((a) => artifactual.some((e) => a.re.test(e))).map((a) => a.check);
+      if (defects.length) {
+        const also = artifactual.length ? ` (plus ${artifactual.length} known-artifact finding(s): ${named.join(', ')})` : '';
+        // findings carries every string, including the warned ones: severity is decided by the
+        // defects, but nothing the verb reported is dropped from the record.
+        return res('error', defects.join('; ') + also, all);
+      }
+      if (artifactual.length) {
+        return res('warning', `no record defect; ${artifactual.length} known-artifact finding(s): ${named.join(', ')}`, all);
+      }
+      return res('pass', 'requirements-completed present and every check clean', []);
+    }
+
+    // All three arrays are genuine structural breakage: a depends_on naming a plan that does
+    // not exist, a dependency scheduled in the same or a later wave, or a cycle.
+    case 'plan-graph': {
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      // A clean graph over zero nodes is not a pass the gate earned.
+      if (fmt(j.plans).length === 0) return res('not_applicable', 'no PLAN files in the phase', []);
+      const breakage = [
+        ...fmt(j.cycles).map((s) => `cycle: ${s}`),
+        ...fmt(j.dangling).map((s) => `dangling depends_on: ${s}`),
+        ...fmt(j.wave_violations).map((s) => `wave violation: ${s}`),
+      ];
+      if (breakage.length) return res('error', breakage.join('; '), breakage);
+      return res('pass', `${fmt(j.plans).length} plan(s), acyclic, every dependency in an earlier wave`, []);
+    }
+
+    // status 'missing' means the phase has no VERIFICATION.md yet. Under A-01 the gate runs
+    // after verify_phase_goal, so on a healthy phase the file is there; when it is not, the
+    // input simply has not been written yet, which is neither a pass nor a defect.
+    case 'phase-verified': {
+      if (j.status === 'missing') return res('not_yet', 'no VERIFICATION.md in the phase yet', []);
+      if (j.verified === true) return res('pass', 'VERIFICATION.md status is "passed"', []);
+      // The J1 defect, stated in the record rather than left for the reader to infer: v5.0
+      // Phase 19 shipped `status: PASS` and read as unverified for a month.
+      const d = `VERIFICATION.md status is "${j.status}"; the engine matches the literal lowercase "passed"`;
+      return res('error', d, [d]);
+    }
+
+    // A-01: SECURITY.md is written by /donny-audit-phase, which runs AFTER execute-phase close
+    // by design, so its absence at gate time is never a record defect. Both the missing-file
+    // and missing-directory shapes are covered, and both are confined to a named field value.
+    case 'threats-clear': {
+      if (j.status === 'missing' || /No SECURITY\.md/.test(String(j.error || ''))) {
+        return res('not_yet', 'no SECURITY.md yet; /donny-audit-phase writes it after close', []);
+      }
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      if (j.has_register === false) {
+        const d = 'SECURITY.md has no Threat Register table, so no threat can be shown closed';
+        return res('error', d, [d]);
+      }
+      if (j.clear === false) {
+        const ids = fmt(j.open_ids);
+        return res('error', `${ids.length} open threat(s): ${ids.join(', ')}`, ids);
+      }
+      if (j.consistent === false) {
+        // The A6 ENFORCING GATE pattern: the register table wins and the disagreement is
+        // reported, rather than the frontmatter count being trusted or the phase failed.
+        const d = `frontmatter declares threats_open: ${j.declared} but the register has ${j.threats_open}`;
+        return res('warning', d, [d]);
+      }
+      return res('pass', 'threat register present, zero open', []);
+    }
+
+    // This verb has no boolean at all, only a status string. Measured: no archived v5.0 phase
+    // has a UI-REVIEW.md, so 'missing' is the normal state for every backend phase - and unlike
+    // threats-clear, nothing later in the lifecycle will write one, so it is not_applicable
+    // rather than not_yet.
+    case 'ui-reviewed': {
+      if (j.status === 'missing') return res('not_applicable', 'no UI-REVIEW.md; not a UI phase', []);
+      if (j.status === 'passed') return res('pass', 'UI review passed', []);
+      const d = `UI review status is "${j.status}"`;
+      return res('warning', d, [d]);
+    }
+
+    // The verb computes its own `blocking` boolean, which is a better severity signal than any
+    // generic array read. It also never scans .planning/milestones/, so on an archived phase
+    // "Phase directory not found" is the expected answer, not a defect.
+    case 'schema-drift': {
+      if (j.skipped === true) return res('not_applicable', 'schema-drift check skipped', []);
+      const msg = String(j.message || '');
+      if (/Phase directory not found/.test(msg)) return res('not_applicable', msg, []);
+      if (j.blocking === true) return res('error', msg || 'blocking schema drift', [msg || 'blocking schema drift']);
+      if (j.drift_detected === true) return res('warning', msg || 'schema drift detected', [msg || 'schema drift detected']);
+      return res('pass', 'no schema drift', []);
+    }
+
+    // Scored from the ALREADY-FILTERED list filterCoverageToPhase produced (D-15), never from
+    // the milestone-wide payload: the gate reports one phase's coverage, and every other
+    // phase's unsatisfied requirements are not this phase's failure.
+    case 'milestone-coverage': {
+      const rows = Array.isArray(o.filteredRequirements) ? o.filteredRequirements : [];
+      // C-9: this verb walks .planning/phases only and always reads the CURRENT
+      // REQUIREMENTS.md, with no archive fallthrough, so on an archived phase the filter comes
+      // back empty. That is a missing input, not a clean sheet.
+      if (rows.length === 0 || j.gate === 'unknown') {
+        return res('not_yet', 'no requirements mapped to this phase in the current REQUIREMENTS.md', []);
+      }
+      const errs = [];
+      const warns = [];
+      for (const r of rows) {
+        if (!r) continue;
+        if (r.status === 'unsatisfied' || r.orphaned === true) {
+          errs.push(`${r.id}: ${r.orphaned === true ? 'orphaned (mapped to no existing phase)' : 'unsatisfied'}`);
+        } else if (r.status === 'partial') {
+          warns.push(`${r.id}: partial (not listed in any SUMMARY's requirements-completed)`);
+        } else if (r.needs_checkbox_update === true) {
+          warns.push(`${r.id}: satisfied, but its REQUIREMENTS.md checkbox is still unticked`);
+        }
+      }
+      if (errs.length) return res('error', `${errs.length} of ${rows.length} requirement(s) not satisfied`, errs.concat(warns));
+      if (warns.length) return res('warning', `${warns.length} of ${rows.length} requirement(s) need attention`, warns);
+      return res('pass', `${rows.length} requirement(s) satisfied`, []);
+    }
+
+    // A-03 half 2. 353 unresolved references across the 18 real archived plans, from a backtick
+    // branch that never expands '~' and from paths that moved when the milestone was archived.
+    // A missing reference is worth recording and is not worth failing a phase over.
+    case 'references': {
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      const missing = fmt(j.missing);
+      if (missing.length) return res('warning', `${missing.length} of ${j.total ?? missing.length} reference(s) did not resolve`, missing);
+      return res('pass', `${j.total ?? 0} reference(s) resolved`, []);
+    }
+
+    // A PLAN with no must_haves.artifacts block declares nothing to check; that early return is
+    // the NORMAL state, not a failure. A-03 half 2 again for the paths that still miss: after
+    // 23-03's expandHomePath fix the residue is files that legitimately moved at archive time.
+    case 'artifacts': {
+      if (j.error === 'No must_haves.artifacts found in frontmatter') {
+        return res('not_applicable', 'the PLAN declares no must_haves.artifacts', []);
+      }
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      if (j.all_passed === false) {
+        const failed = (Array.isArray(j.artifacts) ? j.artifacts : [])
+          .filter((a) => a && a.passed === false)
+          .map((a) => `${a.path}: ${fmt(a.issues).join(', ')}`);
+        return res('warning', `${j.passed ?? 0} of ${j.total ?? 0} artifact(s) verified`, failed);
+      }
+      return res('pass', `${j.total ?? 0} artifact(s) verified`, []);
+    }
+
+    // Same shape as artifacts, and the same reasoning: 47 of 47 key-link checks fail on the
+    // archived plans because cmdVerifyKeyLinks joins both its reads against cwd with no
+    // expansion (23-03 finding F2, deliberately left unfixed under HC-5).
+    case 'key-links': {
+      if (j.error === 'No must_haves.key_links found in frontmatter') {
+        return res('not_applicable', 'the PLAN declares no must_haves.key_links', []);
+      }
+      if (j.error) return res('error', String(j.error), [String(j.error)]);
+      if (j.all_verified === false) {
+        const failed = (Array.isArray(j.links) ? j.links : [])
+          .filter((l) => l && l.verified === false)
+          .map((l) => `${l.from} -> ${l.to}: ${l.detail || 'not verified'}`);
+        return res('warning', `${j.verified ?? 0} of ${j.total ?? 0} key link(s) verified`, failed);
+      }
+      return res('pass', `${j.total ?? 0} key link(s) verified`, []);
+    }
+
+    // git history can be rewritten, and the hashes come from a /\b[0-9a-f]{7,40}\b/ hex-word
+    // harvest over prose, which picks up noise. An unresolvable hash is recorded, not failed.
+    case 'commits': {
+      if (j.all_valid === false) {
+        const invalid = fmt(j.invalid);
+        return res('warning', `${invalid.length} of ${j.total ?? invalid.length} hash(es) not in this repo's history`, invalid);
+      }
+      if ((j.total || 0) === 0) return res('not_applicable', 'no commit hashes to check', []);
+      return res('pass', `${j.total} commit hash(es) resolved`, []);
+    }
+
+    // T-23-17: a verb added to verify.cjs in a later milestone must show up loudly rather than
+    // drop out of the gate while the record still reads clean. Never 'pass', never a throw.
+    default: {
+      const d = 'unmapped verb: ' + verb;
+      return res('error', d, [d]);
+    }
+  }
+}
 function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   if (!summaryPath) {
     error('summary-path required');
@@ -1511,6 +1814,8 @@ function cmdVerifySchemaDrift(cwd, phaseArg, skipFlag, raw) {
 module.exports = {
   captureVerb,
   expandHomePath,
+  GATE_VERBS,
+  classifyVerbResult,
   cmdVerifySummary,
   cmdVerifyPlanStructure,
   validatePlanGraph,
