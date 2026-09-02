@@ -509,3 +509,299 @@ describe('cmdVerifyArtifacts home expansion', () => {
       'cmdVerifyKeyLinks must keep its unexpanded source join');
   });
 });
+
+// ── classifyVerbResult (D-14 as amended by A-01 and A-03) ───────────────────
+// D-14's intent survives - reuse each verb's own semantics rather than invent a second
+// severity model - but its implementation cannot: the uniform errors[]/warnings[] split
+// exists in only 2 of the 13 functions (C-5), so a `result.errors.length ? fail : pass` read
+// would be wrong ten times out of thirteen.
+//
+// Every case below is driven from a RECORDED fixture in tests/fixtures/verbs/, never from a
+// hand-written payload, so the classifier is tested against what the verbs actually emit.
+// The expectation is stated as a literal severity per verb: a `default` plus the named
+// exceptions, with the recorded case count pinned so a re-recording that adds or drops a case
+// fails here instead of silently inheriting the default.
+
+const EXPECTED_SEVERITY = {
+  // Every archived phase has its plans and summaries paired, and the synthetic empty phase
+  // has neither, so the verb reports complete with no errors and no warnings in all five.
+  'phase-completeness': { cases: 5, default: 'pass', byLabel: {} },
+
+  // Four real graphs are acyclic with ordered waves. A phase with zero PLAN files has nothing
+  // to check, and a clean graph over zero nodes must not read as a pass the gate never earned.
+  'plan-graph': { cases: 5, default: 'pass', byLabel: { 'empty phase': 'not_applicable' } },
+
+  // All four archived VERIFICATION.md files read `status: passed`. The synthetic phase has no
+  // VERIFICATION.md at all, which is A-01's not-yet: an input that does not exist yet.
+  'phase-verified': { cases: 5, default: 'pass', byLabel: { 'empty phase': 'not_yet' } },
+
+  // All four archived SECURITY.md files carry a register with zero open threats. The
+  // synthetic phase has no SECURITY.md, which /donny-audit-phase writes AFTER execute-phase
+  // close by design (A-01), so its absence is not-yet rather than a defect.
+  'threats-clear': { cases: 5, default: 'pass', byLabel: { 'empty phase': 'not_yet' } },
+
+  // Measured: no archived v5.0 phase has a UI-REVIEW.md. `missing` is the normal state for
+  // every backend phase, and nothing later in the lifecycle will write one, so it is
+  // not_applicable rather than not_yet.
+  'ui-reviewed': { cases: 5, default: 'not_applicable', byLabel: {} },
+
+  // The verb never scans .planning/milestones/, so all four archived phases come back
+  // "Phase directory not found" - expected on an archive, not a defect. The one live fixture
+  // phase is scanned properly and is clean.
+  'schema-drift': {
+    cases: 5,
+    default: 'not_applicable',
+    byLabel: { 'live (non-archived) fixture phase': 'pass' },
+  },
+
+  // Every recorded payload is the v6.0 REQUIREMENTS.md mid-milestone, where nothing is
+  // satisfied yet, so each one scores error on its own unsatisfied rows.
+  'milestone-coverage': { cases: 5, default: 'error', byLabel: {} },
+
+  // Measured 0 errors and 8 warnings across the 18 real archived plans (the plan's constant,
+  // re-measured here and confirmed exactly), so this verb is safe at error severity. The three
+  // plans carrying warnings all have tasks with no <files> element.
+  'plan-structure': {
+    cases: 20,
+    default: 'pass',
+    byLabel: {
+      '19-01-PLAN.md': 'warning',
+      '19-02-PLAN.md': 'warning',
+      '19-03-PLAN.md': 'warning',
+      'file that does not exist': 'error',
+    },
+  },
+
+  // A-03 half 2: 353 unresolved references across the 18 real plans, from unexpanded ~ in
+  // backticks and from paths that moved when the milestone was archived. Scored as errors
+  // this single verb would make the gate red on every phase.
+  'references': { cases: 19, default: 'warning', byLabel: { 'clean fixture plan': 'pass' } },
+
+  // After 23-03's expandHomePath fix, 15 of 18 archived plans verify all their artifacts. The
+  // three that do not name files that moved into .planning/milestones/ at milestone close,
+  // which no expansion rule can resolve - A-03 half 2 again.
+  'artifacts': {
+    cases: 19,
+    default: 'pass',
+    byLabel: {
+      '21-06-PLAN.md': 'warning',
+      '22-01-PLAN.md': 'warning',
+      '22-02-PLAN.md': 'warning',
+      'plan whose must_haves has no artifacts block': 'not_applicable',
+    },
+  },
+
+  // 47 of 47 key-link checks fail on the archived plans, for the same unexpanded-path reason
+  // (23-03 finding F2, deliberately left unfixed). A PLAN with no key_links block declares
+  // nothing to check.
+  'key-links': {
+    cases: 19,
+    default: 'warning',
+    byLabel: { 'plan whose must_haves has no key_links block': 'not_applicable' },
+  },
+
+  // git history can be rewritten, and cmdVerifySummary harvests hashes with a hex-word regex
+  // that picks up noise, so an unresolvable hash is recorded rather than failed.
+  'commits': { cases: 2, default: 'warning', byLabel: {} },
+
+  // THE ONE THAT DECIDES WHETHER THE GATE IS READABLE. Measured by 23-03 over 21 SUMMARYs
+  // (3 from phase 23 plus all 18 archived): files_created fails 21/21, commits_exist 12/21,
+  // self_check 7/21, for reasons that are artifacts of how those three checks are written and
+  // not record defects. Scored as plain errors this verb is red on every SUMMARY this project
+  // has ever written. The eight archived SUMMARYs below that DO score error are exactly the
+  // ones missing requirements-completed - the J3/J5 drift Phase 22 had to repair by hand, and
+  // the defect this milestone exists for. The ninth is the missing-file early return.
+  'verify-summary': {
+    cases: 19,
+    default: 'warning',
+    byLabel: {
+      '20-01-SUMMARY.md': 'error',
+      '20-02-SUMMARY.md': 'error',
+      '20-03-SUMMARY.md': 'error',
+      '21-01-SUMMARY.md': 'error',
+      '21-02-SUMMARY.md': 'error',
+      '21-03-SUMMARY.md': 'error',
+      '21-04-SUMMARY.md': 'error',
+      '21-05-SUMMARY.md': 'error',
+      'summary path that does not exist': 'error',
+    },
+  },
+};
+
+/**
+ * milestone-coverage is the one verb classifyVerbResult cannot score from the payload alone:
+ * D-15 reduces the milestone-wide list to one phase first, and the classifier reads that
+ * reduced list from opts. Here each recorded payload is scored whole; the D-15 filter and the
+ * phase-scoped view are asserted in their own block below.
+ */
+const optsFor = (verb, kase) => (verb === 'milestone-coverage'
+  ? { filteredRequirements: kase.output.requirements || [] }
+  : undefined);
+
+const readVerbFixture = (verb) =>
+  JSON.parse(fs.readFileSync(join(__dirname, 'fixtures', 'verbs', `${verb}.json`), 'utf-8'));
+
+describe('classifyVerbResult: the GATE_VERBS contract', () => {
+  it('exports thirteen verb names, exactly the thirteen recorded fixtures', () => {
+    assert.ok(Array.isArray(verify.GATE_VERBS), 'GATE_VERBS must be exported as an array');
+    assert.equal(verify.GATE_VERBS.length, 13);
+    assert.deepEqual([...verify.GATE_VERBS].sort(), [...VERB_FIXTURES].sort());
+  });
+
+  it('handles every GATE_VERBS name without falling through to the default branch', () => {
+    // T-23-17: a verb added to verify.cjs in a later milestone must not be able to drop out
+    // of the gate while the record still reads clean. This pins the handled set to the
+    // constant, in both directions.
+    for (const verb of verify.GATE_VERBS) {
+      const got = verify.classifyVerbResult(verb, { ok: true, json: {} });
+      assert.doesNotMatch(got.detail, /unmapped verb/, `${verb} must have a severity rule`);
+    }
+    for (const notAVerb of ['summary', 'gate', 'verify-artifacts', 'plan_structure', '']) {
+      const got = verify.classifyVerbResult(notAVerb, { ok: true, json: {} });
+      assert.equal(got.severity, 'error');
+      assert.match(got.detail, /unmapped verb/);
+    }
+  });
+});
+
+// The loop reads VERB_FIXTURES rather than verify.GATE_VERBS on purpose: the assertion above
+// pins the two lists equal, and iterating a local constant means a missing or truncated
+// export cannot silently erase 133 assertions at module-load time.
+for (const verb of VERB_FIXTURES) {
+  describe(`classifyVerbResult: ${verb}`, () => {
+    const spec = EXPECTED_SEVERITY[verb];
+    const fixture = readVerbFixture(verb);
+
+    it(`still has the ${spec.cases} recorded cases this table was written against`, () => {
+      assert.equal(fixture.cases.length, spec.cases,
+        `${verb}.json changed shape: re-record deliberately, then update EXPECTED_SEVERITY`);
+    });
+
+    for (const kase of fixture.cases) {
+      const want = Object.prototype.hasOwnProperty.call(spec.byLabel, kase.label)
+        ? spec.byLabel[kase.label]
+        : spec.default;
+      it(`classifies '${kase.label}' as ${want}`, () => {
+        const got = verify.classifyVerbResult(verb, { ok: true, json: kase.output }, optsFor(verb, kase));
+        assert.equal(got.severity, want,
+          `${verb} case '${kase.label}' (source: ${kase.source}) classified ${got.severity}: ${got.detail}`);
+        assert.equal(got.verb, verb);
+        assert.equal(typeof got.detail, 'string');
+        assert.ok(got.detail.length > 0, 'detail must say something');
+        assert.ok(Array.isArray(got.findings), 'findings must be an array');
+      });
+    }
+  });
+}
+
+describe('classifyVerbResult: boundary cases', () => {
+  it('scores a verb that threw as an error, carrying the thrown message, for all thirteen', () => {
+    // T-23-01: captureVerb returns rather than throws, so a verb that blew up must be scored
+    // as an error with its message in the record, never read as an empty pass.
+    for (const verb of verify.GATE_VERBS) {
+      const got = verify.classifyVerbResult(verb, { ok: false, error: 'boom' });
+      assert.equal(got.severity, 'error', `${verb} must fail on a non-ok capture`);
+      assert.match(got.detail, /boom/);
+      assert.deepEqual(got.findings, ['boom']);
+    }
+  });
+
+  it('scores an unparseable capture as an error even with no message', () => {
+    const got = verify.classifyVerbResult('references', { ok: false, raw: 'not json' });
+    assert.equal(got.severity, 'error');
+    assert.match(got.detail, /no parseable output/);
+  });
+
+  it('treats a PLAN with no must_haves.artifacts as not_applicable, not a failure', () => {
+    const got = verify.classifyVerbResult('artifacts',
+      { ok: true, json: { error: 'No must_haves.artifacts found in frontmatter' } });
+    assert.equal(got.severity, 'not_applicable');
+  });
+
+  it('treats a PLAN with no must_haves.key_links as not_applicable', () => {
+    const got = verify.classifyVerbResult('key-links',
+      { ok: true, json: { error: 'No must_haves.key_links found in frontmatter' } });
+    assert.equal(got.severity, 'not_applicable');
+  });
+
+  it('treats a missing SECURITY.md as not_yet, neither error nor warning (A-01)', () => {
+    const got = verify.classifyVerbResult('threats-clear',
+      { ok: true, json: { clear: false, status: 'missing' } });
+    assert.equal(got.severity, 'not_yet');
+  });
+
+  it('treats the No SECURITY.md error string as not_yet as well', () => {
+    const got = verify.classifyVerbResult('threats-clear',
+      { ok: true, json: { clear: false, error: 'No SECURITY.md in phase' } });
+    assert.equal(got.severity, 'not_yet');
+  });
+
+  it('names the literal the engine matches when VERIFICATION.md says PASS (the J1 finding)', () => {
+    const got = verify.classifyVerbResult('phase-verified',
+      { ok: true, json: { verified: false, status: 'PASS' } });
+    assert.equal(got.severity, 'error');
+    assert.match(got.detail, /PASS/);
+    assert.match(got.detail, /passed/, 'the detail must name the lowercase literal the engine matches');
+  });
+
+  it('scores unresolved references as a warning, not an error (A-03 half 2)', () => {
+    const got = verify.classifyVerbResult('references',
+      { ok: true, json: { valid: false, missing: ['a', 'b'], found: 1, total: 3 } });
+    assert.equal(got.severity, 'warning');
+    assert.deepEqual(got.findings, ['a', 'b']);
+  });
+
+  it('scores an unknown verb as an error naming it, never as a pass and never by throwing', () => {
+    const got = verify.classifyVerbResult('nope', { ok: true, json: {} });
+    assert.equal(got.severity, 'error');
+    assert.match(got.detail, /unmapped verb: nope/);
+  });
+
+  it('separates a real SUMMARY record defect from the three known measurement artifacts', () => {
+    // 23-03 findings F3/F4/F5. All three of these strings are produced by checks that misfire
+    // on a correctly written SUMMARY, so they warn; the D-16 requirements-completed error is
+    // a real defect and fails. This is the difference between a gate that gets read and one
+    // that is red on 21 of 21 records.
+    const artifactsOnly = verify.classifyVerbResult('verify-summary', {
+      ok: true,
+      json: {
+        passed: false,
+        errors: [
+          'Missing files: ~/Developer/cc-autopilot/autopilot/daemon.py',
+          'Referenced commit hashes not found in git history',
+          'Self-check section indicates failure',
+        ],
+      },
+    });
+    assert.equal(artifactsOnly.severity, 'warning');
+    assert.equal(artifactsOnly.findings.length, 3, 'nothing is dropped from the record');
+
+    const withDefect = verify.classifyVerbResult('verify-summary', {
+      ok: true,
+      json: {
+        passed: false,
+        errors: [
+          'requirements-completed is empty',
+          'Missing files: ~/Developer/cc-autopilot/autopilot/daemon.py',
+        ],
+      },
+    });
+    assert.equal(withDefect.severity, 'error');
+    assert.match(withDefect.detail, /requirements-completed is empty/);
+    assert.equal(withDefect.findings.length, 2);
+  });
+
+  it('scores an unrecognised SUMMARY error string as an error, not as an artifact', () => {
+    // The partition is a named allow-list of three strings, not a "the verb was unhappy"
+    // catch-all (T-23-18). Anything it has not seen fails loudly.
+    const got = verify.classifyVerbResult('verify-summary',
+      { ok: true, json: { passed: false, errors: ['Some future check failed'] } });
+    assert.equal(got.severity, 'error');
+  });
+
+  it('passes a SUMMARY with no errors at all', () => {
+    const got = verify.classifyVerbResult('verify-summary',
+      { ok: true, json: { passed: true, errors: [] } });
+    assert.equal(got.severity, 'pass');
+  });
+});
