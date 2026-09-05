@@ -16,12 +16,13 @@ import { describe, it } from 'node:test';
 import { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { configGetIdiom, HERMETIC_DONNY_HOME, ROOT, runTools, withConfigFixture } from './helpers/cli.mjs';
-import { buildGlobalDefaults, buildRawGlobalDefaults, cleanupFixture } from './helpers/planning-fixture.mjs';
+import { buildGlobalDefaults, buildPlanningFixture, buildRawGlobalDefaults, cleanupFixture } from './helpers/planning-fixture.mjs';
 
 const require = createRequire(import.meta.url);
 const CONFIG = require(resolve(ROOT, 'packages/donny/bin/lib/config.cjs'));
@@ -29,6 +30,15 @@ const CORE = require(resolve(ROOT, 'packages/donny/bin/lib/core.cjs'));
 
 const readCfgRaw = (root) => fs.readFileSync(join(root, '.planning', 'config.json'), 'utf-8');
 const readCfg = (root) => JSON.parse(readCfgRaw(root));
+
+// The pre-change baseline lives in the operator's claudecodeoptimized repo.
+// donnyclaude ships publicly, so the test reading it skips when it is absent,
+// the same way verify-gate.test.js:27-33 guards its Phase 19 fixtures.
+const CCO_ROOT = '/Users/d0nmega/Developer/claudecodeoptimized';
+const CCO_BASELINE = resolve(
+  CCO_ROOT,
+  '.planning/phases/24-global-defaults-that-apply-at-runtime/24-BASELINE-prechange.txt',
+);
 
 // ---------------------------------------------------------------------------
 // Pin the IN-PROCESS global defaults directory for the whole file (T-24-54).
@@ -1198,5 +1208,185 @@ describe('loadConfig resolution ladder (CONFIG-01, CONFIG-02, Pitfall 6)', () =>
       cleanupFixture(a);
       cleanupFixture(b);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Criterion 4, plan 24-06 task 2: an absent global file and an empty one behave
+// exactly as the pre-change engine did.
+//
+// This mirrors 24-config-snapshot.sh in-suite, so the property is re-checked on
+// every npm test rather than only when someone remembers to run the shell script.
+//
+// Test 3 is the negative control and is not optional. Tests 1, 2 and 5 compare
+// two states of the same build, so they would all still pass if the global layer
+// were ignored entirely - which is the exact defect the phase exists to remove.
+//
+// The environment is pinned for the whole block: the three API-key vars because
+// hardcodedProjectDefaults reads them (config.cjs:285-288), and DONNY_WORKSTREAM
+// because planningDir re-roots .planning/ from it. loadConfig reads none of them,
+// but a half-pinned environment is a worse trap than an unpinned one. This is the
+// same determinism block 24-config-snapshot.sh applies.
+// ---------------------------------------------------------------------------
+
+describe('criterion 4: no global file behaves exactly as before', () => {
+  const PINNED = ['BRAVE_API_KEY', 'FIRECRAWL_API_KEY', 'EXA_API_KEY', 'DONNY_WORKSTREAM'];
+  const savedPinned = {};
+  before(() => {
+    for (const k of PINNED) {
+      savedPinned[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+  after(() => {
+    for (const k of PINNED) {
+      if (savedPinned[k] === undefined) delete process.env[k];
+      else process.env[k] = savedPinned[k];
+    }
+  });
+
+  // A realistic project, not an empty one, so the comparison exercises the merge
+  // rather than only the defaults.
+  const FIXTURE_CONFIG = {
+    model_profile: 'quality',
+    commit_docs: true,
+    git: { branching_strategy: 'none', phase_branch_template: 'donny/phase-{phase}-{slug}' },
+    workflow: { research: true, plan_check: true, verifier: true, auto_advance: true },
+  };
+
+  /** The sixteen keys workflow prose actually reads, with the literal each site supplies. */
+  const READ_KEYS = [
+    ['context_window', '200000'],
+    ['git.base_branch', ''],
+    ['workflow._auto_chain_active', 'false'],
+    ['workflow.auto_advance', 'false'],
+    ['workflow.discuss_mode', 'discuss'],
+    ['workflow.node_repair', 'true'],
+    ['workflow.nyquist_validation', 'true'],
+    ['workflow.record_gate', 'true'],
+    ['workflow.security_asvs_level', '1'],
+    ['workflow.security_block_on', 'high'],
+    ['workflow.security_enforcement', 'true'],
+    ['workflow.skip_discuss', 'false'],
+    ['workflow.ui_phase', 'true'],
+    ['workflow.ui_review', 'true'],
+    ['workflow.ui_safety_gate', 'true'],
+    ['workflow.use_worktrees', 'true'],
+  ];
+
+  /** Run fn with root, an absent-global home and an empty-global home, then clean up. */
+  const withThreeStates = (fn) => {
+    const root = buildPlanningFixture({ config: FIXTURE_CONFIG });
+    const absent = buildGlobalDefaults(null);
+    const empty = buildGlobalDefaults({});
+    try {
+      return fn({ root, absent, empty });
+    } finally {
+      cleanupFixture(root);
+      cleanupFixture(absent);
+      cleanupFixture(empty);
+    }
+  };
+
+  it('loadConfig is deep-equal between an absent global file and an empty one', () => {
+    withThreeStates(({ root, absent, empty }) => {
+      const a = withDonnyHomeEnv(absent, () => CORE.loadConfig(root));
+      const e = withDonnyHomeEnv(empty, () => CORE.loadConfig(root));
+      assert.deepEqual(e, a, 'an empty defaults.json must be indistinguishable from no file at all');
+    });
+  });
+
+  it('every one of the sixteen read keys resolves identically in both states', () => {
+    // An absent-versus-empty comparison within ONE build, so the raw idiom value is
+    // the right thing to compare. The normalization in 24-config-snapshot.sh only
+    // matters across the pre-change and post-change builds, where git.base_branch
+    // moves from "" to null; that comparison is the shell check, not this test.
+    withThreeStates(({ root, absent, empty }) => {
+      for (const [key, literal] of READ_KEYS) {
+        assert.equal(
+          configGetIdiom(root, key, literal, { DONNY_HOME: empty }),
+          configGetIdiom(root, key, literal, { DONNY_HOME: absent }),
+          `${key} drifted between the absent and empty global states`,
+        );
+      }
+    });
+  });
+
+  it('a populated global DOES change both results, so the comparison is not vacuous', () => {
+    // The negative control (T-24-33). Without it, the two tests above would pass
+    // unchanged if the global layer were dropped on the floor entirely.
+    //
+    // The global carries one key for each read path, because they do not overlap:
+    // workflow.record_gate is config-get-only, and workflow.browser_research is one
+    // of the 28 keys loadConfig flattens. A control built on record_gate alone would
+    // assert nothing about loadConfig, which is the path this plan changed.
+    withThreeStates(({ root, absent }) => {
+      const populated = buildGlobalDefaults({
+        model_profile: 'budget',
+        workflow: { record_gate: false, browser_research: false },
+      });
+      try {
+        const base = withDonnyHomeEnv(absent, () => CORE.loadConfig(root));
+        const withGlobal = withDonnyHomeEnv(populated, () => CORE.loadConfig(root));
+        assert.notDeepEqual(withGlobal, base, 'the global layer must reach loadConfig');
+        assert.equal(base.browser_research, true, 'the hardcoded default with no global file');
+        assert.equal(withGlobal.browser_research, false, 'and the global value once there is one');
+        assert.equal(base.model_profile, 'quality', 'the project value still wins over the global');
+        assert.equal(withGlobal.model_profile, 'quality');
+
+        assert.notEqual(
+          configGetIdiom(root, 'workflow.record_gate', 'true', { DONNY_HOME: populated }),
+          configGetIdiom(root, 'workflow.record_gate', 'true', { DONNY_HOME: absent }),
+          'the global layer must reach config-get too',
+        );
+        assert.equal(configGetIdiom(root, 'workflow.record_gate', 'true', { DONNY_HOME: populated }), 'false');
+        assert.equal(configGetIdiom(root, 'workflow.record_gate', 'true', { DONNY_HOME: absent }), 'true');
+      } finally {
+        cleanupFixture(populated);
+      }
+    });
+  });
+
+  it('an empty defaults.json produces no stderr at all', () => {
+    // {} is this machine's actual live state, so a warning there would be noise on
+    // every single engine invocation.
+    withThreeStates(({ root, empty }) => {
+      const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: empty });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stderr, '', 'the operator normal state must be silent');
+    });
+  });
+
+  it('matches the PATH A section recorded in 24-BASELINE-prechange.txt', {
+    skip: fs.existsSync(CCO_BASELINE) ? false : 'baseline artifact not present',
+  }, () => {
+    const text = fs.readFileSync(CCO_BASELINE, 'utf-8');
+    const lines = text.split('\n');
+    const start = lines.findIndex((l) => l.startsWith('### PATH A'));
+    assert.notEqual(start, -1, 'the baseline must carry a PATH A section');
+    let end = start + 1;
+    while (end < lines.length && !lines[end].startsWith('### ')) end += 1;
+    const recorded = JSON.parse(lines.slice(start + 1, end).join('\n').trim());
+
+    const cfgPath = join(CCO_ROOT, '.planning', 'config.json');
+    const md5Before = createHash('md5').update(fs.readFileSync(cfgPath)).digest('hex');
+
+    const empty = buildGlobalDefaults({});
+    try {
+      const fresh = withDonnyHomeEnv(empty, () => CORE.loadConfig(CCO_ROOT));
+      const drifted = [...new Set([...Object.keys(recorded), ...Object.keys(fresh)])].filter(
+        (k) => JSON.stringify(recorded[k]) !== JSON.stringify(fresh[k]),
+      );
+      assert.deepEqual(drifted, [], 'criterion 4 failure: fix loadConfig, never the baseline');
+      assert.deepEqual(fresh, recorded);
+    } finally {
+      cleanupFixture(empty);
+    }
+
+    assert.equal(
+      createHash('md5').update(fs.readFileSync(cfgPath)).digest('hex'),
+      md5Before,
+      'resolving against a real project must not write to its config.json (T-24-29)',
+    );
   });
 });
