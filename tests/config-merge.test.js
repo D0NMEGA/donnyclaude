@@ -1577,3 +1577,206 @@ describe('health repairs must not defeat the global layer (D-10, D-17)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plan 24-08: config-get --source, the opt-in provenance flag (D-08, D-11).
+//
+// The flag names the layer that supplied a value: hardcoded, global or project.
+// Its entire safety story is that it is OPT-IN. Without it stdout must stay
+// byte-identical for the 43 shell $(...) capture sites 24-07 measured, which is
+// what the byte-equality block at the end of this describe asserts and why this
+// plan runs last among the code plans (D-21, T-24-40).
+//
+// The raw form is two tab-separated fields, value then layer, so a shell caller
+// can cut -f1 and cut -f2 without a JSON parser. A tab rather than a space
+// because git.quick_branch_template and manager.flags.* can hold spaces (T-24-44).
+// ---------------------------------------------------------------------------
+describe('config-get --source (D-08, D-11)', () => {
+  const GLOBAL_FALSE = { workflow: { record_gate: false } };
+
+  // Behavior 1
+  it('names the hardcoded layer when neither the global nor the project set the key', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw', '--source']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, 'true\thardcoded');
+    });
+  });
+
+  // Behavior 2
+  it('names the global layer when only the global set the key (CONFIG-01)', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({}, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw', '--source'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout, 'false\tglobal');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  // Behavior 3
+  it('names the project layer when the project overrides the global (CONFIG-02)', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({ workflow: { record_gate: true } }, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw', '--source'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout, 'true\tproject');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  // Behavior 4, the D-11 half: the merged value alone cannot tell these two apart.
+  it('flags a project value that merely repeats the global one (D-11)', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({ workflow: { record_gate: false } }, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--source'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        const payload = JSON.parse(r.stdout);
+        assert.equal(payload.key, 'workflow.record_gate');
+        assert.equal(payload.value, false);
+        assert.equal(payload.source, 'project');
+        assert.equal(payload.redundant_with_global, true, 'removing this project key would change nothing');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('does not flag a project value that differs from the global one (D-11)', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({ workflow: { record_gate: true } }, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--source'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        const payload = JSON.parse(r.stdout);
+        assert.equal(payload.source, 'project');
+        assert.equal(payload.redundant_with_global, false, 'the project value is doing real work here');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('never reports redundant_with_global when no global layer exists at all', () => {
+    withConfigFixture({ workflow: { record_gate: false } }, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.record_gate', '--source']);
+      assert.equal(r.status, 0, r.stderr);
+      const payload = JSON.parse(r.stdout);
+      assert.equal(payload.source, 'project');
+      assert.equal(payload.redundant_with_global, false, 'redundancy is against the GLOBAL, not the hardcoded default');
+    });
+  });
+
+  // Behavior 6: the splice. args[1] must stay the key wherever the flag appeared.
+  it('works with the flag placed before the key, proving the argv splice', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({}, (root) => {
+        const after = runTools(root, ['config-get', 'workflow.record_gate', '--source', '--raw'], { DONNY_HOME: home });
+        const before = runTools(root, ['config-get', '--source', 'workflow.record_gate', '--raw'], { DONNY_HOME: home });
+        assert.equal(after.status, 0, after.stderr);
+        assert.equal(before.status, 0, before.stderr);
+        assert.equal(before.stdout, 'false\tglobal');
+        assert.equal(before.stdout, after.stdout, 'flag position must not change the output');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  // Behavior 7: closes assumption A4 of 24-RESEARCH.md rather than leaving it assumed.
+  it('composes with --pick, which parses the JSON form (A4, T-24-42)', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({}, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--source', '--pick', 'source'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout, 'global');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('echoes the tab-separated capture when --source --raw is picked, since it is not JSON (A4)', () => {
+    const home = buildGlobalDefaults(GLOBAL_FALSE);
+    try {
+      withConfigFixture({}, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--source', '--raw', '--pick', 'source'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout, 'false\tglobal', 'no shipped caller combines them; the fall-through is pinned, not endorsed');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  // Behavior 8: provenance must not widen the resolve contract.
+  it('still exits non-zero on a key absent from the allowlist (T-24-41)', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'totally.bogus.key', '--source', '--raw']);
+      assert.notEqual(r.status, 0, '--source is applied after the traversal and after both Key not found errors');
+    });
+  });
+
+  it('still exits non-zero on an exempt key the project never set (T-24-41)', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'mode', '--source', '--raw']);
+      assert.notEqual(r.status, 0, 'RESOLVE_EXEMPT keys stay on the exit-1 path with the flag on');
+    });
+  });
+
+  // Behavior 9
+  it('reports project for a non-resolvable key the project did set, the only layer that could supply it', () => {
+    withConfigFixture({ mode: 'auto' }, (root) => {
+      const r = runTools(root, ['config-get', 'mode', '--raw', '--source']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, 'auto\tproject');
+    });
+  });
+
+  // Behavior 5, the safety test. Byte equality on r.stdout, never on a trimmed
+  // value, so a stray newline or tab would fail. output() writes with
+  // fs.writeSync(1, ...) and appends nothing (core.cjs:196).
+  describe('the default path is byte-identical without the flag (T-24-40)', () => {
+    const rows = [
+      { key: 'workflow.record_gate', project: {}, raw: true, expected: 'true' },
+      { key: 'workflow.record_gate', project: {}, raw: false, expected: 'true' },
+      { key: 'workflow.discuss_mode', project: {}, raw: false, expected: '"discuss"' },
+      { key: 'git.base_branch', project: {}, raw: false, expected: 'null' },
+      { key: 'workflow.record_gate', project: { workflow: { record_gate: false } }, raw: true, expected: 'false' },
+    ];
+
+    for (const row of rows) {
+      const label = `${row.key}${row.raw ? ' --raw' : ''}${Object.keys(row.project).length ? ' (project set)' : ''}`;
+      it(`${label} prints exactly ${JSON.stringify(row.expected)}`, () => {
+        withConfigFixture(row.project, (root) => {
+          const argv = ['config-get', row.key];
+          if (row.raw) argv.push('--raw');
+          const r = runTools(root, argv);
+          assert.equal(r.status, 0, r.stderr);
+          assert.equal(r.stdout, row.expected);
+        });
+      });
+    }
+
+    it('is byte-identical with a populated global layer too, which is the case 43 sites see', () => {
+      const home = buildGlobalDefaults(GLOBAL_FALSE);
+      try {
+        withConfigFixture({}, (root) => {
+          assert.equal(runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: home }).stdout, 'false');
+          assert.equal(runTools(root, ['config-get', 'workflow.record_gate'], { DONNY_HOME: home }).stdout, 'false');
+        });
+      } finally {
+        cleanupFixture(home);
+      }
+    });
+  });
+});
