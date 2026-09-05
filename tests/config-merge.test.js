@@ -13,6 +13,7 @@
  */
 
 import { describe, it } from 'node:test';
+import { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -28,6 +29,30 @@ const CORE = require(resolve(ROOT, 'packages/donny/bin/lib/core.cjs'));
 
 const readCfgRaw = (root) => fs.readFileSync(join(root, '.planning', 'config.json'), 'utf-8');
 const readCfg = (root) => JSON.parse(readCfgRaw(root));
+
+// ---------------------------------------------------------------------------
+// Pin the IN-PROCESS global defaults directory for the whole file (T-24-54).
+//
+// cli.mjs makes every SUBPROCESS hermetic, but plan 24-06 makes loadConfig read
+// $DONNY_HOME/defaults.json and loadConfig is called in-process here. An
+// in-process call reads process.env directly, which that default never reaches,
+// so without this the suite would silently depend on the operator's real
+// ~/.donny/defaults.json - the exact file plan 24-09 populates across a
+// checkpoint that asks the operator to run npm test.
+//
+// Individual tests keep setting DONNY_HOME to their own fixture and restoring it
+// in a finally; they now restore to the hermetic value rather than to whatever
+// the operator's shell had.
+// ---------------------------------------------------------------------------
+let savedDonnyHome;
+before(() => {
+  savedDonnyHome = process.env.DONNY_HOME;
+  process.env.DONNY_HOME = HERMETIC_DONNY_HOME;
+});
+after(() => {
+  if (savedDonnyHome === undefined) delete process.env.DONNY_HOME;
+  else process.env.DONNY_HOME = savedDonnyHome;
+});
 
 // ---------------------------------------------------------------------------
 // CONFIG-03 is already satisfied by shipped code: both rejection paths were
@@ -960,5 +985,218 @@ describe('config-get resolution ladder (CONFIG-01, D-05, D-07)', () => {
         'null prints bare in BOTH modes, which is why base_branch is null and never the string main',
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadConfig's resolution ladder, plan 24-06 task 1.
+//
+// The third and last consumer of the shared merge. loadConfig serves 25 call
+// sites across init.cjs, commands.cjs, phase.cjs, docs.cjs, state.cjs, verify.cjs
+// and core.cjs, and had never read $DONNY_HOME/defaults.json. Until this block
+// passed, CONFIG-01 held on the config-get path and did nothing at all in Node.
+//
+// Two placements are load-bearing, and both are asserted here rather than
+// inspected:
+//
+//   1. The merge goes into `parsed`, in CONFIG-FILE shape, because loadConfig
+//      RENAMES as it flattens (workflow.plan_check -> plan_checker,
+//      git.branching_strategy -> branching_strategy). Merging into the returned
+//      object would need a second default table keyed by the flattened names,
+//      which is the duplication D-03 refuses. Test 3 is what pins the nested
+//      alias path.
+//   2. The merge goes AFTER the try, and so after both write-backs loadConfig
+//      performs: the depth -> granularity migration (core.cjs:250-254) and the
+//      sub_repos sync (:256-289). A merge before them would materialize every
+//      global value into .planning/config.json on a routine read, pinning the
+//      project against the global layer forever and breaking criterion 1, which
+//      is proven by that file being byte-unchanged. Tests 4 and 7 hold the
+//      ordering in place (T-24-29).
+// ---------------------------------------------------------------------------
+
+describe('loadConfig resolution ladder (CONFIG-01, CONFIG-02, Pitfall 6)', () => {
+  it('reaches loadConfig with a global value the project never set (CONFIG-01)', () => {
+    const home = buildGlobalDefaults({ model_profile: 'budget' });
+    try {
+      withConfigFixture({ workflow: { verifier: true } }, (root) => {
+        withDonnyHomeEnv(home, () => {
+          assert.equal(
+            CORE.loadConfig(root).model_profile,
+            'budget',
+            'the global layer must beat the hardcoded balanced',
+          );
+        });
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('lets the project value win over the global one (CONFIG-02)', () => {
+    const home = buildGlobalDefaults({ model_profile: 'budget' });
+    try {
+      withConfigFixture({ model_profile: 'quality' }, (root) => {
+        withDonnyHomeEnv(home, () => {
+          assert.equal(CORE.loadConfig(root).model_profile, 'quality');
+        });
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('merges a section per key rather than replacing it, on the nested alias path', () => {
+    // The project sets workflow.verifier and nothing else. Replacing the section
+    // wholesale would erase the global workflow.research, which is the direct
+    // CONFIG-02 violation MERGE_SECTIONS exists to prevent.
+    const home = buildGlobalDefaults({ workflow: { research: false } });
+    try {
+      withConfigFixture({ workflow: { verifier: false } }, (root) => {
+        withDonnyHomeEnv(home, () => {
+          const c = CORE.loadConfig(root);
+          assert.equal(c.research, false, 'the global workflow key survives the project section');
+          assert.equal(c.verifier, false, 'and the project key is still applied');
+        });
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('leaves .planning/config.json byte-identical while resolving a global value', () => {
+    // The load-bearing one. loadConfig WRITES this file for two migrations, so a
+    // merge placed before those writes would persist the whole global layer into
+    // the project on a routine read. Compare the raw text, not a parsed object.
+    const home = buildGlobalDefaults({
+      model_profile: 'budget',
+      workflow: { research: false, auto_advance: true },
+      git: { branching_strategy: 'phase' },
+    });
+    try {
+      withConfigFixture({ workflow: { verifier: true } }, (root) => {
+        const before = readCfgRaw(root);
+        withDonnyHomeEnv(home, () => {
+          assert.equal(CORE.loadConfig(root).model_profile, 'budget', 'the resolution did happen');
+        });
+        assert.equal(readCfgRaw(root), before, 'a resolution must never write the global layer into the project');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('applies the global layer to a project with no config.json at all (Pitfall 6)', () => {
+    // core.cjs:366-368 used to be a whole-body catch, so a project with no
+    // config.json returned the bare hardcoded table and the global layer was lost
+    // exactly where an operator would most expect it to apply.
+    const home = buildGlobalDefaults({ model_profile: 'budget' });
+    try {
+      withConfigFixture(null, (root) => {
+        withDonnyHomeEnv(home, () => {
+          assert.equal(CORE.loadConfig(root).model_profile, 'budget');
+        });
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('returns exactly the pre-change bare default table with no config and no global', () => {
+    // Criterion 4 at its narrowest: the one path that used to be the whole-body
+    // catch must still return the 24-key `defaults` literal, byte for byte. The
+    // four keys named below exist only on the try path, and that asymmetry is
+    // pre-existing; every consumer uses optional chaining.
+    const home = buildGlobalDefaults(null);
+    try {
+      withConfigFixture(null, (root) => {
+        withDonnyHomeEnv(home, () => {
+          const c = CORE.loadConfig(root);
+          assert.equal(c.model_profile, 'balanced', 'the hardcoded default, not a global one');
+          for (const k of ['manager', 'agent_skills', 'model_overrides', 'response_language']) {
+            assert.equal(k in c, false, `${k} is absent from the bare default table and must stay absent`);
+          }
+          assert.equal(Object.keys(c).length, 24, 'the defaults literal has 24 keys; the flattened return has 28');
+        });
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('still migrates depth to granularity in the file, carrying no global key into it', () => {
+    // Test 4's harder sibling: the write-back must still happen, and must still
+    // write only the project's own contents.
+    const home = buildGlobalDefaults({ model_profile: 'budget', workflow: { research: false } });
+    try {
+      withConfigFixture({ depth: 'comprehensive' }, (root) => {
+        withDonnyHomeEnv(home, () => {
+          assert.equal(CORE.loadConfig(root).model_profile, 'budget', 'the resolution did happen');
+        });
+        const after = readCfg(root);
+        assert.equal(after.granularity, 'fine', 'the depth migration still writes');
+        assert.equal('depth' in after, false, 'and still deletes the deprecated key');
+        assert.deepEqual(
+          Object.keys(after).sort(),
+          ['granularity'],
+          'the written file must carry no key that came from the global layer',
+        );
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('agrees with config-get on the two keys BOTH read paths serve', () => {
+    // context_window (core.cjs:357, plan-phase.md:30, execute-phase.md:84) and
+    // workflow.nyquist_validation (core.cjs:348, audit-phase.md:34,
+    // audit-milestone.md:152) are read through both paths. A divergence between
+    // the two default tables would surface here first.
+    const hardcoded = buildGlobalDefaults({});
+    const populated = buildGlobalDefaults({
+      context_window: 1000000,
+      workflow: { nyquist_validation: false },
+    });
+    try {
+      withConfigFixture({}, (root) => {
+        for (const [label, home, cw, nyq] of [
+          ['hardcoded', hardcoded, 200000, true],
+          ['global', populated, 1000000, false],
+        ]) {
+          const viaLoad = withDonnyHomeEnv(home, () => CORE.loadConfig(root));
+          assert.equal(viaLoad.context_window, cw, `${label}: loadConfig context_window`);
+          assert.equal(viaLoad.nyquist_validation, nyq, `${label}: loadConfig nyquist_validation`);
+
+          const gotCw = runTools(root, ['config-get', 'context_window', '--raw'], { DONNY_HOME: home });
+          assert.equal(gotCw.status, 0, gotCw.stderr);
+          assert.equal(gotCw.stdout.trim(), String(cw), `${label}: config-get context_window`);
+
+          const gotNyq = runTools(root, ['config-get', 'workflow.nyquist_validation', '--raw'], { DONNY_HOME: home });
+          assert.equal(gotNyq.status, 0, gotNyq.stderr);
+          assert.equal(gotNyq.stdout.trim(), String(nyq), `${label}: config-get nyquist_validation`);
+        }
+      });
+    } finally {
+      cleanupFixture(hardcoded);
+      cleanupFixture(populated);
+    }
+  });
+
+  it('observes a DONNY_HOME change between calls, with no module cache reset', () => {
+    // require('./config.cjs') is cached per process, but loadGlobalDefaults reads
+    // the file on every call and getDonnyHome reads process.env on every call.
+    // Asserted so a later "optimization" that caches either one is caught here
+    // rather than by a test that mysteriously stops isolating.
+    const a = buildGlobalDefaults({ model_profile: 'budget' });
+    const b = buildGlobalDefaults({ model_profile: 'economy' });
+    try {
+      withConfigFixture({}, (root) => {
+        assert.equal(withDonnyHomeEnv(a, () => CORE.loadConfig(root).model_profile), 'budget');
+        assert.equal(withDonnyHomeEnv(b, () => CORE.loadConfig(root).model_profile), 'economy');
+        assert.equal(withDonnyHomeEnv(a, () => CORE.loadConfig(root).model_profile), 'budget');
+      });
+    } finally {
+      cleanupFixture(a);
+      cleanupFixture(b);
+    }
   });
 });
