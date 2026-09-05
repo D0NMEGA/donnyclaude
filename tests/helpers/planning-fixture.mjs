@@ -248,3 +248,42 @@ export function requirementsContent({
   lines.push('');
   return lines.join('\n');
 }
+
+/**
+ * A throwaway ~/.donny directory for the DONNY_HOME override.
+ *
+ * Three states, which are exactly the three D-14 names:
+ *   buildGlobalDefaults(null)                       -> directory exists, no defaults.json
+ *   buildGlobalDefaults({})                         -> defaults.json containing {}
+ *   buildGlobalDefaults({ workflow: { ... } })      -> a populated global layer
+ *
+ * Remove it with cleanupFixture(home).
+ *
+ * @param {object|null} defaults  null means write no file at all
+ * @returns {string} absolute path to pass as DONNY_HOME
+ */
+export function buildGlobalDefaults(defaults) {
+  const home = join(
+    tmpdir(),
+    'donny-global-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+  );
+  mkdirSync(home, { recursive: true });
+  if (defaults !== null) {
+    writeFileSync(join(home, 'defaults.json'), JSON.stringify(defaults, null, 2) + '\n', 'utf-8');
+  }
+  return home;
+}
+
+/**
+ * A throwaway DONNY_HOME whose defaults.json holds raw bytes rather than an object.
+ * Used for the D-04 malformed-file case, where JSON.parse must fail.
+ */
+export function buildRawGlobalDefaults(rawText) {
+  const home = join(
+    tmpdir(),
+    'donny-global-raw-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+  );
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, 'defaults.json'), rawText, 'utf-8');
+  return home;
+}

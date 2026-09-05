@@ -1,13 +1,14 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { configGetIdiom, runTools, TOOLS, withConfigFixture } from './helpers/cli.mjs';
 import {
   buildPlanningFixture,
   cleanupFixture,
@@ -1370,18 +1371,6 @@ describe('cmdVerifyGate', () => {
 // thirteen more fd-1 interceptions, so it fails unless both layers restore.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TOOLS = resolve(ROOT, 'packages/donny/bin/donny-tools.cjs');
-
-/** Run donny-tools in a fixture root and return { status, stdout, stderr }. */
-const runTools = (cwd, argv) => {
-  try {
-    const stdout = execFileSync(process.execPath, [TOOLS, ...argv], { cwd, encoding: 'utf-8' });
-    return { status: 0, stdout, stderr: '' };
-  } catch (e) {
-    return { status: e.status === undefined ? -1 : e.status, stdout: e.stdout || '', stderr: e.stderr || '' };
-  }
-};
-
 describe('verify gate CLI', () => {
   it('prints exactly one JSON document', () => {
     withGateFixture({}, (root) => {
@@ -2132,34 +2121,7 @@ describe('D-04 re-close appends', () => {
 
 const CONFIG_TEMPLATE = resolve(ROOT, 'packages/donny/templates/config.json');
 
-/** A throwaway project root carrying only .planning/, optionally with a config.json. */
-const withConfigFixture = (config, fn) => {
-  const root = join(
-    tmpdir(),
-    'donny-record-gate-cfg-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-  );
-  fs.mkdirSync(join(root, '.planning'), { recursive: true });
-  if (config !== null) {
-    fs.writeFileSync(
-      join(root, '.planning', 'config.json'),
-      JSON.stringify(config, null, 2) + '\n',
-      'utf-8',
-    );
-  }
-  try {
-    return fn(root);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-};
-
 const readCfg = (root) => JSON.parse(fs.readFileSync(join(root, '.planning', 'config.json'), 'utf-8'));
-
-/** The exact shell idiom every workflow uses to read an optional config key. */
-const configGetIdiom = (root, key) => execSync(
-  `node ${JSON.stringify(TOOLS)} config-get ${key} --raw 2>/dev/null || echo "true"`,
-  { cwd: root, encoding: 'utf-8' },
-).trim();
 
 describe('workflow.record_gate config (GATE-03 / CONFIG-03)', () => {
   it('is registered in VALID_CONFIG_KEYS, which is what KNOWN_TOP_LEVEL derives from', () => {
