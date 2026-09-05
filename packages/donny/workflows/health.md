@@ -195,6 +195,22 @@ If the user confirms, invoke `/donny-cleanup`. This closes the gap between detec
 
 </repair_actions>
 
+<config_provenance>
+
+A setting that does not appear to take effect is usually shadowed by the project's own
+`.planning/config.json`, which wins over `~/.donny/defaults.json` by design. To see which layer
+supplied a value:
+
+```bash
+node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.record_gate --source
+```
+
+The output names the winning layer as `hardcoded`, `global` or `project`, and sets
+`redundant_with_global` when the project value merely repeats the global one. Removing a redundant
+key from `.planning/config.json` lets the global default show through again.
+
+</config_provenance>
+
 <stale_task_cleanup>
 **Platform-agnostic:** Check for stale Claude Code task directories that accumulate on crash/freeze.
 These are left behind when subagents are force-killed and consume disk space. They build up on macOS and Linux just as on Windows, so this check runs on every platform (the `find -mtime` test below is portable across macOS/Linux/Git Bash).

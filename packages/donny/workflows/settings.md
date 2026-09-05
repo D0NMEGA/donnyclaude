@@ -197,7 +197,9 @@ If "Yes": `mkdir -p ~/.donny` and write `~/.donny/defaults.json` with `model_pro
 minus project-specific fields.
 
 A project that has already set a key in its own `.planning/config.json` keeps its own value:
-the project layer wins. Global defaults show through only where the project is silent.
+the project layer wins. Global defaults show through only where the project is silent. To see
+which layer supplied a value, run `donny-tools config-get <key> --source`; it prints the value
+and the winning layer, and flags a project value that merely repeats the global.
 </step>
 
 <step name="confirm">
