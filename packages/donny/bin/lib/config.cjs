@@ -571,28 +571,57 @@ function cmdConfigSet(cwd, keyPath, value, raw) {
   output(setConfigValueResult, raw, `${keyPath}=${parsedValue}`);
 }
 
+/**
+ * Read a config value through the full resolution ladder.
+ *
+ * hardcoded defaults <- $DONNY_HOME/defaults.json <- .planning/config.json
+ *
+ * For a key in VALID_CONFIG_KEYS and not in RESOLVE_EXEMPT this ALWAYS prints a value,
+ * so a project that has never set the key resolves the global default rather than
+ * exiting 1 (D-05). The inline `|| echo "..."` fallbacks at all 43 workflow read sites
+ * stay in place as a last resort: they become unreachable for a registered key but
+ * still catch a crashed node, a missing binary, or a genuinely unregistered key (D-06).
+ *
+ * Exit 1 survives for exactly three cases:
+ *   - a key absent from VALID_CONFIG_KEYS, including the unbounded agent_skills.<type>
+ *     space, which isValidConfigKey accepts for config-set but which has no possible
+ *     hardcoded default
+ *   - a key in RESOLVE_EXEMPT (mode, granularity, planning.commit_docs,
+ *     planning.search_gitignored), a documented and inert hole: nothing reads them
+ *   - an unreadable or malformed .planning/config.json, which is a hard error because a
+ *     project config is not optional the way the global file is
+ *
+ * The global layer is re-read per invocation rather than cached. Each donny-tools run is
+ * a short-lived process resolving a handful of keys, and a per-process cache would make
+ * DONNY_HOME unobservable to a test that switches it between assertions, for the saving
+ * of one two-byte file read.
+ */
 function cmdConfigGet(cwd, keyPath, raw) {
-  const configPath = path.join(planningRoot(cwd), 'config.json');
-
   if (!keyPath) {
     error('Usage: config-get <key.path>');
   }
 
-  let config = {};
-  try {
-    if (fs.existsSync(configPath)) {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    } else {
-      error('No config.json found at ' + configPath);
+  const configPath = path.join(planningRoot(cwd), 'config.json');
+  const resolvable = VALID_CONFIG_KEYS.has(keyPath) && !RESOLVE_EXEMPT.has(keyPath);
+
+  let project = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      project = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    } catch (err) {
+      error('Failed to read config.json: ' + err.message);
     }
-  } catch (err) {
-    if (err.message.startsWith('No config.json')) throw err;
-    error('Failed to read config.json: ' + err.message);
+  } else if (!resolvable) {
+    error('No config.json found at ' + configPath);
   }
+
+  const source = resolvable
+    ? mergeConfigLayers(configGetDefaults(), loadGlobalDefaults(), project)
+    : project;
 
   // Traverse dot-notation path (e.g., "workflow.auto_advance")
   const keys = keyPath.split('.');
-  let current = config;
+  let current = source;
   for (const key of keys) {
     if (current === undefined || current === null || typeof current !== 'object') {
       error(`Key not found: ${keyPath}`);
