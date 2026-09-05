@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { output, error, planningRoot } = require('./core.cjs');
+const { output, error, planningRoot, getDonnyHome } = require('./core.cjs');
 const {
   VALID_PROFILES,
   getAgentToModelMapForProfile,
@@ -78,18 +78,18 @@ function validateKnownConfigKeyPath(keyPath) {
  */
 function buildNewProjectConfig(userChoices) {
   const choices = userChoices || {};
-  const homedir = require('os').homedir();
+  const donnyHome = getDonnyHome();
 
   // Detect API key availability
-  const braveKeyFile = path.join(homedir, '.donny', 'brave_api_key');
+  const braveKeyFile = path.join(donnyHome, 'brave_api_key');
   const hasBraveSearch = !!(process.env.BRAVE_API_KEY || fs.existsSync(braveKeyFile));
-  const firecrawlKeyFile = path.join(homedir, '.donny', 'firecrawl_api_key');
+  const firecrawlKeyFile = path.join(donnyHome, 'firecrawl_api_key');
   const hasFirecrawl = !!(process.env.FIRECRAWL_API_KEY || fs.existsSync(firecrawlKeyFile));
-  const exaKeyFile = path.join(homedir, '.donny', 'exa_api_key');
+  const exaKeyFile = path.join(donnyHome, 'exa_api_key');
   const hasExaSearch = !!(process.env.EXA_API_KEY || fs.existsSync(exaKeyFile));
 
-  // Load user-level defaults from ~/.donny/defaults.json if available
-  const globalDefaultsPath = path.join(homedir, '.donny', 'defaults.json');
+  // Load user-level defaults from $DONNY_HOME/defaults.json if available
+  const globalDefaultsPath = path.join(donnyHome, 'defaults.json');
   let userDefaults = {};
   try {
     if (fs.existsSync(globalDefaultsPath)) {

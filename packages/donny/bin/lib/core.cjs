@@ -1212,6 +1212,32 @@ function getAgentsDir() {
 }
 
 /**
+ * Resolve the user-level Donny directory, ~/.donny by default.
+ *
+ * DONNY_HOME overrides it, following the DONNY_AGENTS_DIR precedent directly above.
+ * The override governs the WHOLE directory, not just defaults.json: brave_api_key,
+ * firecrawl_api_key and exa_api_key resolve through it too, so a test that redirects
+ * it makes buildNewProjectConfig deterministic instead of leaving it reading the
+ * operator's real key files.
+ *
+ * An empty or whitespace-only value is IGNORED rather than honoured. path.join('',
+ * 'defaults.json') resolves relative to the current working directory, so honouring
+ * an empty override would let a project-local defaults.json act as the machine-wide
+ * global layer.
+ *
+ * Shell and prose sites that write ~/.donny directly (plan-phase.md:285,307,313,
+ * settings.md:195, init.md:441,457) do NOT honour this. Recorded, not closed here:
+ * D-12 defers the global write path.
+ *
+ * @returns {string} Absolute path to the user-level Donny directory
+ */
+function getDonnyHome() {
+  const override = process.env.DONNY_HOME;
+  if (typeof override === 'string' && override.trim() !== '') return override;
+  return path.join(require('os').homedir(), '.donny');
+}
+
+/**
  * Check which Donny agents are installed on disk.
  * Returns an object with installation status and details.
  *
@@ -1498,5 +1524,6 @@ module.exports = {
   getPhaseFileStats,
   readSubdirectories,
   getAgentsDir,
+  getDonnyHome,
   checkAgentsInstalled,
 };
