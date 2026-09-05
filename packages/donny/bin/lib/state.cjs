@@ -389,15 +389,27 @@ function cmdStateUpdateProgress(cwd, raw) {
   const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
   const progressStr = `[${bar}] ${percent}%`;
 
-  // Try **Progress:** bold format first, then plain Progress: format
-  const boldProgressPattern = /(\*\*Progress:\*\*\s*).*/i;
-  const plainProgressPattern = /^(Progress:\s*).*/im;
-  if (boldProgressPattern.test(content)) {
-    content = content.replace(boldProgressPattern, (_match, prefix) => `${prefix}${progressStr}`);
+  // Match ONLY inside the body, never the frontmatter, and only at line start.
+  // Two historical bugs this guards against, both of which silently corrupted
+  // STATE.md rather than erroring:
+  //   1. The bold pattern had no line anchor and no /m, so it rewrote the FIRST
+  //      `**Progress:**` substring anywhere in the file -- repeatedly destroying
+  //      narrative prose that merely quoted the token as an example.
+  //   2. The plain pattern was case-insensitive, so `^progress:` matched the
+  //      frontmatter's own lowercase YAML block key (which appears earlier) and
+  //      the visible body bar never updated at all.
+  const fmMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
+  const head = fmMatch ? fmMatch[0] : '';
+  const body = fmMatch ? content.slice(head.length) : content;
+
+  const boldProgressPattern = /^([ \t]*\*\*Progress:\*\*[ \t]*).*/m;
+  const plainProgressPattern = /^(Progress:[ \t]*).*/m;
+  if (boldProgressPattern.test(body)) {
+    content = head + body.replace(boldProgressPattern, (_match, prefix) => `${prefix}${progressStr}`);
     writeStateMd(statePath, content, cwd);
     output({ updated: true, percent, completed: totalSummaries, total: totalPlans, bar: progressStr }, raw, progressStr);
-  } else if (plainProgressPattern.test(content)) {
-    content = content.replace(plainProgressPattern, (_match, prefix) => `${prefix}${progressStr}`);
+  } else if (plainProgressPattern.test(body)) {
+    content = head + body.replace(plainProgressPattern, (_match, prefix) => `${prefix}${progressStr}`);
     writeStateMd(statePath, content, cwd);
     output({ updated: true, percent, completed: totalSummaries, total: totalPlans, bar: progressStr }, raw, progressStr);
   } else {
