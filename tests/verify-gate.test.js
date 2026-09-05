@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { configGetIdiom, runTools, TOOLS, withConfigFixture } from './helpers/cli.mjs';
 import {
+  buildGlobalDefaults,
   buildPlanningFixture,
   cleanupFixture,
   requirementsContent,
@@ -2159,13 +2160,29 @@ describe('workflow.record_gate config (GATE-03 / CONFIG-03)', () => {
     });
   });
 
-  it('exits non-zero on a missing key, which is what makes the || fallback fire', () => {
+  it('resolves an absent registered key through the ladder instead of exiting (Phase 24 D-05)', () => {
     withConfigFixture({ workflow: { verifier: true } }, (root) => {
-      const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw']);
-      assert.notEqual(r.status, 0, 'cmdConfigGet calls error() on an absent key');
+      const home = buildGlobalDefaults(null);
+      try {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, 'Phase 24 D-05: a key in VALID_CONFIG_KEYS always resolves');
+        assert.equal(r.stdout.trim(), 'true', 'the hardcoded default equals the literal every read site used to supply');
+      } finally {
+        cleanupFixture(home);
+      }
     });
   });
 
+  it('still exits non-zero on a key absent from the allowlist', () => {
+    withConfigFixture({ workflow: { verifier: true } }, (root) => {
+      const r = runTools(root, ['config-get', 'totally.bogus.key', '--raw']);
+      assert.notEqual(r.status, 0, 'D-05 narrowed the exit-1 path to unregistered keys, it did not remove it');
+    });
+  });
+
+  // After D-05 this value comes from the resolution ladder rather than from the shell
+  // fallback, and the result is identical, which is the point: D-07 lifted the hardcoded
+  // default from the literal this very idiom supplies.
   it('resolves true through the workflow shell idiom when the key is absent (D-07)', () => {
     withConfigFixture({ workflow: { verifier: true } }, (root) => {
       assert.equal(

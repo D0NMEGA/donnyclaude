@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { HERMETIC_DONNY_HOME, ROOT, runTools, withConfigFixture } from './helpers/cli.mjs';
+import { configGetIdiom, HERMETIC_DONNY_HOME, ROOT, runTools, withConfigFixture } from './helpers/cli.mjs';
 import { buildGlobalDefaults, buildRawGlobalDefaults, cleanupFixture } from './helpers/planning-fixture.mjs';
 
 const require = createRequire(import.meta.url);
@@ -774,6 +774,191 @@ describe('configGetDefaults, the D-07 table', () => {
       assert.equal('use_worktrees' in initLayer.workflow, false);
       assert.equal('_auto_chain_active' in initLayer.workflow, false);
       assert.equal('subagent_timeout' in initLayer.workflow, false);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The config-get resolution ladder (plan 24-05 task 2).
+//
+//   hardcoded defaults <- $DONNY_HOME/defaults.json <- .planning/config.json
+//
+// D-05 changes the missing-key contract for ALLOWLISTED keys only. Exit 1 survives
+// for a key absent from VALID_CONFIG_KEYS, for the four RESOLVE_EXEMPT keys, and for
+// an unreadable project config. The unbounded agent_skills.<type> space stays on the
+// exit-1 path on purpose (Pitfall 7 / T-24-23): isValidConfigKey's regex governs
+// config-set, and the literal Set governs resolution.
+//
+// The literal-parity table below is the in-suite mirror of 24-BASELINE-prechange.txt's
+// PATH B-prime-normalized column. Fifteen of the sixteen keys workflow prose reads must
+// resolve to the EXACT shell literal their read sites already supply, which is what makes
+// this contract change a provable no-op. git.base_branch is the one deliberate deviation
+// and gets its own guard-equivalence assertion rather than a widened expected column.
+// ---------------------------------------------------------------------------
+
+/** The fifteen measured (key, literal) pairs, minus git.base_branch. */
+const IDIOM_LITERALS = [
+  ['context_window', '200000'],
+  ['workflow._auto_chain_active', 'false'],
+  ['workflow.auto_advance', 'false'],
+  ['workflow.discuss_mode', 'discuss'],
+  ['workflow.node_repair', 'true'],
+  ['workflow.nyquist_validation', 'true'],
+  ['workflow.record_gate', 'true'],
+  ['workflow.security_asvs_level', '1'],
+  ['workflow.security_block_on', 'high'],
+  ['workflow.security_enforcement', 'true'],
+  ['workflow.skip_discuss', 'false'],
+  ['workflow.ui_phase', 'true'],
+  ['workflow.ui_review', 'true'],
+  ['workflow.ui_safety_gate', 'true'],
+  ['workflow.use_worktrees', 'true'],
+];
+
+describe('config-get resolution ladder (CONFIG-01, D-05, D-07)', () => {
+  it('resolves a registered key the project never set, instead of exiting 1', () => {
+    withConfigFixture({ workflow: { verifier: true } }, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), 'true');
+    });
+  });
+
+  it('still exits non-zero on a key absent from the allowlist', () => {
+    withConfigFixture({ workflow: { verifier: true } }, (root) => {
+      const r = runTools(root, ['config-get', 'totally.bogus.key', '--raw']);
+      assert.notEqual(r.status, 0, 'D-05 narrowed the exit-1 path, it did not remove it');
+    });
+  });
+
+  it('still exits non-zero on an exempt key, so the documented hole is asserted', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'mode', '--raw']);
+      assert.notEqual(r.status, 0, 'mode is in RESOLVE_EXEMPT: zero read sites, no literal to match');
+      const g = runTools(root, ['config-get', 'granularity', '--raw']);
+      assert.notEqual(g.status, 0, 'a granularity default would make the depth migration a no-op');
+    });
+  });
+
+  it('still exits non-zero on the unbounded agent_skills key space (T-24-23)', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'agent_skills.donny-planner', '--raw']);
+      assert.notEqual(
+        r.status,
+        0,
+        'the resolve contract gates on VALID_CONFIG_KEYS.has, never on isValidConfigKey regex',
+      );
+    });
+  });
+
+  it('reaches config-get with a global value in a project that never set the key (CONFIG-01)', () => {
+    const home = buildGlobalDefaults({ workflow: { record_gate: false } });
+    try {
+      withConfigFixture({ workflow: { verifier: true } }, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout.trim(), 'false', 'the global layer beats the hardcoded default');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('leaves .planning/config.json byte-identical while resolving a global value', () => {
+    const home = buildGlobalDefaults({ workflow: { record_gate: false } });
+    try {
+      withConfigFixture({ workflow: { verifier: true } }, (root) => {
+        const before = readCfgRaw(root);
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(
+          readCfgRaw(root),
+          before,
+          'resolution is a READ; a global default must never be materialized into the project file',
+        );
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('lets a project value beat the global one (CONFIG-02)', () => {
+    const home = buildGlobalDefaults({ workflow: { record_gate: false } });
+    try {
+      withConfigFixture({ workflow: { record_gate: true } }, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout.trim(), 'true', 'the project layer is authoritative');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('resolves with no config.json at all, but still errors there for an unregistered key', () => {
+    withConfigFixture(null, (root) => {
+      const ok = runTools(root, ['config-get', 'workflow.record_gate', '--raw']);
+      assert.equal(ok.status, 0, ok.stderr);
+      assert.equal(ok.stdout.trim(), 'true');
+
+      const bad = runTools(root, ['config-get', 'totally.bogus.key', '--raw']);
+      assert.notEqual(bad.status, 0);
+      assert.match(
+        bad.stderr,
+        /No config\.json found at/,
+        'the file-missing error is narrowed to non-resolvable keys, not deleted',
+      );
+    });
+  });
+
+  it('resolves fifteen of the sixteen read keys to their exact shell literal (D-07)', () => {
+    const home = buildGlobalDefaults(null);
+    try {
+      withConfigFixture({}, (root) => {
+        for (const [key, literal] of IDIOM_LITERALS) {
+          assert.equal(
+            configGetIdiom(root, key, literal, { DONNY_HOME: home }),
+            literal,
+            `${key} must resolve to the literal its read sites already supply, or D-05 is a behavior change`,
+          );
+        }
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('git.base_branch preserves behavior through its read sites guard, not through string equality', () => {
+    withConfigFixture({}, (root) => {
+      const home = buildGlobalDefaults(null);
+      try {
+        const v = configGetIdiom(root, 'git.base_branch', '', { DONNY_HOME: home });
+        // ship.md:33 and complete-milestone.md:556 both guard with
+        //   [ -z "$BASE_BRANCH" ] || [ "$BASE_BRANCH" = "null" ]
+        // so "" and null take the identical git symbolic-ref origin/HEAD branch.
+        assert.ok(
+          v === '' || v === 'null',
+          `git.base_branch resolved to ${JSON.stringify(v)}, which neither shell guard catches`,
+        );
+      } finally {
+        cleanupFixture(home);
+      }
+    });
+  });
+
+  it('keeps output()s quoting exactly as it was, at the two sites a shell compares (Pitfall 2 and 3)', () => {
+    withConfigFixture({}, (root) => {
+      const s = runTools(root, ['config-get', 'workflow.discuss_mode']);
+      assert.equal(s.status, 0, s.stderr);
+      assert.equal(s.stdout.trim(), '"discuss"', 'a string prints its JSON form without --raw, quotes included');
+
+      const b = runTools(root, ['config-get', 'git.base_branch']);
+      assert.equal(b.status, 0, b.stderr);
+      assert.equal(
+        b.stdout.trim(),
+        'null',
+        'null prints bare in BOTH modes, which is why base_branch is null and never the string main',
+      );
     });
   });
 });
