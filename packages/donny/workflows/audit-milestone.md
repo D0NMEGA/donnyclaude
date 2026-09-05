@@ -154,6 +154,10 @@ NYQUIST_CONFIG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workf
 
 If `false`: skip entirely.
 
+This is the one config read in the engine with no `|| echo` fallback. Before Phase 24 an absent key
+produced empty output; now it produces `true`. Neither is `false`, so the section runs in both
+cases, and the contract above is unchanged.
+
 For each phase directory, check `*-VALIDATION.md`. If exists, parse frontmatter (`nyquist_compliant`, `wave_0_complete`).
 
 Classify per phase:

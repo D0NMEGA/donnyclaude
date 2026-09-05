@@ -35,8 +35,10 @@ NYQUIST_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow
 RECORD_CFG=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" config-get workflow.record_gate --raw 2>/dev/null || echo "true")
 ```
 
-The `|| echo "true"` is load-bearing: `config-get` exits 1 on a key the project has never set, so a
-project whose config.json predates the key behaves as if it were `true`.
+Since Phase 24, `config-get` resolves any key in `VALID_CONFIG_KEYS` through hardcoded defaults,
+then `~/.donny/defaults.json`, then `.planning/config.json`, and always prints a value. The
+`|| echo "true"` is now a last resort rather than the default layer. It stays because it still
+catches a crashed `node`, a missing binary, or a key that is genuinely unregistered.
 
 Resolve `RUN_SECURITY`, `RUN_VALIDATE` and `RUN_RECORDS`:
 - Default scope: `RUN_SECURITY` = (`SECURITY_CFG` != false); `RUN_VALIDATE` = (`NYQUIST_CFG` != false); `RUN_RECORDS` = (`RECORD_CFG` != false).

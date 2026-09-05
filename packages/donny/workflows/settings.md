@@ -182,12 +182,12 @@ Write the updated config to `.planning/config.json`.
 </step>
 
 <step name="save_as_defaults">
-Ask whether to save these as global defaults for future projects:
+Ask whether to save these as global defaults for every project on this machine:
 
 ```
 AskUserQuestion([
-  { header: "Defaults", question: "Save these as default settings for all new projects?", multiSelect: false, options: [
-      { label: "Yes", description: "New projects start with these settings (saved to ~/.donny/defaults.json)" },
+  { header: "Defaults", question: "Save these as default settings for every project?", multiSelect: false, options: [
+      { label: "Yes", description: "Applies to every project, including existing ones, for any key that project has not set (saved to ~/.donny/defaults.json)" },
       { label: "No", description: "Only apply to this project" } ] }
 ])
 ```
@@ -195,6 +195,9 @@ AskUserQuestion([
 If "Yes": `mkdir -p ~/.donny` and write `~/.donny/defaults.json` with `model_profile`,
 `branching_strategy`, and the full `workflow` block (including `text_mode` and `discuss_mode`),
 minus project-specific fields.
+
+A project that has already set a key in its own `.planning/config.json` keeps its own value:
+the project layer wins. Global defaults show through only where the project is silent.
 </step>
 
 <step name="confirm">

@@ -173,7 +173,7 @@ If the user confirms, invoke `/donny-cleanup`. This closes the gap between detec
 | W005 | warning | Phase directory naming mismatch | No |
 | W006 | warning | Phase in ROADMAP but no directory | No |
 | W007 | warning | Phase on disk but not in ROADMAP | No |
-| W008 | warning | config.json: workflow.nyquist_validation absent (defaults to enabled but agents may skip) | Yes |
+| W008 | info | config.json: workflow.nyquist_validation absent (resolves from ~/.donny/defaults.json or the built-in default) | No |
 | W009 | warning | Phase has Validation Architecture in RESEARCH.md but no VALIDATION.md | No |
 | W010 | warning | Phase dir on disk, not in current ROADMAP, belongs to a completed milestone (orphaned - should be archived) | Yes (via /donny-cleanup) |
 | I001 | info | Plan without SUMMARY (may be in progress) | No |
@@ -184,10 +184,9 @@ If the user confirms, invoke `/donny-cleanup`. This closes the gap between detec
 
 | Action | Effect | Risk |
 |--------|--------|------|
-| createConfig | Create config.json with defaults | None |
-| resetConfig | Delete + recreate config.json | Loses custom settings |
+| createConfig | Create config.json with the keys /donny-init treats as user choices | Pins those 7 keys to the project, so they stop resolving from ~/.donny/defaults.json |
+| resetConfig | Delete + recreate config.json | Loses custom settings, and pins the same 7 keys |
 | regenerateState | Create STATE.md from ROADMAP structure when it is missing | Loses session history |
-| addNyquistKey | Add workflow.nyquist_validation: true to config.json | None - matches existing default |
 
 **Not repairable (too risky):**
 - PROJECT.md, ROADMAP.md content
