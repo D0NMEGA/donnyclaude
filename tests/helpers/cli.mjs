@@ -14,7 +14,7 @@
  */
 
 import fs from 'node:fs';
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +64,11 @@ const childEnvFor = (env) => {
 /**
  * Run donny-tools in a fixture root and return { status, stdout, stderr }.
  *
+ * spawnSync, not execFileSync: execFileSync returns only stdout on success and pipes the
+ * child's stderr straight to the parent, so a command that WARNS and still exits 0 had an
+ * unobservable stderr. Plan 24-04's D-04 warn-and-continue tests need exactly that case.
+ * spawnSync also does not throw on a non-zero exit, so both outcomes take one path.
+ *
  * @param {string} cwd  project root to run in
  * @param {string[]} argv  arguments after the binary
  * @param {object} [env]  extra environment, merged over process.env. Pass
@@ -73,12 +78,9 @@ const childEnvFor = (env) => {
  */
 export const runTools = (cwd, argv, env) => {
   const childEnv = childEnvFor(env);
-  try {
-    const stdout = execFileSync(process.execPath, [TOOLS, ...argv], { cwd, encoding: 'utf-8', env: childEnv });
-    return { status: 0, stdout, stderr: '' };
-  } catch (e) {
-    return { status: e.status === undefined ? -1 : e.status, stdout: e.stdout || '', stderr: e.stderr || '' };
-  }
+  const r = spawnSync(process.execPath, [TOOLS, ...argv], { cwd, encoding: 'utf-8', env: childEnv });
+  // status is null when the child was killed by a signal or never spawned at all.
+  return { status: r.status === null || r.status === undefined ? -1 : r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 };
 
 /** A throwaway project root carrying only .planning/, optionally with a config.json. */
