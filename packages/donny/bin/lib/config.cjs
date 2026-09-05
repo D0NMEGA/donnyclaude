@@ -572,6 +572,38 @@ function cmdConfigSet(cwd, keyPath, value, raw) {
 }
 
 /**
+ * Which layer supplied the value at keyPath, and whether the project merely repeats
+ * the global (D-08, D-11).
+ *
+ * Layers are probed independently rather than read off the merged result, because the
+ * merged result cannot tell you which layer a value came from when two layers agree,
+ * and that agreement is exactly the case D-11 exists to explain.
+ *
+ * Returns { source, redundant_with_global }. source is 'project', 'global', 'hardcoded'
+ * or 'unset'. 'unset' is unreachable for a resolvable key, because configGetDefaults
+ * covers every allowlisted key outside RESOLVE_EXEMPT, and is reported honestly rather
+ * than guessed if that ever stops being true.
+ */
+function resolveKeySource(keyPath, hardcoded, globalLayer, project) {
+  const at = (obj) => keyPath.split('.').reduce(
+    (cur, k) => (cur === null || cur === undefined || typeof cur !== 'object' ? undefined : cur[k]),
+    obj,
+  );
+  const pv = at(project);
+  const gv = at(globalLayer);
+  const hv = at(hardcoded);
+  if (pv !== undefined) {
+    return {
+      source: 'project',
+      redundant_with_global: gv !== undefined && JSON.stringify(gv) === JSON.stringify(pv),
+    };
+  }
+  if (gv !== undefined) return { source: 'global', redundant_with_global: false };
+  if (hv !== undefined) return { source: 'hardcoded', redundant_with_global: false };
+  return { source: 'unset', redundant_with_global: false };
+}
+
+/**
  * Read a config value through the full resolution ladder.
  *
  * hardcoded defaults <- $DONNY_HOME/defaults.json <- .planning/config.json
@@ -595,8 +627,13 @@ function cmdConfigSet(cwd, keyPath, value, raw) {
  * a short-lived process resolving a handful of keys, and a per-process cache would make
  * DONNY_HOME unobservable to a test that switches it between assertions, for the saving
  * of one two-byte file read.
+ *
+ * showSource is the opt-in --source flag (D-08). It is applied AFTER the traversal and
+ * after both Key not found errors, so provenance cannot make an unregistered or exempt
+ * key resolvable. With it off, this function's output is byte-for-byte what the 43
+ * shell $(...) capture sites have always seen, which is the whole safety story.
  */
-function cmdConfigGet(cwd, keyPath, raw) {
+function cmdConfigGet(cwd, keyPath, raw, showSource) {
   if (!keyPath) {
     error('Usage: config-get <key.path>');
   }
@@ -615,9 +652,12 @@ function cmdConfigGet(cwd, keyPath, raw) {
     error('No config.json found at ' + configPath);
   }
 
-  const source = resolvable
-    ? mergeConfigLayers(configGetDefaults(), loadGlobalDefaults(), project)
-    : project;
+  // Named locals so the merge and resolveKeySource read the SAME layer objects rather
+  // than loading the global file twice. A non-resolvable key consults no layer but the
+  // project, so its other two are empty and its provenance can only be 'project'.
+  const hardcoded = resolvable ? configGetDefaults() : {};
+  const globalLayer = resolvable ? loadGlobalDefaults() : {};
+  const source = resolvable ? mergeConfigLayers(hardcoded, globalLayer, project) : project;
 
   // Traverse dot-notation path (e.g., "workflow.auto_advance")
   const keys = keyPath.split('.');
@@ -633,7 +673,25 @@ function cmdConfigGet(cwd, keyPath, raw) {
     error(`Key not found: ${keyPath}`);
   }
 
-  output(current, raw, String(current));
+  if (!showSource) {
+    output(current, raw, String(current));
+    return;
+  }
+
+  // Tab-separated in raw mode so a shell caller can cut -f1 for the value and cut -f2
+  // for the layer without a JSON parser. Not a space: git.quick_branch_template and
+  // manager.flags.* can hold values containing spaces (T-24-44).
+  const provenance = resolveKeySource(keyPath, hardcoded, globalLayer, project);
+  output(
+    {
+      key: keyPath,
+      value: current,
+      source: provenance.source,
+      redundant_with_global: provenance.redundant_with_global,
+    },
+    raw,
+    `${String(current)}\t${provenance.source}`,
+  );
 }
 
 /**

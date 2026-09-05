@@ -273,6 +273,13 @@ async function main() {
   const raw = rawIndex !== -1;
   if (rawIndex !== -1) args.splice(rawIndex, 1);
 
+  // --source: ask config-get which layer supplied the value (hardcoded, global, project).
+  // Spliced out here for the same reason --raw is: args[1] must stay the key wherever
+  // the caller put the flag.
+  const sourceIdx = args.indexOf('--source');
+  const showSource = sourceIdx !== -1;
+  if (sourceIdx !== -1) args.splice(sourceIdx, 1);
+
   // --pick <name>: extract a single field from JSON output (replaces jq dependency).
   // Supports dot-notation (e.g., --pick workflow.research) and bracket notation
   // for arrays (e.g., --pick directories[-1]).
@@ -287,7 +294,7 @@ async function main() {
   const command = args[0];
 
   if (!command) {
-    error('Usage: donny-tools <command> [args] [--raw] [--pick <field>] [--cwd <path>] [--ws <name>]\nCommands: state, resolve-model, find-phase, commit, verify-summary, verify, frontmatter, template, generate-slug, current-timestamp, list-todos, verify-path-exists, config-ensure-section, config-new-project, init, workstream, docs-init');
+    error('Usage: donny-tools <command> [args] [--raw] [--source] [--pick <field>] [--cwd <path>] [--ws <name>]\nCommands: state, resolve-model, find-phase, commit, verify-summary, verify, frontmatter, template, generate-slug, current-timestamp, list-todos, verify-path-exists, config-ensure-section, config-new-project, init, workstream, docs-init');
   }
 
   // Multi-repo guard: resolve project root for commands that read/write .planning/.
@@ -326,7 +333,7 @@ async function main() {
       }
     };
     try {
-      await runCommand(command, args, cwd, raw);
+      await runCommand(command, args, cwd, raw, showSource);
       cleanup();
     } catch (e) {
       fs.writeSync = origWriteSync;
@@ -335,7 +342,7 @@ async function main() {
     return;
   }
 
-  await runCommand(command, args, cwd, raw);
+  await runCommand(command, args, cwd, raw, showSource);
 }
 
 /**
@@ -361,7 +368,7 @@ function extractField(obj, fieldPath) {
   return current;
 }
 
-async function runCommand(command, args, cwd, raw) {
+async function runCommand(command, args, cwd, raw, showSource) {
   switch (command) {
     case 'state': {
       const subcommand = args[1];
@@ -594,7 +601,7 @@ async function runCommand(command, args, cwd, raw) {
     }
 
     case 'config-get': {
-      config.cmdConfigGet(cwd, args[1], raw);
+      config.cmdConfigGet(cwd, args[1], raw, showSource);
       break;
     }
 
