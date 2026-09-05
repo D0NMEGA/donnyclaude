@@ -1390,3 +1390,190 @@ describe('criterion 4: no global file behaves exactly as before', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// D-10 and D-17: /donny-health --repair must not pin a key the ladder resolves.
+//
+// Two write-in repairs materialise keys into .planning/config.json, and a key
+// written there shadows every global default for that key forever. Before this
+// plan, addNyquistKey wrote workflow.nyquist_validation on a warning that fired
+// merely because the key was absent, and createConfig / resetConfig wrote a
+// thirteen-leaf default table. One routine repair pinned eleven or more keys.
+//
+// The argv is `validate health [--repair]`, NOT `verify health`. donny-tools.cjs
+// dispatches cmdValidateHealth from case 'validate' (:708-720); case 'verify'
+// (:513) has no `health` subcommand and errors out. The plan's guess was wrong
+// and it said to use the real form.
+// ---------------------------------------------------------------------------
+
+/** Every leaf path in a nested object, e.g. { a: { b: 1 } } -> ['a.b']. */
+const leaves = (obj, prefix = '') => Object.entries(obj).flatMap(([k, v]) =>
+  v && typeof v === 'object' && !Array.isArray(v) ? leaves(v, prefix + k + '.') : [prefix + k]);
+
+/**
+ * A throwaway project that cmdValidateHealth reports as healthy except for the
+ * one finding under test.
+ *
+ * withConfigFixture is not enough here: a root carrying only .planning/config.json
+ * reports status 'broken' on E002/E003/E004, which would drown the W008 signal.
+ * The three PROJECT.md sections are the ones Check 2 requires (W001).
+ *
+ * Pass null for config to get a project with .planning/ and NO config.json, which
+ * is the W003 / createConfig case.
+ */
+const withHealthFixture = (config, fn) => {
+  const root = join(
+    tmpdir(),
+    'donny-health-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+  );
+  fs.mkdirSync(join(root, '.planning', 'phases'), { recursive: true });
+  fs.writeFileSync(
+    join(root, '.planning', 'PROJECT.md'),
+    '# Fixture\n\n## What This Is\n\nx\n\n## Core Value\n\nx\n\n## Requirements\n\nx\n',
+    'utf-8',
+  );
+  fs.writeFileSync(join(root, '.planning', 'ROADMAP.md'), '# Roadmap\n', 'utf-8');
+  fs.writeFileSync(
+    join(root, '.planning', 'STATE.md'),
+    '---\ncurrent_phase: 1\n---\n\n# State\n\nCurrent Phase: 1\n',
+    'utf-8',
+  );
+  if (config !== null) {
+    fs.writeFileSync(
+      join(root, '.planning', 'config.json'),
+      JSON.stringify(config, null, 2) + '\n',
+      'utf-8',
+    );
+  }
+  try {
+    return fn(root);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+};
+
+/** The state that trips W008: a workflow block present, nyquist_validation absent. */
+const W008_CONFIG = { workflow: { verifier: true } };
+
+describe('health repairs must not defeat the global layer (D-10, D-17)', () => {
+  it('reports an absent nyquist_validation as information, not a repairable warning', () => {
+    withHealthFixture(W008_CONFIG, (root) => {
+      const r = runTools(root, ['validate', 'health']);
+      assert.equal(r.status, 0, r.stderr);
+      const out = JSON.parse(r.stdout);
+
+      const asInfo = out.info.filter((i) => i.code === 'W008');
+      assert.equal(asInfo.length, 1, 'W008 must still be REPORTED, just in info');
+      assert.equal(asInfo[0].repairable, false, 'absence is correct, so there is nothing to repair');
+      assert.deepEqual(
+        out.warnings.filter((w) => w.code === 'W008'),
+        [],
+        'and it must no longer be a warning',
+      );
+    });
+  });
+
+  it('does not degrade the health status when W008 is the only finding', () => {
+    withHealthFixture(W008_CONFIG, (root) => {
+      const out = JSON.parse(runTools(root, ['validate', 'health']).stdout);
+      assert.deepEqual(out.errors, [], 'the fixture must be otherwise clean for this to mean anything');
+      assert.deepEqual(out.warnings, []);
+      assert.equal(out.status, 'healthy', 'previously reported degraded on this exact project');
+      assert.equal(out.repairable_count, 0);
+    });
+  });
+
+  it('leaves the project config byte-identical under --repair', () => {
+    withHealthFixture(W008_CONFIG, (root) => {
+      const before = readCfgRaw(root);
+      const r = runTools(root, ['validate', 'health', '--repair']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(
+        readCfgRaw(root),
+        before,
+        'no repair may write nyquist_validation into a project that has not chosen it',
+      );
+    });
+  });
+
+  it('runs no addNyquistKey action and counts W008 as nothing to repair', () => {
+    withHealthFixture(W008_CONFIG, (root) => {
+      const out = JSON.parse(runTools(root, ['validate', 'health', '--repair']).stdout);
+      const actions = (out.repairs_performed || []).map((a) => a.action);
+      assert.ok(
+        !actions.includes('addNyquistKey'),
+        `addNyquistKey must not exist as a repair, got ${JSON.stringify(actions)}`,
+      );
+      assert.equal(out.repairable_count, 0);
+    });
+  });
+
+  it('creates a config carrying exactly the seven /donny-init user-choice leaves', () => {
+    withHealthFixture(null, (root) => {
+      const r = runTools(root, ['validate', 'health', '--repair']);
+      assert.equal(r.status, 0, r.stderr);
+      const out = JSON.parse(r.stdout);
+      assert.ok(
+        (out.repairs_performed || []).some((a) => a.action === 'createConfig' && a.success),
+        'the missing-config repair must still run: a project needs some config file',
+      );
+      // Computed from the written file, so widening the table fails here (T-24-35).
+      assert.deepEqual(leaves(readCfg(root)).sort(), [
+        'commit_docs',
+        'model_profile',
+        'parallelization',
+        'workflow.nyquist_validation',
+        'workflow.plan_check',
+        'workflow.research',
+        'workflow.verifier',
+      ].sort());
+    });
+  });
+
+  it('writes none of the six engine-default keys the old table pinned', () => {
+    withHealthFixture(null, (root) => {
+      runTools(root, ['validate', 'health', '--repair']);
+      const written = readCfg(root);
+      const text = readCfgRaw(root);
+      for (const k of [
+        'search_gitignored',
+        'branching_strategy',
+        'phase_branch_template',
+        'milestone_branch_template',
+        'quick_branch_template',
+        'brave_search',
+      ]) {
+        assert.equal(written[k], undefined, `${k} must not be pinned into the project`);
+        assert.ok(!text.includes(k), `${k} must not appear anywhere in the created file`);
+      }
+    });
+  });
+
+  it('leaves the dropped keys resolvable from the global layer after a repair', () => {
+    withHealthFixture(null, (root) => {
+      runTools(root, ['validate', 'health', '--repair']);
+      const populated = buildGlobalDefaults({
+        git: { branching_strategy: 'phase' },
+        search_gitignored: true,
+        brave_search: true,
+      });
+      try {
+        const get = (key) =>
+          runTools(root, ['config-get', key, '--raw'], { DONNY_HOME: populated }).stdout.trim();
+
+        // The plan's named assertion. Note it does NOT discriminate on its own:
+        // the old table wrote a FLAT branching_strategy, which is not even in
+        // VALID_CONFIG_KEYS (config.cjs:29 registers only git.branching_strategy),
+        // so the nested global always resolved. Kept because the plan names it.
+        assert.equal(get('git.branching_strategy'), 'phase');
+
+        // These two DO discriminate. Both are registered flat keys that the old
+        // thirteen-leaf table wrote as false, shadowing the global true.
+        assert.equal(get('search_gitignored'), 'true', 'the old repair pinned this to false');
+        assert.equal(get('brave_search'), 'true', 'the old repair pinned this to false');
+      } finally {
+        cleanupFixture(populated);
+      }
+    });
+  });
+});
