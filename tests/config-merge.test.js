@@ -644,3 +644,136 @@ describe('config-new-project output is unchanged by the extraction', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// configGetDefaults, the D-07 resolution-layer table (plan 24-05 task 1).
+//
+// hardcodedProjectDefaults() is the layer /donny-init MATERIALIZES into a new
+// project's config.json. configGetDefaults() is a different layer: the one
+// config-get RESOLVES through. It adds the eight keys that had no hardcoded
+// default anywhere in the engine, plus the two loadConfig-only keys, so the D-05
+// contract has no hole on a registered key.
+//
+// Every in-process assertion runs with DONNY_HOME pinned at the hermetic directory
+// and the three API-key env vars cleared, because hardcodedProjectDefaults() reads
+// all four (config.cjs:282-285) and BRAVE_API_KEY is set on this machine.
+// ---------------------------------------------------------------------------
+
+/** Pin DONNY_HOME at the hermetic dir and clear the API-key env vars for one call. */
+const withHermeticEnv = (fn) => {
+  const keys = ['BRAVE_API_KEY', 'FIRECRAWL_API_KEY', 'EXA_API_KEY'];
+  const saved = keys.map((k) => [k, Object.prototype.hasOwnProperty.call(process.env, k), process.env[k]]);
+  try {
+    for (const k of keys) delete process.env[k];
+    return withDonnyHomeEnv(HERMETIC_DONNY_HOME, fn);
+  } finally {
+    for (const [k, had, v] of saved) {
+      if (had) process.env[k] = v;
+      else delete process.env[k];
+    }
+  }
+};
+
+/** Resolve a dotted key path against an object; undefined when any hop is missing. */
+const dotted = (obj, keyPath) => keyPath.split('.').reduce(
+  (cur, k) => (cur === null || typeof cur !== 'object' ? undefined : cur[k]),
+  obj,
+);
+
+describe('configGetDefaults, the D-07 table', () => {
+  it('registers context_window, so a global value can take effect (D-18)', () => {
+    assert.equal(
+      CONFIG.VALID_CONFIG_KEYS.size,
+      47,
+      'context_window is the 47th key; it is read via config-get at plan-phase.md:30 and execute-phase.md:84',
+    );
+    assert.ok(CONFIG.VALID_CONFIG_KEYS.has('context_window'));
+  });
+
+  it('accepts config-set context_window and lands it at the top level', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-set', 'context_window', '1000000']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(
+        readCfg(root).context_window,
+        1000000,
+        'loadConfig reads context_window at the top level, never nested',
+      );
+    });
+  });
+
+  it('has a value for every allowlisted key except the four deliberate exemptions', () => {
+    withHermeticEnv(() => {
+      const defaults = CONFIG.configGetDefaults();
+      const missing = [...CONFIG.VALID_CONFIG_KEYS]
+        .filter((k) => !CONFIG.RESOLVE_EXEMPT.has(k))
+        .filter((k) => dotted(defaults, k) === undefined);
+      assert.deepEqual(
+        missing,
+        [],
+        'D-05 exits 1 on a registered key with no default; add it to configGetDefaults or to RESOLVE_EXEMPT with a reason',
+      );
+    });
+  });
+
+  it('defaults git.base_branch to bare null, never to a quoted main', () => {
+    withHermeticEnv(() => {
+      const defaults = CONFIG.configGetDefaults();
+      assert.equal(
+        defaults.git.base_branch,
+        null,
+        'ship.md:32 and complete-milestone.md:555 read this WITHOUT --raw, so a string default emits with quote characters',
+      );
+      assert.notEqual(defaults.git.base_branch, 'main');
+      assert.notEqual(defaults.git.base_branch, '');
+    });
+  });
+
+  it('gives the three manager.flags the empty string sanitizeFlags already coerces to', () => {
+    withHermeticEnv(() => {
+      const flags = CONFIG.configGetDefaults().manager.flags;
+      assert.deepEqual(
+        flags,
+        { discuss: '', plan: '', execute: '' },
+        'these three flow toward a shell command line; the regex allowlist in sanitizeFlags must keep doing the work',
+      );
+    });
+  });
+
+  it('carries the two loadConfig-only keys buildNewProjectConfig never materializes', () => {
+    withHermeticEnv(() => {
+      const defaults = CONFIG.configGetDefaults();
+      assert.equal(defaults.context_window, 200000, "loadConfig's value (core.cjs:242)");
+      assert.equal(defaults.response_language, null, "loadConfig's value (core.cjs:364)");
+      assert.equal(defaults.workflow.subagent_timeout, 300000, "loadConfig's value (core.cjs:360)");
+      assert.equal(defaults.workflow.use_worktrees, true, 'the literal at all 3 read sites');
+      assert.equal(defaults.workflow._auto_chain_active, false, 'the literal at all 7 read sites');
+    });
+  });
+
+  it('leaves the four exemptions out of the data, not only out of a comment', () => {
+    withHermeticEnv(() => {
+      const defaults = CONFIG.configGetDefaults();
+      assert.equal('mode' in defaults, false, 'zero read sites, no shell literal to match');
+      assert.equal('granularity' in defaults, false, 'a default would make the depth migration a no-op');
+      assert.equal(
+        'planning' in defaults,
+        false,
+        "planning.commit_docs' real default is COMPUTED from isGitIgnored, not constant (D-20)",
+      );
+    });
+  });
+
+  it('does not change what /donny-init materializes, which is a separate table', () => {
+    withHermeticEnv(() => {
+      const initLayer = CONFIG.hardcodedProjectDefaults();
+      assert.equal('context_window' in initLayer, false, 'D-09 leaves buildNewProjectConfig untouched');
+      assert.equal('response_language' in initLayer, false);
+      assert.equal('manager' in initLayer, false);
+      assert.equal('base_branch' in initLayer.git, false);
+      assert.equal('use_worktrees' in initLayer.workflow, false);
+      assert.equal('_auto_chain_active' in initLayer.workflow, false);
+      assert.equal('subagent_timeout' in initLayer.workflow, false);
+    });
+  });
+});
