@@ -30,7 +30,10 @@ const VALID_CONFIG_KEYS = new Set([
   'planning.commit_docs', 'planning.search_gitignored',
   'workflow.subagent_timeout',
   'hooks.context_warnings',
-  'project_code', 'phase_naming',
+  'project_code', 'phase_naming', 'context_window',
+  // context_window: read via config-get at plan-phase.md:30 and execute-phase.md:84,
+  // and in loadConfig's table at 200000. Registered so it resolves through the ladder
+  // rather than exiting 1, and so a global value takes effect (D-18).
   'manager.flags.discuss', 'manager.flags.plan', 'manager.flags.execute',
   'response_language',
 ]);
@@ -329,6 +332,59 @@ function hardcodedProjectDefaults() {
 }
 
 /**
+ * The hardcoded layer for config-get's resolution ladder.
+ *
+ * hardcodedProjectDefaults() covers 34 leaves. This adds the eight keys that had no
+ * hardcoded default anywhere in the engine, so the D-05 contract has no hole on a
+ * registered key. Every value is lifted from the shell literal its read sites already
+ * use, so resolving them changes no behavior; see 24-BASELINE-prechange.txt's PATH
+ * B-prime-normalized column, which must stay byte-identical. The RAW B-prime column
+ * changes on exactly one row, git.base_branch from "" to null, which both read sites
+ * collapse with [ -z "$B" ] || [ "$B" = "null" ].
+ *
+ * Deliberately SEPARATE from hardcodedProjectDefaults. Adding a resolvable default here
+ * must never change what /donny-init materializes into a new project's config.json,
+ * which D-09 leaves untouched.
+ *
+ * Not covered here, and exempt on purpose: mode, granularity, planning.commit_docs and
+ * planning.search_gitignored. See RESOLVE_EXEMPT above for each one's reason.
+ */
+function configGetDefaults() {
+  const base = hardcodedProjectDefaults();
+  return {
+    ...base,
+    // loadConfig has these two and buildNewProjectConfig does not (core.cjs:242, :364).
+    context_window: 200000,
+    response_language: null,
+    git: {
+      ...base.git,
+      // NOT 'main'. Without --raw, output() prints the JSON form, so a string default
+      // emits with quotes and the shipped guards at ship.md:32-36 and
+      // complete-milestone.md:555-559 would pass the seven characters "main" straight
+      // through to git. Both guards already test for the string null, and null prints
+      // bare in both modes, so this preserves today's behavior exactly and keeps the
+      // git symbolic-ref origin/HEAD autodetection reachable.
+      base_branch: null,
+    },
+    workflow: {
+      ...base.workflow,
+      // 3 read sites, all || echo "true" (diagnose-issues.md:61, execute-phase.md:76, quick.md:214)
+      use_worktrees: true,
+      // 7 read sites, all || echo "false", one of them outside workflows/ at
+      // agents/donny-executor.md:229. Also in GLOBAL_EXEMPT, so this hardcoded value is
+      // the only layer that ever supplies it.
+      _auto_chain_active: false,
+      // loadConfig's value (core.cjs:360)
+      subagent_timeout: 300000,
+    },
+    // sanitizeFlags (init.cjs:1097-1108) already coerces a non-string to '', so '' is a
+    // no-op that keeps the regex allowlist doing the work. Do NOT give these a non-empty
+    // default: manager.flags.* flows toward a shell command line.
+    manager: { flags: { discuss: '', plan: '', execute: '' } },
+  };
+}
+
+/**
  * Build a fully-materialized config object for a new project.
  *
  * Merges (increasing priority):
@@ -621,6 +677,7 @@ module.exports = {
   GLOBAL_EXEMPT,
   isValidConfigKey,
   hardcodedProjectDefaults,
+  configGetDefaults,
   loadGlobalDefaults,
   mergeConfigLayers,
   buildNewProjectConfig,
