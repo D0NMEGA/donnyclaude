@@ -16,7 +16,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { HERMETIC_DONNY_HOME, ROOT, runTools, withConfigFixture } from './helpers/cli.mjs';
@@ -24,6 +24,7 @@ import { buildGlobalDefaults, buildRawGlobalDefaults, cleanupFixture } from './h
 
 const require = createRequire(import.meta.url);
 const CONFIG = require(resolve(ROOT, 'packages/donny/bin/lib/config.cjs'));
+const CORE = require(resolve(ROOT, 'packages/donny/bin/lib/core.cjs'));
 
 const readCfgRaw = (root) => fs.readFileSync(join(root, '.planning', 'config.json'), 'utf-8');
 const readCfg = (root) => JSON.parse(readCfgRaw(root));
@@ -157,5 +158,111 @@ describe('Phase 24 test scaffold', () => {
       false,
       'and it is empty, so a child reading it sees no global layer',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The DONNY_HOME override (D-15), plan 24-04 task 1.
+//
+// The override governs the WHOLE ~/.donny directory, not only defaults.json:
+// brave_api_key, firecrawl_api_key and exa_api_key resolve through it too. A
+// test that redirected only defaults.json would still leave config.cjs and
+// init.cjs reading the operator's real key files, so config-new-project would
+// stay environment-dependent. Tests 4 and 5 are what pin that decision.
+//
+// getDonnyHome reads process.env on every call, so no module-cache reset is
+// needed; each test restores the previous value in a finally.
+//
+// verify-gate.test.js:2188-2202 sets HOME and never DONNY_HOME, so it exercises
+// the homedir() fallback. It is deliberately not modified; the full-suite run is
+// what proves it still passes.
+// ---------------------------------------------------------------------------
+
+/** Set DONNY_HOME (undefined deletes it), run fn, restore the previous state. */
+const withDonnyHomeEnv = (value, fn) => {
+  const had = Object.prototype.hasOwnProperty.call(process.env, 'DONNY_HOME');
+  const previous = process.env.DONNY_HOME;
+  try {
+    if (value === undefined) delete process.env.DONNY_HOME;
+    else process.env.DONNY_HOME = value;
+    return fn();
+  } finally {
+    if (had) process.env.DONNY_HOME = previous;
+    else delete process.env.DONNY_HOME;
+  }
+};
+
+/** Clear the three API-key env vars in a child, so only $DONNY_HOME decides. */
+const NO_API_KEYS = {
+  BRAVE_API_KEY: undefined,
+  FIRECRAWL_API_KEY: undefined,
+  EXA_API_KEY: undefined,
+};
+
+describe('DONNY_HOME override (D-15)', () => {
+  it('returns the override path verbatim', () => {
+    const home = buildGlobalDefaults(null);
+    try {
+      withDonnyHomeEnv(home, () => {
+        assert.equal(CORE.getDonnyHome(), home);
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('falls back to ~/.donny when DONNY_HOME is unset', () => {
+    withDonnyHomeEnv(undefined, () => {
+      assert.equal(CORE.getDonnyHome(), join(homedir(), '.donny'));
+    });
+  });
+
+  it('ignores an empty or whitespace-only override (T-24-14)', () => {
+    // path.join('', 'defaults.json') resolves relative to the CURRENT WORKING
+    // DIRECTORY, so honouring an empty override would let a defaults.json
+    // committed into a project act as the machine-wide global layer.
+    for (const bad of ['', '   ', '\t']) {
+      withDonnyHomeEnv(bad, () => {
+        assert.equal(
+          CORE.getDonnyHome(),
+          join(homedir(), '.donny'),
+          `DONNY_HOME=${JSON.stringify(bad)} must fall back, never resolve relative to cwd`,
+        );
+      });
+    }
+  });
+
+  it('moves API-key detection with the override, not only defaults.json', () => {
+    const home = buildGlobalDefaults(null);
+    fs.writeFileSync(join(home, 'brave_api_key'), 'x', 'utf-8');
+    try {
+      withConfigFixture(null, (root) => {
+        const r = runTools(root, ['config-new-project', '{}'], { DONNY_HOME: home, ...NO_API_KEYS });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(
+          readCfg(root).brave_search,
+          true,
+          'a key file under $DONNY_HOME must be the one config-new-project reads',
+        );
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('sees no API key at all when the override directory is empty', () => {
+    const home = buildGlobalDefaults(null);
+    try {
+      withConfigFixture(null, (root) => {
+        const r = runTools(root, ['config-new-project', '{}'], { DONNY_HOME: home, ...NO_API_KEYS });
+        assert.equal(r.status, 0, r.stderr);
+        const cfg = readCfg(root);
+        assert.equal(cfg.brave_search, false, 'nothing may leak from the operator real ~/.donny');
+        assert.equal(cfg.firecrawl, false);
+        assert.equal(cfg.exa_search, false);
+      });
+    } finally {
+      cleanupFixture(home);
+    }
   });
 });
