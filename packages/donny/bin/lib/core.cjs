@@ -243,6 +243,9 @@ function loadConfig(cwd) {
     subagent_timeout: 300000, // 5 min default; increase for large codebases or slower models (ms)
   };
 
+  const { loadGlobalDefaults, mergeConfigLayers } = require('./config.cjs');
+
+  let projectParsed = null;
   try {
     const raw = fs.readFileSync(configPath, 'utf-8');
     const parsed = JSON.parse(raw);
@@ -310,62 +313,88 @@ function loadConfig(cwd) {
       );
     }
 
-    const get = (key, nested) => {
-      if (parsed[key] !== undefined) return parsed[key];
-      if (nested && parsed[nested.section] && parsed[nested.section][nested.field] !== undefined) {
-        return parsed[nested.section][nested.field];
-      }
-      return undefined;
-    };
-
-    const parallelization = (() => {
-      const val = get('parallelization');
-      if (typeof val === 'boolean') return val;
-      if (typeof val === 'object' && val !== null && 'enabled' in val) return val.enabled;
-      return defaults.parallelization;
-    })();
-
-    return {
-      model_profile: get('model_profile') ?? defaults.model_profile,
-      commit_docs: (() => {
-        const explicit = get('commit_docs', { section: 'planning', field: 'commit_docs' });
-        // If explicitly set in config, respect the user's choice
-        if (explicit !== undefined) return explicit;
-        // Auto-detection: when no explicit value and .planning/ is gitignored,
-        // default to false instead of true
-        if (isGitIgnored(cwd, '.planning/')) return false;
-        return defaults.commit_docs;
-      })(),
-      search_gitignored: get('search_gitignored', { section: 'planning', field: 'search_gitignored' }) ?? defaults.search_gitignored,
-      branching_strategy: get('branching_strategy', { section: 'git', field: 'branching_strategy' }) ?? defaults.branching_strategy,
-      phase_branch_template: get('phase_branch_template', { section: 'git', field: 'phase_branch_template' }) ?? defaults.phase_branch_template,
-      milestone_branch_template: get('milestone_branch_template', { section: 'git', field: 'milestone_branch_template' }) ?? defaults.milestone_branch_template,
-      quick_branch_template: get('quick_branch_template', { section: 'git', field: 'quick_branch_template' }) ?? defaults.quick_branch_template,
-      research: get('research', { section: 'workflow', field: 'research' }) ?? defaults.research,
-      browser_research: get('browser_research', { section: 'workflow', field: 'browser_research' }) ?? defaults.browser_research,
-      plan_checker: get('plan_checker', { section: 'workflow', field: 'plan_check' }) ?? defaults.plan_checker,
-      verifier: get('verifier', { section: 'workflow', field: 'verifier' }) ?? defaults.verifier,
-      nyquist_validation: get('nyquist_validation', { section: 'workflow', field: 'nyquist_validation' }) ?? defaults.nyquist_validation,
-      max_replan_iterations: get('max_replan_iterations', { section: 'workflow', field: 'max_replan_iterations' }) ?? defaults.max_replan_iterations,
-      parallelization,
-      brave_search: get('brave_search') ?? defaults.brave_search,
-      firecrawl: get('firecrawl') ?? defaults.firecrawl,
-      exa_search: get('exa_search') ?? defaults.exa_search,
-      text_mode: get('text_mode', { section: 'workflow', field: 'text_mode' }) ?? defaults.text_mode,
-      sub_repos: get('sub_repos', { section: 'planning', field: 'sub_repos' }) ?? defaults.sub_repos,
-      resolve_model_ids: get('resolve_model_ids') ?? defaults.resolve_model_ids,
-      context_window: get('context_window') ?? defaults.context_window,
-      phase_naming: get('phase_naming') ?? defaults.phase_naming,
-      project_code: get('project_code') ?? defaults.project_code,
-      subagent_timeout: get('subagent_timeout', { section: 'workflow', field: 'subagent_timeout' }) ?? defaults.subagent_timeout,
-      model_overrides: parsed.model_overrides || null,
-      agent_skills: parsed.agent_skills || {},
-      manager: parsed.manager || {},
-      response_language: get('response_language') || null,
-    };
+    projectParsed = parsed;
   } catch {
+    projectParsed = null;
+  }
+
+  const globalLayer = loadGlobalDefaults();
+
+  // CONFIG-01/02: resolve the global layer UNDER the project's own values.
+  //
+  // Placed after the try, and therefore after both write-backs above, so a global
+  // value can never be materialized into .planning/config.json. Criterion 1 is proven
+  // by that file being byte-unchanged, and a merge before the writes would break it
+  // and pin the project against every global default at the same time.
+  //
+  // Merged into the config-file-shaped object, not into the flattened return, because
+  // loadConfig renames as it flattens (workflow.plan_check -> plan_checker,
+  // git.branching_strategy -> branching_strategy). Merging into the return would need
+  // a second default table keyed by the flattened names, which is the duplication D-03
+  // refuses.
+  //
+  // When there is no usable project config AND no global file, return the bare
+  // hardcoded table, which is byte-for-byte what the old whole-body catch returned.
+  // That keeps criterion 4 true even for a project with no config.json at all.
+  if (projectParsed === null && Object.keys(globalLayer).length === 0) {
     return defaults;
   }
+
+  const resolved = mergeConfigLayers({}, globalLayer, projectParsed || {});
+
+  const get = (key, nested) => {
+    if (resolved[key] !== undefined) return resolved[key];
+    if (nested && resolved[nested.section] && resolved[nested.section][nested.field] !== undefined) {
+      return resolved[nested.section][nested.field];
+    }
+    return undefined;
+  };
+
+  const parallelization = (() => {
+    const val = get('parallelization');
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'object' && val !== null && 'enabled' in val) return val.enabled;
+    return defaults.parallelization;
+  })();
+
+  return {
+    model_profile: get('model_profile') ?? defaults.model_profile,
+    commit_docs: (() => {
+      const explicit = get('commit_docs', { section: 'planning', field: 'commit_docs' });
+      // If explicitly set in config, respect the user's choice
+      if (explicit !== undefined) return explicit;
+      // Auto-detection: when no explicit value and .planning/ is gitignored,
+      // default to false instead of true
+      if (isGitIgnored(cwd, '.planning/')) return false;
+      return defaults.commit_docs;
+    })(),
+    search_gitignored: get('search_gitignored', { section: 'planning', field: 'search_gitignored' }) ?? defaults.search_gitignored,
+    branching_strategy: get('branching_strategy', { section: 'git', field: 'branching_strategy' }) ?? defaults.branching_strategy,
+    phase_branch_template: get('phase_branch_template', { section: 'git', field: 'phase_branch_template' }) ?? defaults.phase_branch_template,
+    milestone_branch_template: get('milestone_branch_template', { section: 'git', field: 'milestone_branch_template' }) ?? defaults.milestone_branch_template,
+    quick_branch_template: get('quick_branch_template', { section: 'git', field: 'quick_branch_template' }) ?? defaults.quick_branch_template,
+    research: get('research', { section: 'workflow', field: 'research' }) ?? defaults.research,
+    browser_research: get('browser_research', { section: 'workflow', field: 'browser_research' }) ?? defaults.browser_research,
+    plan_checker: get('plan_checker', { section: 'workflow', field: 'plan_check' }) ?? defaults.plan_checker,
+    verifier: get('verifier', { section: 'workflow', field: 'verifier' }) ?? defaults.verifier,
+    nyquist_validation: get('nyquist_validation', { section: 'workflow', field: 'nyquist_validation' }) ?? defaults.nyquist_validation,
+    max_replan_iterations: get('max_replan_iterations', { section: 'workflow', field: 'max_replan_iterations' }) ?? defaults.max_replan_iterations,
+    parallelization,
+    brave_search: get('brave_search') ?? defaults.brave_search,
+    firecrawl: get('firecrawl') ?? defaults.firecrawl,
+    exa_search: get('exa_search') ?? defaults.exa_search,
+    text_mode: get('text_mode', { section: 'workflow', field: 'text_mode' }) ?? defaults.text_mode,
+    sub_repos: get('sub_repos', { section: 'planning', field: 'sub_repos' }) ?? defaults.sub_repos,
+    resolve_model_ids: get('resolve_model_ids') ?? defaults.resolve_model_ids,
+    context_window: get('context_window') ?? defaults.context_window,
+    phase_naming: get('phase_naming') ?? defaults.phase_naming,
+    project_code: get('project_code') ?? defaults.project_code,
+    subagent_timeout: get('subagent_timeout', { section: 'workflow', field: 'subagent_timeout' }) ?? defaults.subagent_timeout,
+    model_overrides: resolved.model_overrides || null,
+    agent_skills: resolved.agent_skills || {},
+    manager: resolved.manager || {},
+    response_language: get('response_language') || null,
+  };
 }
 
 // ─── Git utilities ────────────────────────────────────────────────────────────

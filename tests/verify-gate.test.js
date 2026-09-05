@@ -9,6 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { configGetIdiom, runTools, TOOLS, withConfigFixture } from './helpers/cli.mjs';
+import { HERMETIC_DONNY_HOME } from './helpers/cli.mjs';
 import {
   buildGlobalDefaults,
   buildPlanningFixture,
@@ -31,6 +32,31 @@ const { extractFrontmatter } = require(resolve(ROOT, 'packages/donny/bin/lib/fro
 const CCO_ROOT = '/Users/d0nmega/Developer/claudecodeoptimized';
 const CCO_PHASE_19 = '.planning/milestones/v5.0-phases/19-supervisor-foundation';
 const hasCco = fs.existsSync(resolve(CCO_ROOT, CCO_PHASE_19));
+
+// ---------------------------------------------------------------------------
+// Pin the IN-PROCESS global defaults directory for the whole file (T-24-54).
+//
+// Plan 24-06 made loadConfig resolve $DONNY_HOME/defaults.json, and this file
+// drives verify and init through 29 runTools calls plus in-process requires.
+// cli.mjs already keeps every child hermetic; an in-process call reads
+// process.env directly and that default never reaches it. Without this, a
+// populated ~/.donny/defaults.json would change what the suite proves - and plan
+// 24-09 populates that exact file across a checkpoint that asks the operator to
+// run npm test on this file.
+//
+// The record_gate test at :2206 sets HOME, not DONNY_HOME, on a raw execFileSync
+// child. It is the buildNewProjectConfig regression guard and is left exactly as
+// it is; this hook covers the DONNY_HOME half its isolation was missing.
+// ---------------------------------------------------------------------------
+let savedDonnyHome;
+before(() => {
+  savedDonnyHome = process.env.DONNY_HOME;
+  process.env.DONNY_HOME = HERMETIC_DONNY_HOME;
+});
+after(() => {
+  if (savedDonnyHome === undefined) delete process.env.DONNY_HOME;
+  else process.env.DONNY_HOME = savedDonnyHome;
+});
 
 // ── captureVerb ─────────────────────────────────────────────────────────────
 
