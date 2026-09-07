@@ -24,11 +24,17 @@
  * `exec resume` accepts no `-C`, the working root exists there only as the child spawn's cwd,
  * so it is resolved here and reported as `spawn_cwd`: a dry run printing argv alone would
  * under-report the scope the reviewer runs with.
+ *
+ * One recorded weakness, stated rather than hidden: the `auth` and `quota` arms of the
+ * classifier are string matches over `turn.failed.error.message`, because the exec JSONL
+ * carries no machine-readable error code at all - `ThreadErrorEvent { message: String }` is
+ * the entire shape at rust-v0.153.4 (Grade A). See AUTH_RE and `classify`.
  */
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { output, error, planningRoot } = require('./core.cjs');
 const { configGetDefaults, loadGlobalDefaults, mergeConfigLayers } = require('./config.cjs');
 
@@ -301,6 +307,167 @@ function parseCodexOpts(argv) {
   return opts;
 }
 
+// ─── Reading the result ───────────────────────────────────────────────────────
+
+/**
+ * The failure vocabulary, Grade A from `codex-rs/protocol/src/error.rs` at rust-v0.153.4.
+ * Deliberately broad, because these are model-facing UI strings that will drift.
+ *
+ * Two of the eleven recorded strings are deliberately NOT matched. 25-01 pinned the seven that
+ * are not in question and left this call to 25-04; it is made here.
+ * `To use Codex with your ChatGPT plan, upgrade to Plus` is `UsageNotIncluded`, an entitlement
+ * failure rather than an exhausted quota - waiting does not help, so `quota` would mislead the
+ * caller and `nonzero` plus the verbatim terminal_message is honest.
+ * `exceeded retry limit, last status: <code>` is `RetryLimitReached`, whose meaning depends on
+ * that code: the 429 case is already caught by the `429` token below, and a 5xx case really is
+ * a transient failure rather than a quota one. Widening for either would mandate a looser
+ * regex than the research proposed and buy nothing, since `terminal_message` carries the exact
+ * reason in the envelope either way.
+ */
+const AUTH_RE = /\b401\b|Unauthorized|Missing bearer|refresh token|not logged in|codex login/i;
+const QUOTA_RE = /usage limit|out of credits|spend cap|Quota exceeded|rate limit|429/i;
+
+// A model-authored file is untrusted input, so the read is capped. An unbounded read of
+// untrusted input is the wrong default even though nothing plausible produces 8 MiB of verdict.
+const MAX_VERDICT_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Parse the `--json` event stream into the four things the contract needs from it.
+ *
+ * An unparseable line is SKIPPED rather than fatal: `--json` writes JSONL to stdout while the
+ * tracing layer writes to stderr (Grade A, `lib.rs:239-243`), so stdout should be clean, but a
+ * future event variant must not break the contract.
+ *
+ * @returns {{events: object[], sessionId: string|null, terminal: object|null, usage: object|null, agentMessages: string[]}}
+ */
+function parseEvents(stdoutText) {
+  const events = [];
+  for (const line of String(stdoutText || '').split('\n')) {
+    if (!line.trim()) continue;
+    try { events.push(JSON.parse(line)); } catch { /* not an event we understand; skip it */ }
+  }
+  // thread.started arrives before the model is contacted at all: the recorded unauthenticated
+  // run produced it even though auth failed, which is why a session id survives a failure.
+  const started = events.find((e) => e && e.type === 'thread.started');
+  // The LAST terminal event, never the first `error`. The recorded fixture emits ten `error`
+  // events of retry chatter (`Reconnecting... 2/5`) and only the final `turn.failed` carries
+  // the real reason (Grade A). A classifier reading the first one reports the chatter.
+  let terminal = null;
+  for (const e of events) {
+    if (e && (e.type === 'turn.failed' || e.type === 'turn.completed')) terminal = e;
+  }
+  return {
+    events,
+    sessionId: started ? started.thread_id || null : null,
+    terminal,
+    usage: terminal && terminal.type === 'turn.completed' ? terminal.usage || null : null,
+    // Collected ONLY so the SEAM-05 test can prove the verdict is not taken from here. Never
+    // used to produce a verdict; see the comment at readVerdict for why that is load-bearing.
+    agentMessages: events
+      .filter((e) => e && e.type === 'item.completed' && e.item && e.item.type === 'agent_message')
+      .map((e) => e.item.text),
+  };
+}
+
+/**
+ * The one spawn. Single-shot at this layer (D-04); `codex exec` runs its own retry ladder
+ * underneath - five WebSocket attempts then five HTTPS, about 15 s to a terminal auth failure
+ * (Grade A) - which is why the default bound is generous rather than tight.
+ *
+ * @returns {object} the raw spawnSync result plus a measured `duration_ms`
+ */
+function runCodex({ bin, argv, cwd, timeoutMs }) {
+  const t0 = Date.now();
+  const r = spawnSync(bin, argv, {
+    // Proof D: `exec resume` accepts no -C and does NOT inherit the creating turn's root -
+    // both resumed turns recorded the CALLING process's cwd. On that path this option is the
+    // only thing that puts the reviewer in the right directory, and nothing in the argv would
+    // reveal it if it were left off.
+    cwd,
+    // RECORD-01. Note for the next reader: spawnSync with stdio[0]='pipe' and no `input` does
+    // not actually hang, because Node closes the child's stdin immediately (measured, Grade A).
+    // 'ignore' is pinned anyway because it is the correct value under spawn, exec and execSync
+    // too, and it does not depend on that Node implementation detail. The hang at
+    // review.md:144 was a shell invocation inheriting an open pipe, and `codex exec` blocks in
+    // read_to_end until EOF whenever stdin is not a TTY.
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: timeoutMs,
+    killSignal: 'SIGTERM',
+    encoding: 'utf-8',
+    // Pitfall 1: the default is 1 MiB and exceeding it produces status null + SIGTERM +
+    // ENOBUFS, which is indistinguishable from a timeout to a classifier that only checks
+    // status and signal. 64 MiB is cheap and a --json review stream is nowhere near it.
+    maxBuffer: MAX_SPAWN_BUFFER,
+  });
+  // `status` is NOT coerced here. Two precedents both coerce it with a nullish default:
+  // core.cjs execGit defaults a null status to 1, and openai/codex-plugin-cc's process.mjs
+  // defaults it to 0, which turns a signal-kill into a success. The first is the safer of the
+  // two and still collapses a timeout into an exit code. This contract keeps status, signal and
+  // error.code distinct, because that triple is exactly what tells a timeout, an over-buffer
+  // and a missing binary apart.
+  return { ...r, duration_ms: Date.now() - t0 };
+}
+
+/**
+ * The six-value D-02 status, plus a human note for the cases where silence would hide the
+ * reason. Order matters: `error.code` is read first, because a timeout and an over-buffer both
+ * arrive as status null + SIGTERM and only `error.code` separates them.
+ *
+ * @returns {{status: 'ok'|'auth'|'quota'|'timeout'|'empty'|'nonzero', note: string|null}}
+ */
+function classify(r, outPath, terminal) {
+  const code = r.error ? r.error.code : null;
+  if (code === 'ENOENT') return { status: 'nonzero', note: `the codex binary was not found at ${r.error.path || codexBin()}` };
+  if (code === 'ETIMEDOUT') return { status: 'timeout', note: null };
+  if (code === 'ENOBUFS') {
+    // NOT timeout. Pitfall 1, and the whole reason error.code is read before status.
+    return { status: 'nonzero', note: `ENOBUFS: the child wrote past the ${MAX_SPAWN_BUFFER}-byte stdout bound and was killed. This is an over-buffer, not a timeout.` };
+  }
+  if (code) return { status: 'nonzero', note: `spawn failed with ${code}` };
+  if (r.status === 0) {
+    if (!fs.existsSync(outPath)) {
+      // The CLI's own invariant says this cannot happen: the -o file is written on every
+      // TurnStatus::Completed. Being loud beats reporting a review nobody wrote.
+      return { status: 'nonzero', note: `codex exited 0 but wrote no --output-last-message file at ${outPath}` };
+    }
+    return fs.statSync(outPath).size === 0
+      ? { status: 'empty', note: 'codex completed with no agent message; the output file is zero bytes' }
+      : { status: 'ok', note: null };
+  }
+  // AUTH_RE is tested before QUOTA_RE because the auth string contains 401 and no quota string
+  // does, so the order is stable rather than incidental.
+  const msg = (terminal && terminal.error && terminal.error.message) || '';
+  if (AUTH_RE.test(msg)) return { status: 'auth', note: null };
+  if (QUOTA_RE.test(msg)) return { status: 'quota', note: null };
+  return { status: 'nonzero', note: null };
+}
+
+/**
+ * SEAM-05. The verdict comes from the --output-last-message file and from nowhere else.
+ * openai/codex#19816 is OPEN and a maintainer stated on 2026-04-28 that it cannot be fixed in
+ * the harness: with --output-schema set, EVERY assistant message in the sampling loop is
+ * schema-shaped, so an intermediate progress note parses as a valid final result. parseEvents
+ * collects agentMessages only so a test can prove they are not used here. Do not "optimise"
+ * this function into reading the agent message it already has in memory.
+ *
+ * @returns {{text: string|null, chars: number, truncated: boolean}}
+ */
+function readVerdict(outPath) {
+  let size;
+  try { size = fs.statSync(outPath).size; } catch { return { text: null, chars: 0, truncated: false }; }
+  if (size <= MAX_VERDICT_BYTES) {
+    const text = fs.readFileSync(outPath, 'utf-8');
+    return { text, chars: text.length, truncated: false };
+  }
+  const fd = fs.openSync(outPath, 'r');
+  const buf = Buffer.alloc(MAX_VERDICT_BYTES);
+  try { fs.readSync(fd, buf, 0, MAX_VERDICT_BYTES, 0); } finally { fs.closeSync(fd); }
+  warnOnce('verdict-size', `the verdict file ${outPath} is ${size} bytes, over the ` +
+    `${MAX_VERDICT_BYTES}-byte cap. Reading the first ${MAX_VERDICT_BYTES} bytes only.`);
+  const text = buf.toString('utf-8');
+  return { text, chars: text.length, truncated: true };
+}
+
 // ─── The verb ─────────────────────────────────────────────────────────────────
 
 // One test seam so the suite can substitute a fake binary; no shipped workflow sets it.
@@ -308,11 +475,36 @@ function parseCodexOpts(argv) {
 const codexBin = () => process.env.DONNY_CODEX_BIN || 'codex';
 
 /**
- * The envelope. A dry run reports status null rather than a seventh status value: the D-02
- * enum is locked at six, all six describe a completed spawn, and a run that spawned nothing
- * has no verdict about itself - the same reading schema_valid: null already has.
+ * D-16. Stamp the running CLI on every result and warn once when it has drifted from the
+ * version 25-PROBES.md was recorded against. Never hard-errors, never changes `status`, and a
+ * failure of the probe itself is recorded as null rather than propagated (Phase 24 D-04's
+ * posture). The CLI moved 0.151.0 to 0.153.4 in four days, so stale evidence must be visible
+ * rather than assumed, and a hard error would make a routine upgrade break every review.
+ *
+ * @returns {{observed: string|null, drift: boolean}}
  */
-function dryRunEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId }) {
+function observeVersion(bin) {
+  // 11 ms on this machine. Its own short bound, so a hung probe cannot eat the review's.
+  const r = spawnSync(bin, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf-8', timeout: 10000 });
+  if (r.error || r.status !== 0) return { observed: null, drift: false };
+  const observed = String(r.stdout || '').trim();
+  const m = observed.match(/codex-cli\s+(\S+)/);
+  const version = m ? m[1] : observed;
+  if (version === PROOFS_RECORDED_AGAINST) return { observed, drift: false };
+  warnOnce('version-drift', `codex version drift: the proofs in 25-PROBES.md were recorded ` +
+    `against codex-cli ${PROOFS_RECORDED_AGAINST}, this run observed ${version}. Re-run the ` +
+    `probes if behaviour looks wrong.`);
+  return { observed, drift: true };
+}
+
+/**
+ * The envelope, one shape for a dry run and a live one. A dry run reports status null rather
+ * than a seventh status value: the D-02 enum is locked at six, all six describe a completed
+ * spawn, and a run that spawned nothing has no verdict about itself - the same reading
+ * schema_valid: null already has. The live path spreads its result over this base, so the two
+ * surfaces cannot drift apart field by field.
+ */
+function buildEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId }) {
   return {
     mode,
     status: null,
@@ -320,11 +512,25 @@ function dryRunEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId
     bin: codexBin(),
     argv: [...argv],
     codex_version: null,
+    version_drift: false,
+    verdict: null,
+    verdict_path: outPath,
+    verdict_chars: 0,
+    verdict_truncated: false,
+    verdict_out: opts.verdictOut || null,
+    verdict_out_written: false,
+    session_id: null,
+    terminal_message: null,
+    usage: null,
+    note: null,
+    exit_status: null,
+    signal: null,
+    error_code: null,
+    duration_ms: null,
     spawn_stdin: 'ignore',
     spawn_cwd: spawnCwd,
     spawn_timeout_ms: cfg.timeoutMs,
     spawn_max_buffer: MAX_SPAWN_BUFFER,
-    verdict_out: opts.verdictOut || null,
     proofs_recorded_against: PROOFS_RECORDED_AGAINST,
     resolved: {
       cd,
@@ -341,6 +547,67 @@ function dryRunEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId
   };
 }
 
+/**
+ * The live half, shared by both verbs: everything after the argv is identical on create and
+ * resume, which is D-07's point - Phase 26 inherits a tested path rather than an untested one.
+ *
+ * The process exits 0 whenever an envelope was produced, including on every failure status. The
+ * posture is advisory (Phase 23 D-02): nothing about Codex may block a run, and the caller
+ * reads `status`, or `--pick status` when the body is large enough for output() to divert it to
+ * an @file: payload. A non-zero exit would let a failed review kill the workflow that asked
+ * for it, which is the opposite of RECORD-02's intent.
+ */
+function executeCodex({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId, raw }) {
+  const bin = codexBin();
+  // Both destinations are cleared BEFORE the spawn. The -o path is fresh per call, so that one
+  // is belt and braces; --verdict-out is the caller's and is stable across runs by design, and
+  // a stale or empty file at a stable path reading as a clean review is the exact defect
+  // RECORD-02 exists to close.
+  fs.rmSync(outPath, { force: true });
+  if (opts.verdictOut) fs.rmSync(opts.verdictOut, { force: true });
+
+  const version = observeVersion(bin);
+  const r = runCodex({ bin, argv, cwd: spawnCwd, timeoutMs: cfg.timeoutMs });
+  // Forwarded verbatim, never swallowed. This is what `2>/dev/null` at review.md:144 was
+  // discarding, including the one line that says why a run failed.
+  if (r.stderr) process.stderr.write(r.stderr);
+
+  const parsed = parseEvents(r.stdout);
+  const { status, note } = classify(r, outPath, parsed.terminal);
+  if (note) process.stderr.write(`donny-tools: codex: ${note}\n`);
+
+  const verdict = status === 'ok' ? readVerdict(outPath) : { text: null, chars: 0, truncated: false };
+  // RECORD-02 at the caller's boundary: written ONLY on ok. Not on empty, not on any failure.
+  // That is what makes a contentless run impossible to render as a clean review, and it makes
+  // the presence of the file itself the ok signal.
+  const wroteOut = status === 'ok' && Boolean(opts.verdictOut);
+  if (wroteOut) fs.writeFileSync(opts.verdictOut, verdict.text);
+
+  const terminalMessage = parsed.terminal
+    ? (parsed.terminal.error && parsed.terminal.error.message) || null
+    : null;
+
+  output({
+    ...buildEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId }),
+    status,
+    dry_run: false,
+    codex_version: version.observed,
+    version_drift: version.drift,
+    verdict: verdict.text,
+    verdict_chars: verdict.chars,
+    verdict_truncated: verdict.truncated,
+    verdict_out_written: wroteOut,
+    session_id: parsed.sessionId,
+    terminal_message: terminalMessage,
+    usage: parsed.usage,
+    note,
+    exit_status: r.status,
+    signal: r.signal,
+    error_code: r.error ? r.error.code : null,
+    duration_ms: r.duration_ms,
+  }, raw);
+}
+
 /** `donny-tools codex run [--cd <dir>] --prompt-file <p> [--schema <p>] [--verdict-out <p>] [--dry-run]` */
 function cmdCodexRun(cwd, argv, raw) {
   const opts = parseCodexOpts(argv);
@@ -351,15 +618,14 @@ function cmdCodexRun(cwd, argv, raw) {
   const argvOut = buildCreateArgv({
     cd, model: cfg.model, effort: cfg.effort, schemaPath: opts.schema, outPath, prompt,
   });
+  // The child runs in the root it pinned with -C, so the two agree by construction and
+  // T-25-05's mitigation is a property of the spawn rather than of the caller's luck.
+  const shared = { mode: 'run', argv: argvOut, cfg, spawnCwd: cd, cd, outPath, opts, threadId: null };
   if (opts.dryRun) {
-    // The child runs in the root it pinned with -C, so the two agree by construction and
-    // T-25-05's mitigation is a property of the spawn rather than of the caller's luck.
-    output(dryRunEnvelope({
-      mode: 'run', argv: argvOut, cfg, spawnCwd: cd, cd, outPath, opts, threadId: null,
-    }), raw);
+    output(buildEnvelope(shared), raw);
     return;
   }
-  error('codex run: live invocation lands in plan 25-04');
+  executeCodex({ ...shared, raw });
 }
 
 /** `donny-tools codex resume <thread_id> [--cd <dir>] --prompt-file <p> ... [--dry-run]` */
@@ -377,13 +643,12 @@ function cmdCodexResume(cwd, threadId, argv, raw) {
   const argvOut = buildResumeArgv({
     threadId, model: cfg.model, effort: cfg.effort, schemaPath: opts.schema, outPath, prompt,
   });
+  const shared = { mode: 'resume', argv: argvOut, cfg, spawnCwd, cd: null, outPath, opts, threadId };
   if (opts.dryRun) {
-    output(dryRunEnvelope({
-      mode: 'resume', argv: argvOut, cfg, spawnCwd, cd: null, outPath, opts, threadId,
-    }), raw);
+    output(buildEnvelope(shared), raw);
     return;
   }
-  error('codex resume: live invocation lands in plan 25-04');
+  executeCodex({ ...shared, raw });
 }
 
 module.exports = {
@@ -391,5 +656,7 @@ module.exports = {
   FORBIDDEN_FLAGS, FORBIDDEN_C_PREFIXES,
   PROOFS_RECORDED_AGAINST, MAX_PROMPT_BYTES, MAX_SPAWN_BUFFER,
   resolveCodexConfig, buildCreateArgv, buildResumeArgv, assertArgvSafe,
-  resolvePrompt, resolveCd, parseCodexOpts, cmdCodexRun, cmdCodexResume,
+  resolvePrompt, resolveCd, parseCodexOpts,
+  parseEvents, runCodex, classify, readVerdict, observeVersion,
+  cmdCodexRun, cmdCodexResume,
 };

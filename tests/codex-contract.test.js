@@ -576,6 +576,63 @@ describe('RECORD-01: the call is bounded and stdin is never inherited', () => {
       assert.equal(envelope(res).status, 'timeout');
     });
   });
+
+  it('runCodex passes the resolved working root to the child as its spawn cwd', () => {
+    // Proof D, Grade A: `exec resume` accepts no -C and does NOT inherit the creating turn's
+    // root, so on that path the spawn's cwd is the only thing that puts the reviewer in the
+    // right directory - and nothing in the argv would reveal it if it were left off. The
+    // dry-run test in block 1 proves the value is REPORTED; this one proves it is PASSED.
+    // The fake binary cannot show it, because it never reads its own cwd, so the seam is
+    // driven directly.
+    const dir = fs.realpathSync(TMP);
+    const r = CODEX.runCodex({
+      bin: process.execPath,
+      argv: ['-e', 'process.stdout.write(process.cwd())'],
+      cwd: dir,
+      timeoutMs: 10000,
+    });
+    assert.equal(r.status, 0);
+    assert.equal(r.stdout, dir, 'the child ran somewhere other than the resolved working root');
+    assert.notEqual(
+      r.stdout,
+      process.cwd(),
+      'and not merely in the caller cwd, which is the Proof D failure mode',
+    );
+  });
+
+  it('runCodex does not let the child inherit an open stdin', () => {
+    // `codex exec` blocks in read_to_end until EOF whenever stdin is not a TTY, which is what
+    // hung review.md:144. A child that reads stdin must see EOF at once, not a live pipe.
+    const r = CODEX.runCodex({
+      bin: 'sh', argv: ['-c', 'cat; echo READ_DONE'], cwd: TMP, timeoutMs: 5000,
+    });
+    assert.equal(r.status, 0, 'the child blocked on stdin instead of seeing EOF');
+    assert.equal(r.stdout, 'READ_DONE\n');
+  });
+
+  it('runCodex keeps timeout, nonzero exit and missing binary distinguishable', () => {
+    // The measured triple, Grade A on Node v24.16.0. classify branches on error.code precisely
+    // because status and signal alone cannot tell a timeout from an over-buffer.
+    const t = CODEX.runCodex({ bin: 'sh', argv: ['-c', 'sleep 5'], cwd: TMP, timeoutMs: 300 });
+    assert.equal(t.status, null);
+    assert.equal(t.signal, 'SIGTERM');
+    assert.equal(t.error.code, 'ETIMEDOUT');
+    assert.ok(Number.isInteger(t.duration_ms) && t.duration_ms >= 0, 'every call is measured');
+
+    const n = CODEX.runCodex({
+      bin: 'sh', argv: ['-c', 'echo out; echo err 1>&2; exit 7'], cwd: TMP, timeoutMs: 10000,
+    });
+    assert.equal(n.status, 7, 'a real exit code must survive uncoerced');
+    assert.equal(n.signal, null);
+    assert.equal(n.error, undefined);
+    assert.equal(n.stderr, 'err\n', 'and stderr is captured, never discarded');
+
+    const e = CODEX.runCodex({
+      bin: path.join(TMP, 'no-such-binary-xyz'), argv: [], cwd: TMP, timeoutMs: 10000,
+    });
+    assert.equal(e.status, null);
+    assert.equal(e.error.code, 'ENOENT');
+  });
 });
 
 // -----------------------------------------------------------------------------------------
@@ -617,6 +674,51 @@ describe('RECORD-02: every failure is distinct from a clean review', () => {
     }
   });
 
+  it('the two strings the seven-row table excluded are a recorded decision', () => {
+    // 25-01 pinned the seven arms that are not in question and left the other two of the
+    // eleven recorded strings to 25-04. That call, made explicit here rather than left to be
+    // inferred from a regex:
+    //
+    //  - "To use Codex with your ChatGPT plan, upgrade to Plus" is UsageNotIncluded, an
+    //    ENTITLEMENT failure. Waiting does not help, so `quota` would mislead a caller that
+    //    reads it as "try later"; `nonzero` plus the verbatim terminal_message is honest.
+    //  - "exceeded retry limit, last status: <code>" is RetryLimitReached, and its meaning is
+    //    that code. A 429 ladder IS quota exhaustion and is already matched by the 429 token;
+    //    a 5xx ladder is a transient failure and is correctly `nonzero`.
+    //
+    // Two strings the regex already covers are pinned alongside them, so a later widening
+    // cannot pass unnoticed.
+    const ROWS = [
+      ['Quota exceeded. Check your plan and billing details.', 'quota'],
+      ['rate limit exceeded: 40 requests per minute', 'quota'],
+      ['exceeded retry limit, last status: 429, request id: req_abc', 'quota'],
+      ['exceeded retry limit, last status: 503, request id: req_abc', 'nonzero'],
+      ['To use Codex with your ChatGPT plan, upgrade to Plus: https://chatgpt.com/#pricing', 'nonzero'],
+    ];
+    for (const [message, expected] of ROWS) {
+      const env = envelope(run('quota', { FAKE_CODEX_MESSAGE: message }));
+      assert.equal(env.status, expected, `${message} must classify ${expected}`);
+      assert.equal(
+        env.terminal_message,
+        message,
+        'and either way the raw reason survives verbatim, which is what makes the coarse bucket safe',
+      );
+    }
+  });
+
+  it('a run that emits no JSONL at all classifies nonzero without throwing', () => {
+    // Config errors, a malformed --output-schema file, a failed git-repo check and a bad
+    // thread id all exit before the event stream opens (Grade A, four separate live cases).
+    // The parser must survive an empty stream rather than treat it as impossible.
+    const res = run('no_jsonl');
+    const env = envelope(res);
+    assert.equal(env.status, 'nonzero');
+    assert.equal(env.session_id, null, 'no thread.started means no session id, reported honestly');
+    assert.equal(env.terminal_message, null);
+    assert.equal(env.exit_status, 1, 'and the real exit code survives uncoerced');
+    assert.match(res.stderr, /unknown configuration field/, "the child's reason is not swallowed");
+  });
+
   it('exit 0 with a zero-byte -o file classifies empty, not ok', () => {
     const env = envelope(run('ok_empty_o'));
     assert.equal(env.status, 'empty');
@@ -644,6 +746,11 @@ describe('RECORD-02: every failure is distinct from a clean review', () => {
     assert.equal(env.status, 'nonzero');
     assert.notEqual(env.status, 'timeout');
     assert.match(res.stderr, /ENOBUFS/i, 'over-buffer must be named on stderr, not silently folded in');
+    // And in the JSON, because the caller is a workflow reading a field, not a human reading
+    // a terminal. status says which bucket; error_code and note say why.
+    assert.equal(env.error_code, 'ENOBUFS');
+    assert.match(env.note, /ENOBUFS/);
+    assert.equal(env.signal, 'SIGTERM', 'the signal that made it look like a timeout is recorded too');
   });
 
   it('a missing binary classifies nonzero', () => {
@@ -653,6 +760,20 @@ describe('RECORD-02: every failure is distinct from a clean review', () => {
       }),
     );
     assert.equal(envelope(res).status, 'nonzero', 'ENOENT is a failed review, never a clean one');
+  });
+
+  it('a spawn failure names itself in the envelope, not only on stderr', () => {
+    const res = withConfigFixture({}, (root) =>
+      runCodex(root, ['run', '--cd', root, '--prompt-file', promptFile(), '--verdict-out', scratch('v.md')], {
+        DONNY_CODEX_BIN: path.join(TMP, 'no-such-codex-binary-xyz'),
+      }),
+    );
+    const env = envelope(res);
+    assert.equal(env.error_code, 'ENOENT');
+    assert.match(env.note, /binary was not found/);
+    assert.equal(env.codex_version, null, 'a version probe failure is recorded, never propagated');
+    assert.equal(env.verdict, null);
+    assert.equal(env.verdict_out_written, false, 'and nothing is written where a review would go');
   });
 
   it('the recorded 401 fixture classifies auth and yields the right thread_id', () => {
