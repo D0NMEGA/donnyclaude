@@ -141,8 +141,25 @@ claude -p "$(cat /tmp/donny-review-prompt-{phase}.md)" --no-input 2>/dev/null > 
 
 **Codex:**
 ```bash
-codex exec --skip-git-repo-check "$(cat /tmp/donny-review-prompt-{phase}.md)" 2>/dev/null > /tmp/donny-review-codex-{phase}.md
+CODEX_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" codex run \
+  --prompt-file /tmp/donny-review-prompt-{phase}.md \
+  --verdict-out /tmp/donny-review-codex-{phase}.md \
+  --cd "$(pwd)" \
+  --pick status)
+echo "codex: $CODEX_STATUS"
 ```
+
+Codex is the one reviewer that goes through an owned contract rather than a bare shell line
+(SEAM-02). The contract closes stdin, applies the `workflow.codex_timeout` bound, pins the sandbox
+to `read-only`, passes `--ignore-user-config`, and reads the verdict from the
+`-o/--output-last-message` file rather than stdout. Do NOT send stderr to /dev/null here: the
+discarded stderr is how the previous version hid an indefinite hang, and the contract's warnings
+are meant to be seen.
+
+`$CODEX_STATUS` is one of `ok`, `auth`, `quota`, `timeout`, `empty` or `nonzero`.
+`/tmp/donny-review-codex-{phase}.md` is written ONLY when the status is `ok`, and it is removed
+before the call, so an absent file means no review exists rather than an empty one. Carry the
+status into the `write_reviews` step.
 
 **CodeRabbit:**
 

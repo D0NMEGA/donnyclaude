@@ -884,14 +884,48 @@ describe('SEAM-02: the verb dispatches', () => {
   });
 
   it('review.md contains no codex exec string', () => {
-    // Expected to stay red until 25-05 rewires line 144. The whole SEAM-02 claim is that
-    // exactly one contract reaches Codex, and an ad-hoc shell line in a workflow is a
-    // second one.
+    // Closed by 25-05, which rewired line 144. The whole SEAM-02 claim is that exactly one
+    // contract reaches Codex, and an ad-hoc shell line in a workflow is a second one. Three
+    // assertions, not one: the defect is gone, the replacement is there exactly once, and the
+    // four sibling invocations D-17 defers are still byte-identical.
     const source = fs.readFileSync(REVIEW_MD, 'utf-8');
     assert.ok(
       !/codex exec/.test(source),
       'workflows/review.md still calls codex exec directly',
     );
+
+    // Counted on the shell-flattened source: the replacement call is written across five
+    // continued lines, so the token pair is only adjacent once the continuations collapse.
+    const flat = source.replace(/[ \t]*\\\n[ \t]*/g, ' ');
+    const calls = flat.match(/codex run --prompt-file/g) || [];
+    assert.equal(
+      calls.length,
+      1,
+      `review.md must reach Codex through exactly one 'codex run --prompt-file' call, found ${calls.length}`,
+    );
+    assert.match(
+      flat,
+      /node "\$HOME\/\.claude\/donny\/bin\/donny-tools\.cjs" codex run --prompt-file/,
+      'the one Codex call must go through donny-tools, not through some other transport',
+    );
+
+    // D-17 defers the four sibling reviewer invocations: same stderr-into-a-redirect swallow,
+    // and three of them also leave stdin open. Asserting their exact text guards the deferred
+    // scope from being closed by accident, which would make the rewire's effect unisolable
+    // (D-18). Their LINE numbers moved when the Codex block grew; their text did not.
+    const lines = source.split('\n');
+    const DEFERRED_SIBLINGS = [
+      'gemini -p "$(cat /tmp/donny-review-prompt-{phase}.md)" 2>/dev/null > /tmp/donny-review-gemini-{phase}.md',
+      'claude -p "$(cat /tmp/donny-review-prompt-{phase}.md)" --no-input 2>/dev/null > /tmp/donny-review-claude-{phase}.md',
+      'coderabbit review --prompt-only 2>/dev/null > /tmp/donny-review-coderabbit-{phase}.md',
+      'cat /tmp/donny-review-prompt-{phase}.md | opencode run - 2>/dev/null > /tmp/donny-review-opencode-{phase}.md',
+    ];
+    for (const sibling of DEFERRED_SIBLINGS) {
+      assert.ok(
+        lines.includes(sibling),
+        `a deferred sibling invocation changed or vanished, which is out of this phase's scope: ${sibling}`,
+      );
+    }
   });
 });
 
