@@ -468,6 +468,63 @@ function readVerdict(outPath) {
   return { text, chars: text.length, truncated: true };
 }
 
+/**
+ * Check a verdict against the three properties the probe schema exercises: required keys
+ * present, enum members legal, and no extra keys under `additionalProperties: false`.
+ *
+ * Hand-rolled, with no npm dependency, because the engine ships zero runtime dependencies and
+ * that property is worth more here than generality. It is also the OpenAI maintainer's own
+ * recommendation on the closed openai/codex#15451: "If you need to work around the problem in
+ * your use case, you can wrap the call to `codex exec` with schema validation logic."
+ *
+ * The result reaches the envelope as `schema_valid`, a SEPARATE additive field, and never as a
+ * seventh `status`. D-02's enum is locked at ok/auth/quota/timeout/empty/nonzero and a schema
+ * violation is orthogonal to all six: a run can be a complete success at the transport layer
+ * and still return the wrong shape. Do not fold this into `status` later.
+ *
+ * A parse failure is a recorded violation rather than a throw, because the file is
+ * model-authored: untrusted input must not be able to end the process. The body is never
+ * eval'd and never selects a code path.
+ *
+ * @returns {{valid: boolean|null, violations: string[]}}
+ */
+function validateAgainstSchema(text, schemaPath) {
+  if (!schemaPath) return { valid: null, violations: [] };
+  let schema;
+  try {
+    schema = JSON.parse(fs.readFileSync(schemaPath, 'utf-8'));
+  } catch (err) {
+    return { valid: false, violations: [`schema unreadable at ${schemaPath}: ${err.message}`] };
+  }
+  let value;
+  try {
+    value = JSON.parse(String(text));
+  } catch {
+    return { valid: false, violations: ['verdict is not valid JSON'] };
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return { valid: false, violations: ['verdict is not a JSON object'] };
+  }
+  const props = schema.properties || {};
+  const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+  const violations = [];
+  for (const key of schema.required || []) {
+    if (!has(value, key)) violations.push(`missing required key: ${key}`);
+  }
+  for (const [key, spec] of Object.entries(props)) {
+    if (!spec || !Array.isArray(spec.enum) || !has(value, key)) continue;
+    if (!spec.enum.includes(value[key])) {
+      violations.push(`illegal enum value for ${key}: ${JSON.stringify(value[key])}`);
+    }
+  }
+  if (schema.additionalProperties === false) {
+    for (const key of Object.keys(value)) {
+      if (!has(props, key)) violations.push(`unexpected key: ${key}`);
+    }
+  }
+  return { valid: violations.length === 0, violations };
+}
+
 // ─── The verb ─────────────────────────────────────────────────────────────────
 
 // One test seam so the suite can substitute a fake binary; no shipped workflow sets it.
@@ -519,9 +576,22 @@ function buildEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId 
     verdict_truncated: false,
     verdict_out: opts.verdictOut || null,
     verdict_out_written: false,
+    schema_valid: null,
+    schema_errors: [],
     session_id: null,
     terminal_message: null,
     usage: null,
+    // D-02 asks for the rate_limits block "when Codex emits one". At codex-cli 0.153.4
+    // `codex exec` emits none: `rate_limit` and `RateLimitSnapshot` appear nowhere in the
+    // codex-rs/exec crate at tag rust-v0.153.4. UsageLimitReachedError carries plan_type,
+    // resets_at and a rate_limits snapshot, but only its Display string survives into exec,
+    // flattened as "{message} ({details})". So this field is null today and terminal_message
+    // carries the raw string verbatim. Phase 26's CRITIC-05 reads a usage window from this
+    // block; that is recorded as a named condition in 25-PROBES.md section 8.
+    rate_limits: null,
+    // Best effort only, and never parsed into a timestamp: it is one capture out of a
+    // model-facing UI string, offered because a caller that hit a usage limit wants it.
+    resets_at_text: null,
     note: null,
     exit_status: null,
     signal: null,
@@ -583,9 +653,16 @@ function executeCodex({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId, 
   const wroteOut = status === 'ok' && Boolean(opts.verdictOut);
   if (wroteOut) fs.writeFileSync(opts.verdictOut, verdict.text);
 
+  // Only an ok run has a shape to have an opinion about. Anything else reports null, the same
+  // reading a missing --schema gets: no verdict was produced, so none is judged.
+  const schema = status === 'ok'
+    ? validateAgainstSchema(verdict.text, opts.schema || null)
+    : { valid: null, violations: [] };
+
   const terminalMessage = parsed.terminal
     ? (parsed.terminal.error && parsed.terminal.error.message) || null
     : null;
+  const resets = terminalMessage && terminalMessage.match(/Try again at ([^.]+)\./);
 
   output({
     ...buildEnvelope({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId }),
@@ -597,9 +674,12 @@ function executeCodex({ mode, argv, cfg, spawnCwd, cd, outPath, opts, threadId, 
     verdict_chars: verdict.chars,
     verdict_truncated: verdict.truncated,
     verdict_out_written: wroteOut,
+    schema_valid: schema.valid,
+    schema_errors: schema.violations,
     session_id: parsed.sessionId,
     terminal_message: terminalMessage,
     usage: parsed.usage,
+    resets_at_text: resets ? resets[1] : null,
     note,
     exit_status: r.status,
     signal: r.signal,
@@ -657,6 +737,6 @@ module.exports = {
   PROOFS_RECORDED_AGAINST, MAX_PROMPT_BYTES, MAX_SPAWN_BUFFER,
   resolveCodexConfig, buildCreateArgv, buildResumeArgv, assertArgvSafe,
   resolvePrompt, resolveCd, parseCodexOpts,
-  parseEvents, runCodex, classify, readVerdict, observeVersion,
+  parseEvents, runCodex, classify, readVerdict, validateAgainstSchema, observeVersion,
   cmdCodexRun, cmdCodexResume,
 };

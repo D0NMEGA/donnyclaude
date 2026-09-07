@@ -981,3 +981,119 @@ describe('schema_valid (additive, operator decision 2026-09-05)', () => {
     assert.equal(env.status, 'ok');
   });
 });
+
+// -----------------------------------------------------------------------------------------
+// 8. The rest of the envelope (D-02), and the resume path Phase 26 inherits (D-07)
+// -----------------------------------------------------------------------------------------
+describe('the envelope (D-02) and the resume path (D-07)', () => {
+  const run = (scenario, env = {}, argv = []) =>
+    withConfigFixture({}, (root) =>
+      runCodex(root, ['run', '--cd', root, '--prompt-file', promptFile(), ...argv], {
+        FAKE_CODEX_SCENARIO: scenario,
+        ...env,
+      }),
+    );
+
+  it('rate_limits is present and null, and resets_at_text is best effort', () => {
+    // D-02 asks for a rate_limits block "when Codex emits one". `codex exec` emits none at
+    // 0.153.4: rate_limit and RateLimitSnapshot appear nowhere in the codex-rs/exec crate at
+    // tag rust-v0.153.4, and UsageLimitReachedError reaches a caller as its Display string
+    // only. Pinned as an explicit null rather than an absent key, because Phase 26's CRITIC-05
+    // reads a usage window from here and an absent key is indistinguishable from an oversight.
+    const ok = envelope(run('ok'));
+    assert.ok('rate_limits' in ok, 'the key must exist, so its absence is never inferred');
+    assert.equal(ok.rate_limits, null);
+    assert.equal(ok.resets_at_text, null);
+    assert.equal(ok.usage.output_tokens, 340, 'usage IS available, from turn.completed');
+    assert.equal(ok.exit_status, 0);
+    assert.equal(ok.signal, null);
+    assert.equal(ok.error_code, null);
+    assert.ok(Number.isInteger(ok.duration_ms), 'every live call is measured');
+
+    const quota = envelope(run('quota', {
+      FAKE_CODEX_MESSAGE: "You've hit your usage limit. Try again at 2026-09-07T18:00:00Z.",
+    }));
+    assert.equal(quota.status, 'quota');
+    assert.equal(quota.rate_limits, null, 'even a usage-limit failure carries no structured block');
+    assert.equal(quota.resets_at_text, '2026-09-07T18:00:00Z');
+    assert.equal(quota.usage, null, 'and a failed turn has no usage to report');
+  });
+
+  it('readVerdict caps its read of a model-authored file', () => {
+    // Nothing plausible produces 8 MiB of verdict, but an unbounded read of untrusted input is
+    // the wrong default and the cap is one statSync.
+    const p = scratch('huge-verdict.txt');
+    fs.writeFileSync(p, 'V'.repeat(9 * 1024 * 1024));
+    const v = CODEX.readVerdict(p);
+    assert.equal(v.truncated, true);
+    assert.equal(v.chars, 8 * 1024 * 1024);
+    const missing = CODEX.readVerdict(path.join(TMP, 'no-such-verdict-file'));
+    assert.deepEqual(missing, { text: null, chars: 0, truncated: false });
+  });
+
+  it('a large verdict is diverted to an @file: payload, and --pick status reads through it', () => {
+    withConfigFixture({}, (root) => {
+      const out = scratch('verdict-big.md');
+      // Past output()'s 50000-character threshold (core.cjs:178-199), so stdout becomes
+      // @file:<path> rather than the JSON. That is existing, documented engine behaviour, and
+      // it is why review.md takes the body from --verdict-out and the status from --pick
+      // instead of parsing stdout. Both halves are pinned here rather than discovered later.
+      const big = 'B'.repeat(80000);
+      const args = ['codex', 'run', '--cd', root, '--prompt-file', promptFile(), '--verdict-out', out];
+      const childEnv = {
+        DONNY_CODEX_BIN: FAKE, FAKE_CODEX_SCENARIO: 'ok_json_verdict', FAKE_CODEX_VERDICT: big,
+      };
+      const res = runTools(root, args, childEnv);
+      assert.match(res.stdout.trim(), /^@file:/, 'a large envelope is diverted, never truncated');
+      const payload = JSON.parse(fs.readFileSync(res.stdout.trim().slice(6), 'utf-8'));
+      assert.equal(payload.status, 'ok');
+      assert.equal(payload.verdict_chars, big.length);
+      assert.equal(payload.verdict_truncated, false);
+      assert.equal(fs.readFileSync(out, 'utf-8'), big, 'the body reaches the destination intact');
+
+      const picked = runTools(root, [...args, '--pick', 'status'], childEnv);
+      assert.equal(picked.stdout, 'ok', '--pick must read through the @file: prefix');
+    });
+  });
+
+  it('the resume path runs the same pipeline as create', () => {
+    // Phase 26 is resume's first real consumer, and D-07's whole point is that it inherits a
+    // tested path rather than an untested one. The create assertions do not cover it: resume
+    // has its own argv builder and, with no -C to carry, its own working-root handling.
+    withConfigFixture({}, (root) => {
+      const out = scratch('verdict-resume.md');
+      const env = envelope(runCodex(
+        root,
+        ['resume', THREAD_ID, '--cd', root, '--prompt-file', promptFile(), '--verdict-out', out],
+        { FAKE_CODEX_SCENARIO: 'ok' },
+      ));
+      assert.equal(env.mode, 'resume');
+      assert.equal(env.dry_run, false);
+      assert.equal(env.status, 'ok');
+      assert.match(env.verdict, /FINAL-VERDICT-FROM-O-FILE/);
+      assert.ok(!/INTERMEDIATE-NOT-THE-VERDICT/.test(env.verdict), 'SEAM-05 holds here too');
+      assert.equal(env.resolved.thread_id, THREAD_ID);
+      assert.equal(env.spawn_cwd, root, 'the working root reaches the child only as the spawn cwd');
+      assert.ok(!env.argv.includes('-C'), 'and never as -C, which does not exist on exec resume');
+      assert.match(env.codex_version, /0\.153\.4/);
+      assert.equal(fs.readFileSync(out, 'utf-8'), env.verdict);
+    });
+  });
+
+  it('a failure on the resume path is just as distinct as on the create path', () => {
+    withConfigFixture({}, (root) => {
+      const out = scratch('verdict-resume-auth.md');
+      fs.writeFileSync(out, 'STALE');
+      const env = envelope(runCodex(
+        root,
+        ['resume', THREAD_ID, '--prompt-file', promptFile(), '--verdict-out', out],
+        { FAKE_CODEX_SCENARIO: 'auth' },
+      ));
+      assert.equal(env.status, 'auth');
+      assert.equal(env.session_id, THREAD_ID);
+      assert.equal(env.verdict, null);
+      assert.equal(env.verdict_out_written, false);
+      assert.ok(!fs.existsSync(out), 'a stale verdict must not survive a failed resume either');
+    });
+  });
+});
