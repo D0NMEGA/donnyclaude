@@ -53,9 +53,16 @@ import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { runTools, withConfigFixture, ROOT } from './helpers/cli.mjs';
+
+// The argv builders are pure, so half of this file's safety property can be asserted
+// without a subprocess. The CLI assertions stay: they are what proves the shipped path
+// uses these same functions rather than a second copy that can drift.
+const require_ = createRequire(import.meta.url);
+const CODEX = require_(path.resolve(ROOT, 'packages/donny/bin/lib/codex.cjs'));
 
 // Derived from this module's own location rather than from ROOT, so moving the suite cannot
 // silently point the fake-binary indirection at a directory that does not exist.
@@ -280,6 +287,213 @@ describe('argv construction (D-20, SEAM-03, RECORD-01)', () => {
       assert.equal(env.dry_run, true);
       // Follows from never spawning: the version cannot have been observed.
       assert.equal(env.codex_version, null, 'a dry run cannot have observed a version');
+    });
+  });
+
+  // -------------------------------------------------------------------------------------
+  // The same properties against the exported pure functions. Sixteen rows again, and this
+  // time the effort column is real: the CLI matrix above cannot set effort to null,
+  // because an unregistered key in a fixture config is inert on the read path, so only a
+  // direct call reaches the omit-the-flag branch.
+  // -------------------------------------------------------------------------------------
+  const PURE = [];
+  for (const model of [null, 'gpt-6-astra-mini'])
+    for (const effort of [null, 'low'])
+      for (const schemaPath of [null, SCHEMA])
+        for (const cd of ['/tmp', '/usr']) PURE.push({ model, effort, schemaPath, cd });
+
+  const pureArgvs = () => {
+    assert.equal(PURE.length, 16, 'the pure permutation table must cover all sixteen rows');
+    const out = [];
+    for (const row of PURE) {
+      const label = JSON.stringify(row);
+      out.push({
+        label,
+        kind: 'create',
+        argv: CODEX.buildCreateArgv({ ...row, outPath: '/tmp/donny-o.txt', prompt: PROMPT_MARKER }),
+      });
+      out.push({
+        label,
+        kind: 'resume',
+        argv: CODEX.buildResumeArgv({
+          threadId: THREAD_ID,
+          model: row.model,
+          effort: row.effort,
+          schemaPath: row.schemaPath,
+          outPath: '/tmp/donny-o.txt',
+          prompt: PROMPT_MARKER,
+        }),
+      });
+    }
+    return out;
+  };
+
+  it('the builders emit no widening flag and no widening -c key on any of sixteen rows', () => {
+    for (const { label, kind, argv } of pureArgvs()) {
+      for (const flag of WIDENING_FLAGS) {
+        assert.ok(!argv.includes(flag), `${kind} ${label} emitted ${flag}`);
+      }
+      for (const value of cValues(argv)) {
+        for (const key of WIDENING_CONFIG_KEYS) {
+          assert.ok(!value.startsWith(key), `${kind} ${label} emitted -c ${value}`);
+        }
+      }
+    }
+  });
+
+  it('every flag token on either path is a member of that path frozen allowlist', () => {
+    // The closed half of the claim. The two assertions above say "not these ten"; this one
+    // says "only these nine", which is what makes an unknown flag unrepresentable rather
+    // than merely unlisted. The final element is the prompt and can begin with anything.
+    for (const { label, kind, argv } of pureArgvs()) {
+      const allowed = kind === 'create' ? CODEX.ALLOWED_CREATE_FLAGS : CODEX.ALLOWED_RESUME_FLAGS;
+      for (let i = 0; i < argv.length - 1; i++) {
+        if (!argv[i].startsWith('-')) continue;
+        assert.ok(allowed.includes(argv[i]), `${kind} ${label} emitted unlisted flag ${argv[i]}`);
+      }
+    }
+  });
+
+  it('create pins -s read-only and -C on every row, and resume carries neither', () => {
+    for (const { label, kind, argv } of pureArgvs()) {
+      if (kind === 'create') {
+        assert.equal(argv[argv.indexOf('-s') + 1], 'read-only', `create ${label}`);
+        assert.notEqual(argv.indexOf('-C'), -1, `create ${label} must pin the working root`);
+      } else {
+        assert.ok(!argv.includes('-s') && !argv.includes('--sandbox'), `resume ${label}`);
+        assert.ok(!argv.includes('-C'), `resume ${label}: -C does not exist on exec resume`);
+      }
+    }
+  });
+
+  it('a null model or effort omits the flag and its value together', () => {
+    for (const { label, kind, argv } of pureArgvs()) {
+      const row = JSON.parse(label);
+      if (!row.model) assert.ok(!argv.includes('-m'), `${kind} ${label} left an orphan -m`);
+      else assert.equal(argv[argv.indexOf('-m') + 1], row.model, `${kind} ${label}`);
+      if (!row.effort) assert.ok(!argv.includes('-c'), `${kind} ${label} left an orphan -c`);
+      if (!row.schemaPath) assert.ok(!argv.includes('--output-schema'), `${kind} ${label}`);
+      // An odd token count is the signature of an orphan flag on both shapes: create is
+      // 17 tokens with everything set and drops 2 per omission, resume 15 the same way.
+      assert.ok(argv.every((t) => typeof t === 'string'), `${kind} ${label} emitted a non-string`);
+    }
+  });
+
+  it('the only -c value the builders ever emit is model_reasoning_effort', () => {
+    for (const { label, kind, argv } of pureArgvs()) {
+      for (const value of cValues(argv)) {
+        assert.match(value, /^model_reasoning_effort="[^"]*"$/, `${kind} ${label}: ${value}`);
+      }
+    }
+  });
+
+  it('the frozen constants are actually frozen', () => {
+    for (const name of ['ALLOWED_CREATE_FLAGS', 'ALLOWED_RESUME_FLAGS', 'ALLOWED_C_KEYS', 'FORBIDDEN_FLAGS', 'FORBIDDEN_C_PREFIXES']) {
+      assert.ok(Object.isFrozen(CODEX[name]), `${name} must be frozen`);
+    }
+    assert.equal(CODEX.FORBIDDEN_FLAGS.length, 10, 'ten items, matching this file own list');
+    assert.deepEqual([...CODEX.FORBIDDEN_FLAGS].sort(), [...WIDENING_FLAGS].sort());
+    assert.deepEqual(CODEX.ALLOWED_C_KEYS, ['model_reasoning_effort']);
+  });
+
+  it('assertArgvSafe rejects a hand-built widening argv on both paths', () => {
+    // Without this the allowlist tests are consistent with a guard that returns true
+    // unconditionally: every row above is built by the very function under test, so none
+    // of them can produce a violation. These are the negative controls.
+    const create = (extra) => [
+      'exec', '--skip-git-repo-check', '--ignore-user-config', '-C', '/tmp', '-s', 'read-only',
+      ...extra, '-o', '/tmp/donny-o.txt', '--json', PROMPT_MARKER,
+    ];
+    assert.throws(
+      () => CODEX.assertArgvSafe(create(['--dangerously-bypass-approvals-and-sandbox']), 'create'),
+      /dangerously-bypass-approvals-and-sandbox/,
+      'the clap-global bypass flag is Proof D attack vector 1',
+    );
+    assert.throws(
+      () => CODEX.assertArgvSafe(create(['-c', 'sandbox_mode="danger-full-access"']), 'create'),
+      /sandbox_mode/,
+      'the -c route is Proof D attack vector 2 and widened just as effectively',
+    );
+    assert.throws(() => CODEX.assertArgvSafe(create(['--add-dir', '/']), 'create'), /add-dir/);
+    assert.throws(() => CODEX.assertArgvSafe(create(['-c', 'approval_policy="never"']), 'create'), /approval_policy/);
+    assert.throws(() => CODEX.assertArgvSafe(create(['-p', 'somewhere']), 'create'), /-p/);
+    assert.throws(
+      () => CODEX.assertArgvSafe(create(['--totally-new-flag']), 'create'),
+      /--totally-new-flag/,
+      'an unknown flag is refused by the allowlist without anyone having listed it',
+    );
+    assert.throws(
+      () => CODEX.assertArgvSafe(
+        ['exec', 'resume', THREAD_ID, '--skip-git-repo-check', '-s', 'read-only', '-o', '/tmp/o', '--json', 'p'],
+        'resume',
+      ),
+      /-s/,
+      'resume has no -s at 0.153.4, so emitting one is a broken invocation',
+    );
+    assert.throws(
+      () => CODEX.assertArgvSafe(
+        ['exec', '--skip-git-repo-check', '--ignore-user-config', '-C', '/tmp', '-o', '/tmp/o', '--json', 'p'],
+        'create',
+      ),
+      /read-only/,
+      'a create argv that forgot the sandbox pin must not pass',
+    );
+    // And the positive control: a conforming argv passes, so the guard is not "throw always".
+    assert.doesNotThrow(() => CODEX.assertArgvSafe(create(['-c', 'model_reasoning_effort="high"']), 'create'));
+  });
+
+  it('a --cd naming a path that does not exist is refused, naming the path', () => {
+    withConfigFixture({}, (root) => {
+      const missing = path.join(TMP, 'no-such-working-root-xyz');
+      const res = runCodex(root, ['run', '--cd', missing, '--prompt-file', promptFile(), '--dry-run']);
+      assert.notEqual(res.status, 0);
+      assert.match(res.stderr, new RegExp(missing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    });
+  });
+
+  it('an unrecognised option is refused rather than passed through', () => {
+    // A pass-through option would be a hole straight through the allowlist, and it would
+    // make the sixteen-row property above untestable.
+    withConfigFixture({}, (root) => {
+      const res = runCodex(root, [
+        'run', '--cd', root, '--prompt-file', promptFile(), '--sandbox', 'danger-full-access', '--dry-run',
+      ]);
+      assert.notEqual(res.status, 0, 'an unknown option must never be forwarded to codex');
+      assert.match(res.stderr, /--sandbox/);
+      assert.match(res.stderr, /--prompt-file/, 'the error lists what is recognised');
+    });
+  });
+
+  it('a prompt past the argv cap is refused by name, not with a bare E2BIG', () => {
+    withConfigFixture({}, (root) => {
+      const big = scratch('huge-prompt.md');
+      fs.writeFileSync(big, 'x'.repeat(CODEX.MAX_PROMPT_BYTES + 1));
+      const res = runCodex(root, ['run', '--cd', root, '--prompt-file', big, '--dry-run']);
+      assert.notEqual(res.status, 0);
+      assert.match(res.stderr, /ARG_MAX/, 'the failure must name the kernel limit it is protecting');
+      assert.match(res.stderr, new RegExp(String(CODEX.MAX_PROMPT_BYTES + 1)), 'and the observed size');
+    });
+  });
+
+  it('the dry run reports the working root the child would spawn in, on both paths', () => {
+    // Proof D, Grade A: `exec resume` accepts no -C and does NOT inherit the creating
+    // turn's working root. Both resumed turns recorded the CALLING process's cwd. So on
+    // the resume path the working root exists only as the spawn's cwd, and a dry run that
+    // printed argv alone would under-report the scope the reviewer runs with.
+    withConfigFixture({}, (root) => {
+      const create = envelope(runCodex(root, ['run', '--cd', root, '--prompt-file', promptFile(), '--dry-run']));
+      assert.equal(create.spawn_cwd, root, 'create spawns in the root it pinned with -C');
+      assert.equal(create.argv[create.argv.indexOf('-C') + 1], create.spawn_cwd);
+
+      const bare = envelope(runCodex(root, ['resume', THREAD_ID, '--prompt-file', promptFile(), '--dry-run']));
+      assert.equal(bare.spawn_cwd, root, 'resume defaults to the project root, not to nothing');
+      assert.equal(bare.resolved.cd, null, 'there is no -C on resume, so resolved.cd is honestly null');
+
+      const explicit = envelope(
+        runCodex(root, ['resume', THREAD_ID, '--cd', TMP, '--prompt-file', promptFile(), '--dry-run']),
+      );
+      assert.equal(explicit.spawn_cwd, TMP, '--cd on resume moves the spawn cwd');
+      assert.ok(!explicit.argv.includes('-C'), 'and it must never reach the argv as -C');
     });
   });
 });
