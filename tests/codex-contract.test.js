@@ -927,6 +927,39 @@ describe('SEAM-02: the verb dispatches', () => {
       );
     }
   });
+
+  it('the REVIEWS.md template derives its reviewer list rather than hardcoding five', () => {
+    // D-03, widened to all five reviewers by the operator on 2026-09-05. Rewiring the
+    // invocation alone cannot satisfy it: the template hardcoded the list, so a reviewer that
+    // never ran was named in the frontmatter of every REVIEWS.md. Phase 23 D-10 applied here -
+    // absence is the not-run state and must never read as a pass.
+    const source = fs.readFileSync(REVIEW_MD, 'utf-8');
+
+    assert.ok(
+      !source.includes('reviewers: [gemini, claude, codex, coderabbit, opencode]'),
+      'the REVIEWS.md frontmatter still hardcodes all five reviewers',
+    );
+    assert.match(
+      source,
+      /reviewer_status/,
+      'every considered reviewer needs a status, including the ones that did not run',
+    );
+
+    const statusLines = source.match(/^\*\*Status:\*\*/gm) || [];
+    assert.ok(
+      statusLines.length >= 5,
+      `each of the five reviewer sections needs a Status line, found ${statusLines.length}`,
+    );
+
+    // The opencode block writes a sentinel sentence into its own output file when the run
+    // produced nothing, so a bare non-empty check reads that failure as a review. The
+    // derivation rule has to name it or the derived list is wrong for exactly one reviewer.
+    assert.match(
+      source,
+      /OpenCode review failed or returned empty output\.[\s\S]{0,200}`empty`, not `ok`/,
+      'the derivation rule must exclude the opencode sentinel from counting as a review',
+    );
+  });
 });
 
 // -----------------------------------------------------------------------------------------

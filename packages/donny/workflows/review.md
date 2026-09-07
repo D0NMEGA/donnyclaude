@@ -193,10 +193,25 @@ Display progress:
 <step name="write_reviews">
 Combine all review responses into `{phase_dir}/{padded_phase}-REVIEWS.md`:
 
+Derive `reviewers` and `reviewer_status` from observation, never from the list of CLIs you intended
+to run. For Codex, use the `status` the contract returned in `$CODEX_STATUS`. For each of the other
+four, the file at `/tmp/donny-review-<name>-{phase}.md` is `ok` when it exists and is non-empty and
+`empty` otherwise; the OpenCode block writes `OpenCode review failed or returned empty output.`
+into its own output file, so a file holding only that sentence is `empty`, not `ok`. A CLI that
+`detect_clis` reported missing is `cli_missing`; one that was available but not selected by the
+flags is `not_selected`. Do not write a name into `reviewers` whose status is anything other than
+`ok`.
+
+Those four file-based statuses are weaker than the Codex one. They separate output from no output,
+not one failure reason from another, so do not present all five reviewers as checked to the same
+depth.
+
 ```markdown
 ---
 phase: {N}
-reviewers: [gemini, claude, codex, coderabbit, opencode]
+reviewers: [{reviewers that actually produced a review, in the order they ran}]
+reviewer_status:
+  {name}: {ok | auth | quota | timeout | empty | nonzero | not_selected | cli_missing}
 reviewed_at: {ISO timestamp}
 plans_reviewed: [{list of PLAN.md files}]
 ---
@@ -205,37 +220,52 @@ plans_reviewed: [{list of PLAN.md files}]
 
 ## Gemini Review
 
-{gemini review content}
+**Status:** {status}
+
+{gemini review content, or the not-run note}
 
 ---
 
 ## Claude Review
 
-{claude review content}
+**Status:** {status}
+
+{claude review content, or the not-run note}
 
 ---
 
 ## Codex Review
 
-{codex review content}
+**Status:** {status}
+
+{codex review content, or the not-run note}
 
 ---
 
 ## CodeRabbit Review
 
-{coderabbit review content}
+**Status:** {status}
+
+{coderabbit review content, or the not-run note}
 
 ---
 
 ## OpenCode Review
 
-{opencode review content}
+**Status:** {status}
+
+{opencode review content, or the not-run note}
 
 ---
 
 ## Consensus Summary
 
-{synthesize common concerns across all reviewers}
+Consensus over {reviewers with status ok} of {reviewers considered} reviewers. Consensus is
+computed over the reviewers whose status is `ok`. A reviewer that did not run is not evidence of
+agreement, and the count of participating reviewers is stated so a two-reviewer consensus is not
+read as a five-reviewer one.
+
+{synthesize common concerns across the reviewers whose status is ok}
 
 ### Agreed Strengths
 {strengths mentioned by 2+ reviewers}
@@ -246,6 +276,25 @@ plans_reviewed: [{list of PLAN.md files}]
 ### Divergent Views
 {where reviewers disagreed - worth investigating}
 ```
+
+A reviewer whose status is not `ok` gets the reason in place of content, never a blank section.
+For Codex the reason is the contract's status and its `terminal_message`:
+
+```
+No review produced. Status `{status}`. {terminal_message}
+```
+
+For the other four the only available signal is whether the output file has content, so the note
+claims that much and no more:
+
+```
+No review produced. Status `empty`. This reviewer is still invoked through a bare shell line with
+stderr discarded (a deferred defect at review.md lines 134, 139, 169 and 174), so no reason is
+available. Only Codex reports a distinguishable failure reason today.
+```
+
+Naming the deferred defect in the artifact the operator reads, rather than only in a planning
+document, is how it gets fixed rather than forgotten.
 
 Commit:
 ```bash
