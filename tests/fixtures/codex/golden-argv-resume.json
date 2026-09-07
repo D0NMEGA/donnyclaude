@@ -1,0 +1,11 @@
+[
+  "exec", "resume", "{{THREAD_ID}}",
+  "--skip-git-repo-check",
+  "--ignore-user-config",
+  "-m", "gpt-6-astra",
+  "-c", "model_reasoning_effort=\"high\"",
+  "--output-schema", "{{SCHEMA}}",
+  "-o", "{{OUT}}",
+  "--json",
+  "{{PROMPT}}"
+]

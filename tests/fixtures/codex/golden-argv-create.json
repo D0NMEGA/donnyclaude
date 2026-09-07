@@ -1,0 +1,13 @@
+[
+  "exec",
+  "--skip-git-repo-check",
+  "--ignore-user-config",
+  "-C", "{{CD}}",
+  "-s", "read-only",
+  "-m", "gpt-6-astra",
+  "-c", "model_reasoning_effort=\"high\"",
+  "--output-schema", "{{SCHEMA}}",
+  "-o", "{{OUT}}",
+  "--json",
+  "{{PROMPT}}"
+]
