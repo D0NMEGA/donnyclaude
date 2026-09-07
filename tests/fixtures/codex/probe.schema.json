@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["zq_verdict_code", "zq_evidence_span", "zq_confidence_bucket"],
+  "properties": {
+    "zq_verdict_code":     { "type": "string", "enum": ["QQ-ALPHA", "QQ-BRAVO", "QQ-CHARLIE"] },
+    "zq_evidence_span":    { "type": "array", "minItems": 2, "maxItems": 2,
+                             "items": { "type": "integer", "minimum": 0 } },
+    "zq_confidence_bucket":{ "type": "integer", "enum": [11, 37, 73] }
+  }
+}
