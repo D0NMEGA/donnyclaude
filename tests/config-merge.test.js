@@ -719,8 +719,10 @@ describe('configGetDefaults, the D-07 table', () => {
   it('registers context_window, so a global value can take effect (D-18)', () => {
     assert.equal(
       CONFIG.VALID_CONFIG_KEYS.size,
-      47,
-      'context_window is the 47th key; it is read via config-get at plan-phase.md:30 and execute-phase.md:84',
+      50,
+      'Phase 24 left 47 registered keys, of which context_window was the 47th (read via ' +
+        'config-get at plan-phase.md:30 and execute-phase.md:84); Phase 25 added the three ' +
+        'workflow.codex_* keys. The size is a canary: a key added without a test lands here.',
     );
     assert.ok(CONFIG.VALID_CONFIG_KEYS.has('context_window'));
   });
@@ -1778,5 +1780,156 @@ describe('config-get --source (D-08, D-11)', () => {
         cleanupFixture(home);
       }
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 25 appends here rather than starting a second config test file: these
+// three keys are ordinary members of Phase 24's ladder and the interesting
+// assertion (the per-key merge) is the same property CONFIG-02 already pins.
+// ---------------------------------------------------------------------------
+describe('Phase 25 codex config keys (CONFIG-03, D-05, D-08, D-25)', () => {
+  it('workflow.codex_timeout resolves to the hardcoded 300000', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.codex_timeout', '--raw']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), '300000', 'milliseconds, matching workflow.subagent_timeout');
+    });
+  });
+
+  it('workflow.codex_model resolves to the hardcoded gpt-6-astra', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.codex_model', '--raw']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), 'gpt-6-astra');
+    });
+  });
+
+  it('workflow.codex_reasoning_effort resolves to the hardcoded high', () => {
+    // Not cosmetic. Proof B measured the wire: with the operator's config.toml loaded the
+    // request carries reasoning.effort "high", and under --ignore-user-config (D-10,
+    // unconditional) it carries "low". So this default is what keeps the reviewer at the
+    // effort the operator runs at; an unpinned effort silently drops to the CLI built-in.
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-get', 'workflow.codex_reasoning_effort', '--raw']);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), 'high');
+    });
+  });
+
+  it('a global workflow.codex_timeout beats the hardcoded default and reports its layer', () => {
+    const home = buildGlobalDefaults({ workflow: { codex_timeout: 45000 } });
+    try {
+      withConfigFixture({}, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.codex_timeout', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout.trim(), '45000');
+        // Tab-separated in raw mode (config.cjs:688), so cut -f2 is the layer.
+        const s = runTools(root, ['config-get', 'workflow.codex_timeout', '--source', '--raw'], { DONNY_HOME: home });
+        assert.equal(s.status, 0, s.stderr);
+        assert.equal(s.stdout.trim(), '45000\tglobal');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('a project workflow.codex_timeout beats the global one, and an unset sibling falls through', () => {
+    // The fall-through half is not decoration. A project value for an UNREGISTERED key
+    // still resolves, because cmdConfigGet consults the project layer alone when the key
+    // is not resolvable - so the first two assertions pass whether or not the key is
+    // registered, and only codex_model reaching the global layer proves the ladder ran.
+    const home = buildGlobalDefaults({ workflow: { codex_timeout: 45000, codex_model: 'gpt-6-astra-mini' } });
+    try {
+      withConfigFixture({ workflow: { codex_timeout: 90000 } }, (root) => {
+        const r = runTools(root, ['config-get', 'workflow.codex_timeout', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(r.stdout.trim(), '90000', 'the project layer is authoritative');
+        const s = runTools(root, ['config-get', 'workflow.codex_timeout', '--source', '--raw'], { DONNY_HOME: home });
+        assert.equal(s.stdout.trim(), '90000\tproject');
+        const m = runTools(root, ['config-get', 'workflow.codex_model', '--source', '--raw'], { DONNY_HOME: home });
+        assert.equal(m.status, 0, m.stderr);
+        assert.equal(m.stdout.trim(), 'gpt-6-astra-mini\tglobal', 'a key the project never set falls through');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('the workflow section merges per key, so a global codex_model survives a project workflow key', () => {
+    // The load-bearing one. This is why the three keys live under workflow.* and not in a
+    // new top-level codex section: MERGE_SECTIONS (config.cjs:215) spreads only the six
+    // named sections per key, so a codex.* section would be REPLACED wholesale by the
+    // highest layer that defines it - the CONFIG-02 violation the comment at :213 names.
+    // If anyone ever moves these keys, this assertion is what fails.
+    const home = buildGlobalDefaults({ workflow: { codex_model: 'gpt-6-astra-mini' } });
+    try {
+      withConfigFixture({ workflow: { record_gate: false } }, (root) => {
+        const model = runTools(root, ['config-get', 'workflow.codex_model', '--raw'], { DONNY_HOME: home });
+        assert.equal(model.status, 0, model.stderr);
+        assert.equal(model.stdout.trim(), 'gpt-6-astra-mini', 'the global workflow key must survive');
+        const gate = runTools(root, ['config-get', 'workflow.record_gate', '--raw'], { DONNY_HOME: home });
+        assert.equal(gate.status, 0, gate.stderr);
+        assert.equal(gate.stdout.trim(), 'false', 'and the project workflow key must survive too');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('rejects a transposed codex_timout, naming the registered keys', () => {
+    withConfigFixture({}, (root) => {
+      const r = runTools(root, ['config-set', 'workflow.codex_timout', '1000']);
+      assert.notEqual(r.status, 0, 'a typo must be an error, never a silent no-op');
+      assert.match(r.stderr, /Unknown config key: "workflow\.codex_timout"/);
+      assert.match(r.stderr, /workflow\.codex_timeout/, 'the valid set names the key the operator meant');
+    });
+  });
+
+  it('accepts the registered key and round-trips the value', () => {
+    withConfigFixture({}, (root) => {
+      const set = runTools(root, ['config-set', 'workflow.codex_timeout', '45000']);
+      assert.equal(set.status, 0, set.stderr);
+      assert.equal(readCfg(root).workflow.codex_timeout, 45000, 'config-set coerces a numeric string');
+      const get = runTools(root, ['config-get', 'workflow.codex_timeout', '--raw']);
+      assert.equal(get.stdout.trim(), '45000');
+    });
+  });
+
+  it('prints codex_model with quotes without --raw, bare with it', () => {
+    // output() prints JSON.stringify(value, null, 2) without --raw, so a string default
+    // emits WITH quotes and a number emits bare. Pinned because a caller reading this key
+    // with $(...) has to know which form it gets.
+    withConfigFixture({}, (root) => {
+      const json = runTools(root, ['config-get', 'workflow.codex_model']);
+      assert.equal(json.status, 0, json.stderr);
+      assert.equal(json.stdout.trim(), '"gpt-6-astra"');
+      const num = runTools(root, ['config-get', 'workflow.codex_timeout']);
+      assert.equal(num.stdout.trim(), '300000', 'a number emits bare in both modes');
+    });
+  });
+
+  it('the three keys are registered, resolvable and not exempt', () => {
+    for (const key of ['workflow.codex_timeout', 'workflow.codex_model', 'workflow.codex_reasoning_effort']) {
+      assert.ok(CONFIG.VALID_CONFIG_KEYS.has(key), `${key} must be registered`);
+      assert.equal(CONFIG.RESOLVE_EXEMPT.has(key), false, `${key} must resolve through the ladder`);
+      assert.equal(CONFIG.GLOBAL_EXEMPT.has(key), false, `${key} must be settable machine-wide`);
+    }
+  });
+
+  it('does not add the codex keys to what /donny-init materializes', () => {
+    // D-09 of Phase 24 leaves hardcodedProjectDefaults untouched: a resolvable default
+    // belongs only in configGetDefaults, or every new project's config.json grows a key
+    // it never chose.
+    const hard = CONFIG.hardcodedProjectDefaults();
+    assert.deepEqual(
+      Object.keys(hard.workflow || {}).filter((k) => k.startsWith('codex')),
+      [],
+      'hardcodedProjectDefaults must carry no codex_* key',
+    );
+    const defaults = CONFIG.configGetDefaults();
+    assert.equal(defaults.workflow.codex_timeout, 300000);
+    assert.equal(defaults.workflow.codex_model, 'gpt-6-astra');
+    assert.equal(defaults.workflow.codex_reasoning_effort, 'high');
   });
 });

@@ -29,6 +29,11 @@ const VALID_CONFIG_KEYS = new Set([
   'git.branching_strategy', 'git.base_branch', 'git.phase_branch_template', 'git.milestone_branch_template', 'git.quick_branch_template',
   'planning.commit_docs', 'planning.search_gitignored',
   'workflow.subagent_timeout',
+  // Phase 25, the Codex invocation contract. Under workflow.* rather than a codex.* section
+  // because MERGE_SECTIONS (:215) spreads only the six named sections per key; a new top-level
+  // codex section would be REPLACED wholesale by the highest layer that defines it, which the
+  // comment at :213 names as a direct CONFIG-02 violation (D-25).
+  'workflow.codex_timeout', 'workflow.codex_model', 'workflow.codex_reasoning_effort',
   'hooks.context_warnings',
   'project_code', 'phase_naming', 'context_window',
   // context_window: read via config-get at plan-phase.md:30 and execute-phase.md:84,
@@ -376,6 +381,28 @@ function configGetDefaults() {
       _auto_chain_active: false,
       // loadConfig's value (core.cjs:360)
       subagent_timeout: 300000,
+      // RECORD-01's explicit wall-clock bound (D-05). Milliseconds, matching
+      // subagent_timeout rather than seconds, so the two timeout keys read the same way.
+      // 300000 is generous on purpose: `codex exec` retries internally up to ten times
+      // (five WebSocket attempts, then five HTTPS after `Falling back from WebSockets to
+      // HTTPS transport`), which took about 15 s to reach a terminal failure in the
+      // recorded auth probe. A tight bound would report `timeout` for runs the CLI was
+      // still legitimately retrying.
+      codex_timeout: 300000,
+      // D-08: pin the model explicitly rather than inheriting ~/.codex/config.toml, which
+      // the Codex desktop app rewrites. --ignore-user-config (D-10) blanks that file's
+      // model and reasoning settings while keeping auth, so without an explicit pin the
+      // reviewer's model would be whatever the CLI defaults to. This value is the model
+      // this machine's config.toml carries and the one Proof B measured on the wire in
+      // both arms, so the rewire does not change WHICH model reviews, only whether that
+      // fact is recorded. Set to null to omit -m and let Codex choose.
+      codex_model: 'gpt-6-astra',
+      // D-08, same reasoning, and measured: Proof B captured reasoning.effort "high" with
+      // the operator's config.toml loaded and "low" under --ignore-user-config. Since D-10
+      // passes that flag unconditionally, this pin is what keeps the reviewer at the
+      // operator's effort instead of silently dropping to the CLI built-in. Emitted as
+      // -c model_reasoning_effort="<value>". Set to null to omit the -c entirely.
+      codex_reasoning_effort: 'high',
     },
     // sanitizeFlags (init.cjs:1097-1108) already coerces a non-string to '', so '' is a
     // no-op that keeps the regex allowlist doing the work. Do NOT give these a non-empty
