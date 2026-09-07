@@ -141,6 +141,14 @@
  *   init map-codebase                  All context for map-codebase workflow
  *   init progress                      All context for progress workflow
  *
+ * Codex (the single owned Codex invocation contract, SEAM-02):
+ *   codex run --prompt-file <p>        Review through `codex exec`, pinned -s read-only
+ *     [--cd <dir>] [--schema <p>]
+ *     [--verdict-out <p>] [--dry-run]
+ *   codex resume <thread_id>           Continue a session; no -s and no -C exist there
+ *     --prompt-file <p> [--cd <dir>]
+ *     [--schema <p>] [--verdict-out <p>] [--dry-run]
+ *
  * Documentation:
  *   docs-init                            Project context for docs-update workflow
  */
@@ -165,6 +173,7 @@ const profileOutput = require('./lib/profile-output.cjs');
 const workstream = require('./lib/workstream.cjs');
 const docs = require('./lib/docs.cjs');
 const security = require('./lib/security.cjs');
+const codex = require('./lib/codex.cjs');
 
 // ─── Arg parsing helpers ──────────────────────────────────────────────────────
 
@@ -294,7 +303,7 @@ async function main() {
   const command = args[0];
 
   if (!command) {
-    error('Usage: donny-tools <command> [args] [--raw] [--source] [--pick <field>] [--cwd <path>] [--ws <name>]\nCommands: state, resolve-model, find-phase, commit, verify-summary, verify, frontmatter, template, generate-slug, current-timestamp, list-todos, verify-path-exists, config-ensure-section, config-new-project, init, workstream, docs-init');
+    error('Usage: donny-tools <command> [args] [--raw] [--source] [--pick <field>] [--cwd <path>] [--ws <name>]\nCommands: state, resolve-model, find-phase, commit, verify-summary, verify, frontmatter, template, generate-slug, current-timestamp, list-todos, verify-path-exists, config-ensure-section, config-new-project, init, workstream, docs-init, codex');
   }
 
   // Multi-repo guard: resolve project root for commands that read/write .planning/.
@@ -561,6 +570,18 @@ async function runCommand(command, args, cwd, raw, showSource) {
         security.cmdScanSecrets(cwd, args.slice(2), raw);
       } else {
         error('Unknown security subcommand. Available: scan-secrets');
+      }
+      break;
+    }
+
+    case 'codex': {
+      const subcommand = args[1];
+      if (subcommand === 'run') {
+        codex.cmdCodexRun(cwd, args.slice(2), raw);
+      } else if (subcommand === 'resume') {
+        codex.cmdCodexResume(cwd, args[2], args.slice(3), raw);
+      } else {
+        error('Unknown codex subcommand. Available: run, resume');
       }
       break;
     }

@@ -480,13 +480,21 @@ describe('argv construction (D-20, SEAM-03, RECORD-01)', () => {
     // turn's working root. Both resumed turns recorded the CALLING process's cwd. So on
     // the resume path the working root exists only as the spawn's cwd, and a dry run that
     // printed argv alone would under-report the scope the reviewer runs with.
+    // macOS canonicalises a child's cwd, so process.cwd() inside donny-tools reports
+    // /private/var/... for a fixture created under /var/... . A DEFAULT working root
+    // therefore arrives already realpath'd, while an explicit --cd is preserved verbatim
+    // (resolveCd does not realpath, because the golden test requires resolved.cd to equal
+    // what the caller passed). Both forms are recorded; resolved.cd_real carries the
+    // canonical one.
     withConfigFixture({}, (root) => {
+      const real = fs.realpathSync(root);
       const create = envelope(runCodex(root, ['run', '--cd', root, '--prompt-file', promptFile(), '--dry-run']));
       assert.equal(create.spawn_cwd, root, 'create spawns in the root it pinned with -C');
       assert.equal(create.argv[create.argv.indexOf('-C') + 1], create.spawn_cwd);
+      assert.equal(create.resolved.cd_real, real, 'and the canonical form is in the record');
 
       const bare = envelope(runCodex(root, ['resume', THREAD_ID, '--prompt-file', promptFile(), '--dry-run']));
-      assert.equal(bare.spawn_cwd, root, 'resume defaults to the project root, not to nothing');
+      assert.equal(bare.spawn_cwd, real, 'resume defaults to the project root, not to nothing');
       assert.equal(bare.resolved.cd, null, 'there is no -C on resume, so resolved.cd is honestly null');
 
       const explicit = envelope(
@@ -494,6 +502,30 @@ describe('argv construction (D-20, SEAM-03, RECORD-01)', () => {
       );
       assert.equal(explicit.spawn_cwd, TMP, '--cd on resume moves the spawn cwd');
       assert.ok(!explicit.argv.includes('-C'), 'and it must never reach the argv as -C');
+    });
+  });
+
+  it('the dry-run envelope carries the surface plans 04 and 05 read', () => {
+    withConfigFixture({}, (root) => {
+      const out = scratch('verdict.md');
+      const env = envelope(runCodex(root, [
+        'run', '--cd', root, '--prompt-file', promptFile(), '--schema', SCHEMA,
+        '--verdict-out', out, '--dry-run',
+      ]));
+      assert.equal(env.mode, 'run');
+      assert.equal(env.dry_run, true);
+      assert.equal(env.bin, FAKE, 'the binary is one env indirection, reported not guessed');
+      assert.equal(env.verdict_out, out, '--verdict-out is the caller destination, not the argv -o');
+      assert.notEqual(env.resolved.out, out, 'and it is never the same path as -o');
+      assert.equal(env.argv[env.argv.indexOf('-o') + 1], env.resolved.out);
+      assert.equal(env.proofs_recorded_against, '0.153.4', 'the version the evidence was recorded at');
+      assert.equal(env.status, null, 'the six-value status enum describes a spawn; this one spawned nothing');
+      assert.equal(env.resolved.model, 'gpt-6-astra');
+      assert.equal(env.resolved.effort, 'high');
+      // The -o path is fresh per call, so two dry runs cannot collide and a stale file from
+      // a previous run can never be read as this run's verdict (T-25-16).
+      const again = envelope(runCodex(root, ['run', '--cd', root, '--prompt-file', promptFile(), '--dry-run']));
+      assert.notEqual(again.resolved.out, env.resolved.out);
     });
   });
 });
