@@ -369,7 +369,7 @@ Skill(skill="donny-execute-phase", args="${PHASE_NUM} --no-transition")
 After execute-phase returns (or the execute agent completes), read the verification result:
 
 ```bash
-VERIFY_STATUS=$(grep "^status:" "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
+VERIFY_STATUS=$(grep -h "^verdict:" "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
 ```
 
 Where `PHASE_DIR` comes from the `init phase-op` call already made in step 3a. If the variable is not in scope, re-fetch:
@@ -442,7 +442,7 @@ Skill(skill="donny-execute-phase", args="${PHASE_NUM} --no-transition")
 
 Re-read verification status:
 ```bash
-VERIFY_STATUS=$(grep "^status:" "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
+VERIFY_STATUS=$(grep -h "^verdict:" "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
 ```
 
 If `passed` or `human_needed`: Route normally (continue or ask user as above).

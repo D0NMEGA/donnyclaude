@@ -795,12 +795,20 @@ Collect all unique test file paths into `REGRESSION_FILES`.
 **Step 3: Run regression tests (if any found)**
 
 ```bash
-# Detect test runner and run prior phase tests
-if [ -f "package.json" ]; then
+# Detect test runner and run prior phase tests. A project-level test_command in
+# .planning/config.json wins (2026-10-07: Go and uv projects were not covered).
+TEST_CMD=$(python3 -c 'import json;print(json.load(open(".planning/config.json")).get("test_command",""))' 2>/dev/null)
+if [ -n "$TEST_CMD" ]; then
+  bash -c "$TEST_CMD" 2>&1
+elif [ -f "go.mod" ]; then
+  go test -count=1 ./... 2>&1
+elif [ -f "package.json" ]; then
   # Node.js - use project's test runner
   npx jest ${REGRESSION_FILES} --passWithNoTests --no-coverage -q 2>&1 || npx vitest run ${REGRESSION_FILES} 2>&1
 elif [ -f "Cargo.toml" ]; then
   cargo test 2>&1
+elif [ -f "uv.lock" ]; then
+  uv run pytest ${REGRESSION_FILES} -q --tb=short 2>&1
 elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
   python -m pytest ${REGRESSION_FILES} -q --tb=short 2>&1
 fi
@@ -922,9 +930,9 @@ Read these files before verification:
 - {phase_dir}/*-PLAN.md (All plans - understand intent, check must_haves)
 - {phase_dir}/*-SUMMARY.md (All summaries - cross-reference claimed vs actual)
 - .planning/REQUIREMENTS.md (Requirement traceability)
-${CONTEXT_WINDOW >= 500000 ? `- {phase_dir}/*-CONTEXT.md (User decisions - verify they were honored)
+- {phase_dir}/*-CONTEXT.md (User decisions - verify they were honored; always included since 2026-10-07)
 - {phase_dir}/*-RESEARCH.md (Known pitfalls - check for traps)
-- Prior VERIFICATION.md files from earlier phases (regression check)
+${CONTEXT_WINDOW >= 500000 ? `- Prior VERIFICATION.md files from earlier phases (regression check)
 ` : ''}
 </files_to_read>
 
@@ -936,7 +944,7 @@ ${VERIFIER_SKILLS}",
 
 Read status:
 ```bash
-VERIFY_STATUS=$(grep "^status:" "$PHASE_DIR"/*-VERIFICATION.md | cut -d: -f2 | tr -d ' ')
+VERIFY_STATUS=$(grep -h "^verdict:" "$PHASE_DIR"/*-VERIFICATION.md | cut -d: -f2 | tr -d ' ')
 echo "$VERIFY_STATUS"
 node "$HOME/.claude/donny/bin/donny-tools.cjs" ledger append "${PHASE_NUMBER}" verification --status "$VERIFY_STATUS" >/dev/null 2>&1 || true
 ```

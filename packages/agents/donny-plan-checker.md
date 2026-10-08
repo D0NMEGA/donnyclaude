@@ -2,7 +2,7 @@
 name: donny-plan-checker
 description: Verifies plans will achieve phase goal before execution. Goal-backward analysis of plan quality. Spawned by /donny-plan-phase orchestrator.
 tools: Read, Bash, Glob, Grep
-model: claude-opus-4-8
+model: opus
 color: green
 ---
 
@@ -269,6 +269,7 @@ issue:
 - Truths are implementation-focused ("bcrypt installed") not user-observable ("passwords are secure")
 - Artifacts don't map to truths
 - Key links missing for critical wiring
+- No task carries a runnable acceptance command (`<verify><automated>` or an explicit shell command in the success criteria) that exercises the truth on the real target. This is a **blocker**, not a warning (2026-10-07): a plan the verifier cannot execute cannot be verified.
 
 **Example issue:**
 ```yaml

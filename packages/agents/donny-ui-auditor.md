@@ -2,7 +2,7 @@
 name: donny-ui-auditor
 description: Retroactive 6-pillar visual audit of implemented frontend code. Produces scored UI-REVIEW.md. Spawned by /donny-ui-review orchestrator.
 tools: Read, Write, Bash, Grep, Glob, mcp__playwright__*
-model: claude-sonnet-4-6
+model: sonnet
 color: pink
 ---
 

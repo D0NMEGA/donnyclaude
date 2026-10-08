@@ -728,7 +728,7 @@ Check must_haves against actual codebase. Create VERIFICATION.md at ${QUICK_DIR}
 
 Read verification status:
 ```bash
-grep "^status:" "${QUICK_DIR}/${quick_id}-VERIFICATION.md" | cut -d: -f2 | tr -d ' '
+grep "^verdict:" "${QUICK_DIR}/${quick_id}-VERIFICATION.md" | cut -d: -f2 | tr -d ' '
 ```
 
 Store as `$VERIFICATION_STATUS`.

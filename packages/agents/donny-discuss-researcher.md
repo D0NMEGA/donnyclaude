@@ -1,8 +1,8 @@
 ---
 name: donny-discuss-researcher
 description: Researches one discuss-phase gray area (--mode external) or extracts codebase assumptions (--mode assumptions). Spawned by /donny-discuss-phase.
-tools: Read, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__playwright__*
-model: claude-sonnet-4-6
+tools: Read, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__playwright__*, mcp__browser-harness__*
+model: sonnet
 color: cyan
 ---
 
@@ -84,7 +84,7 @@ Agent receives via prompt:
 
 | Priority | Tool | Use For | Trust Level |
 |----------|------|---------|-------------|
-| 1st | `research_topic.py` HTTP digest (subagent-safe) - `python3 ~/.claude/scrapers/research_topic.py "<topic>" --limit 12` | Ecosystem discovery, community patterns, maturity signals, prior art | HIGH (primary for discovery) |
+| 1st | `research_topic.py` HTTP digest (subagent-safe) - `python3 ~/Developer/scrapers/research_topic.py "<topic>" --limit 12` | Ecosystem discovery, community patterns, maturity signals, prior art | HIGH (primary for discovery) |
 | 2nd | Context7 | Library APIs, features, configuration, versions | HIGH |
 | 3rd | WebFetch | Official docs/READMEs not in Context7, changelogs | HIGH-MEDIUM |
 | 4th | Playwright MCP (`mcp__playwright__*`) | JS-rendered or interactive pages that need a real browser - subagent-safe | HIGH |
@@ -99,10 +99,10 @@ Keep research focused on the single gray area. Do not explore tangential topics.
 
 ## Browser access (you are a subagent)
 
-browser-harness, reddit_scrape.py, and x_scrape.py CANNOT run here. They require the main thread and error out silently inside a subagent (the silent-failure trap). Do NOT invoke them.
+browser-harness, reddit_scrape.py, and x_scrape.py CANNOT run here. They require the main thread and error out silently inside a subagent (the silent-failure trap). Do NOT invoke them. NEW 2026-10-07: the `browser_*` MCP tools (server `browser-harness`, from browser-harness-mcp) DO work in a subagent; they drive the same daemon and logged-in Chrome. Use `browser_http_get` or `browser_new_tab` + `browser_js` + `browser_close_tab` for a page the HTTP digest cannot reach, and close every tab you open.
 
 - For pages that need a real browser (JS-rendered, interactive, or behind a click), use the Playwright MCP tools (mcp__playwright__browser_navigate, browser_snapshot, browser_evaluate, browser_click). These are subagent-safe.
-- For static pages and APIs, prefer the HTTP digest first: python3 ~/.claude/scrapers/research_topic.py "<topic>" --limit 12, then Context7 and WebFetch.
+- For static pages and APIs, prefer the HTTP digest first: python3 ~/Developer/scrapers/research_topic.py "<topic>" --limit 12, then Context7 and WebFetch.
 - If a task genuinely needs logged-in browser-harness (authenticated Reddit or X) or the full local browser, do NOT fake it with WebSearch. Add a "## Main-thread-gated research" note to your artifact listing exactly what the orchestrator should fetch on the main thread (URLs or queries plus why).
 
 <external_output_format>

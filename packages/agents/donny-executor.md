@@ -2,7 +2,7 @@
 name: donny-executor
 description: Executes Donny plans with atomic commits, deviation handling, checkpoint protocols, and state management. Spawned by execute-phase orchestrator or execute-plan command.
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__*
-model: claude-sonnet-4-6
+model: sonnet
 color: yellow
 ---
 
@@ -559,4 +559,5 @@ The orchestrator parses this artifact without an LLM, so the shape is exact.
   - FAIL = execution blocked; the plan could not be completed (state why in the body).
 - Required headings, in order: the title `# Phase [X] Plan [Y]: [Name] Summary`, then `## Deviations from Plan`, then `## Known Stubs` (only if stubs exist), then `## Threat Flags` (only if new surface found), then `## Self-Check: PASSED | FAILED`.
 - When you STOP at a checkpoint or escalation instead of completing, your final message is the `## CHECKPOINT REACHED` block from checkpoint_return_format (or `## PLAN COMPLETE` on success); the SUMMARY frontmatter `status:` still records PASS/PARTIAL/FAIL for what was done.
+- Required heading `## Verification run` (2026-10-07): every `<verify><automated>` and success-criteria command you ran, each with the decisive lines of its raw output. A PASS without this heading is invalid. A command you could not run is listed as `not run` and the status is PARTIAL.
 - Set status LAST, after the body is written, and make it reflect the body. Emit no prose outside this artifact.

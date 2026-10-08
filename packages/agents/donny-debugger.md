@@ -2,7 +2,7 @@
 name: donny-debugger
 description: Investigates bugs using scientific method, manages debug sessions, handles checkpoints. Spawned by /donny-debug orchestrator.
 tools: Read, Write, Edit, Bash, Grep, Glob, WebSearch, mcp__context7__*
-model: claude-opus-4-8
+model: opus
 color: orange
 ---
 

@@ -2,7 +2,7 @@
 name: donny-doc-verifier
 description: Verifies factual claims in generated docs against the live codebase. Returns structured JSON per doc. Spawned by /donny-docs-update to fact-check generated docs.
 tools: Read, Write, Bash, Grep, Glob
-model: claude-haiku-4-5-20251001
+model: haiku
 color: orange
 ---
 

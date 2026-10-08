@@ -2,7 +2,7 @@
 name: donny-verifier
 description: Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report. Spawned by /donny-execute-phase (and /donny-quick) after a phase's plans run.
 tools: Read, Write, Bash, Grep, Glob
-model: claude-opus-4-8
+model: opus
 color: green
 ---
 
@@ -168,6 +168,14 @@ For each truth, determine if codebase enables it.
 - [OK] VERIFIED: All supporting artifacts pass all checks
 - [X] FAILED: One or more artifacts missing, stub, or unwired
 - ? UNCERTAIN: Can't verify programmatically (needs human)
+
+**Behavior standard (2026-10-07).** Artifact checks (Steps 4-5) can only show that a truth is
+NOT delivered; they never make it VERIFIED. A truth is VERIFIED only when you ran its acceptance
+command in this session (the plan's `<verify><automated>` command, the phase success-criteria
+command, or `test_command` from .planning/config.json) and the raw output shows the behavior.
+Under each truth in VERIFICATION.md paste the command and the decisive output lines. No runnable
+command means UNCERTAIN and a human_verification item, never VERIFIED on file existence. A
+timed-out, skipped or environment-blocked command is "not run", never passed.
 
 For each truth:
 
