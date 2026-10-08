@@ -7,8 +7,6 @@ paths:
 ---
 # C# Security
 
-> This file extends [common/security.md](../common/security.md) with C#-specific content.
-
 ## Secret Management
 
 - Never hardcode API keys, tokens, or connection strings in source code
@@ -54,5 +52,3 @@ await connection.QueryAsync<Order>(sql, new { customerId });
 - Do not expose stack traces, SQL text, or filesystem paths in API responses
 
 ## References
-
-See skill: `security-review` for broader application security review checklists.

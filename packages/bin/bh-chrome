@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Ensure the dedicated browser-harness automation Chrome is running on the CDP port.
+# Idempotent: no-op if already up. "Way 2" (isolated profile) per browser-harness install.md
+# (Chrome 136+ silently ignores --remote-debugging-port on the default user-data-dir, so we
+# use a dedicated profile dir). browser-harness is told to use it via BU_CDP_URL in ~/.zshenv.
+set -euo pipefail
+PORT="${BU_CDP_PORT:-9222}"
+# Default to the persistent profile that holds the logged-in sessions (Reddit, X, ...).
+# Do NOT point this at ~/.browser-harness-chrome: that dir exists but is a thin, mostly
+# logged-out profile, and using it silently costs you every login-gated source.
+PROFILE="${BH_CHROME_PROFILE:-$HOME/.browser-harness-profile}"
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+if curl -sS --max-time 2 "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1; then
+  echo "browser-harness Chrome already up on :${PORT}"
+  exit 0
+fi
+[ -x "$CHROME" ] || { echo "Chrome not found at: $CHROME" >&2; exit 1; }
+mkdir -p "$PROFILE"
+nohup "$CHROME" --remote-debugging-port="$PORT" --user-data-dir="$PROFILE" \
+  --no-first-run --no-default-browser-check --no-startup-window >/dev/null 2>&1 &
+disown 2>/dev/null || true
+if curl -sS --retry-connrefused --retry 25 --retry-delay 1 --max-time 45 \
+     "http://127.0.0.1:${PORT}/json/version" >/dev/null 2>&1; then
+  echo "browser-harness Chrome up on :${PORT} (profile: ${PROFILE})"
+else
+  echo "failed to bring up Chrome on :${PORT}" >&2; exit 1
+fi

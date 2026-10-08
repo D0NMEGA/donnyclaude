@@ -9,8 +9,6 @@ paths:
 ---
 # COBOL Patterns
 
-> This file extends [common/patterns.md](../common/patterns.md) with COBOL-specific content.
-
 ## Repository Pattern
 
 Use subprogram `CALL` interfaces to encapsulate data access:

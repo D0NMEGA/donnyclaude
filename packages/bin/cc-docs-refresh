@@ -1,0 +1,129 @@
+#!/usr/bin/env python3 -I
+"""Refresh the vault mirror of the Claude Code docs from the live site.
+
+Fetches https://code.claude.com/docs/llms.txt, then every /docs/en/<slug>.md page, and writes
+~/vault/Reference/Claude-Code-Docs/<slug>.md in the mirror's existing note format. Existing notes
+keep their created date, tags, related links and aliases; only the body, updated date and
+confidence_reasoning change. Pages that no longer exist live are left in place (reported).
+
+Usage: cc-docs-refresh [--limit N] [--workers N]
+"""
+import concurrent.futures as cf
+import os
+import re
+import sys
+import urllib.request
+from datetime import date
+
+BASE = "https://code.claude.com/docs/en/"
+MIRROR = os.path.expanduser("~/vault/Reference/Claude-Code-Docs")
+TODAY = date.today().isoformat()
+UA = {"User-Agent": "cc-docs-refresh/1 (vault mirror)"}
+
+
+def fetch(url, timeout=30):
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", errors="replace")
+
+
+def strip_preamble(body):
+    # The live .md pages start with a 3-line "Documentation Index" blockquote.
+    lines = body.split("\n")
+    i = 0
+    while i < len(lines) and (lines[i].startswith("> ") or lines[i].strip() == ""):
+        i += 1
+    return "\n".join(lines[i:]).strip() + "\n"
+
+
+def title_of(body):
+    m = re.search(r"^# (.+)$", body, re.M)
+    return m.group(1).strip() if m else ""
+
+
+def existing_front(path):
+    if not os.path.exists(path):
+        return {}
+    s = open(path, encoding="utf-8").read()
+    if not s.startswith("---"):
+        return {}
+    end = s.find("\n---", 3)
+    front = s[4:end] if end > 0 else ""
+    keep = {}
+    for key in ("created", "tags", "related", "aliases"):
+        m = re.search(rf"^{key}: (.+)$", front, re.M)
+        if m:
+            keep[key] = m.group(1).strip()
+    return keep
+
+
+def write_note(slug, body):
+    path = os.path.join(MIRROR, slug + ".md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    keep = existing_front(path)
+    title = title_of(body) or slug
+    url = BASE + slug
+    front = [
+        "---",
+        "type: reference",
+        "status: active",
+        "confidence: A",
+        f"created: {keep.get('created', TODAY)}",
+        f"updated: {TODAY}",
+        f"tags: {keep.get('tags', '[claude-code, docs]')}",
+        f"related: {keep.get('related', '[]')}",
+        f"source_url: {url}",
+        f"aliases: {keep.get('aliases', '[' + chr(34) + title.replace(chr(34), '') + chr(34) + ']')}",
+        f'confidence_reasoning: "A - transcribed verbatim from the official Claude Code docs at {url}, fetched {TODAY}."',
+        "---",
+        "",
+        f"> [!info] Mirrored from the official Claude Code docs on {TODAY}. The live page wins for anything version-sensitive.",
+        "",
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(front) + body)
+    return "updated" if keep else "new"
+
+
+def main(argv):
+    limit = int(argv[argv.index("--limit") + 1]) if "--limit" in argv else 0
+    workers = int(argv[argv.index("--workers") + 1]) if "--workers" in argv else 8
+    index = fetch("https://code.claude.com/docs/llms.txt")
+    slugs = sorted(set(re.findall(r"https://code\.claude\.com/docs/en/([A-Za-z0-9/_-]+)", index)))
+    if limit:
+        slugs = slugs[:limit]
+    print(f"{len(slugs)} live pages")
+    results = {"new": 0, "updated": 0, "failed": []}
+
+    def one(slug):
+        try:
+            body = strip_preamble(fetch(BASE + slug + ".md"))
+            if not body.strip():
+                raise ValueError("empty body")
+            return slug, write_note(slug, body)
+        except Exception as e:  # network or parse problems are reported, not fatal
+            return slug, f"failed: {type(e).__name__}"
+
+    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        for slug, status in ex.map(one, slugs):
+            if status.startswith("failed"):
+                results["failed"].append(f"{slug} ({status})")
+            else:
+                results[status] += 1
+    live = set(slugs)
+    stale = []
+    for root, _, files in os.walk(MIRROR):
+        for fn in files:
+            if fn.endswith(".md"):
+                rel = os.path.relpath(os.path.join(root, fn), MIRROR)[:-3]
+                if rel not in live and not os.path.basename(rel).startswith("MOC") and rel != "Claude-Code-Docs":
+                    stale.append(rel)
+    print(f"new {results['new']}, updated {results['updated']}, failed {len(results['failed'])}")
+    for f in results["failed"]:
+        print("  failed:", f)
+    print(f"in mirror but not live ({len(stale)}): {' '.join(sorted(stale))}")
+    return 1 if results["failed"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

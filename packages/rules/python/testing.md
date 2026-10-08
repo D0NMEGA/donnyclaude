@@ -9,7 +9,8 @@ paths:
 
 ## Framework
 
-Use **pytest** as the testing framework.
+Use **pytest** as the testing framework, run through the project environment (`uv run pytest`,
+or the repo's `.venv/bin/python -m pytest`), never a bare system `python`.
 
 ## Coverage
 
@@ -32,7 +33,3 @@ def test_calculate_total():
 def test_database_connection():
     ...
 ```
-
-## Reference
-
-See skill: `python-testing` for detailed pytest patterns and fixtures.

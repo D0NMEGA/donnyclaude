@@ -128,7 +128,6 @@ Use descriptive names that explain the scenario:
 
 ## Coverage
 
-- Target 80%+ line coverage
 - Use **cargo-llvm-cov** for coverage reporting
 - Focus on business logic — exclude generated code and FFI bindings
 
@@ -150,5 +149,3 @@ cargo test --doc                 # Doc tests only
 ```
 
 ## References
-
-See skill: `rust-testing` for comprehensive testing patterns including property-based testing, fixtures, and benchmarking with Criterion.

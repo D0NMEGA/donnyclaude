@@ -38,7 +38,3 @@ paths:
 
 - Use **clang-format** — no style debates
 - Run `clang-format -i <file>` before committing
-
-## Reference
-
-See skill: `cpp-coding-standards` for comprehensive C++ coding standards and guidelines.

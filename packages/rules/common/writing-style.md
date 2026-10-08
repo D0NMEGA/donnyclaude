@@ -62,3 +62,6 @@ Format and workflow: see [git-workflow.md](./git-workflow.md). Prose style:
 - [ ] Every claim is specific; no puffery or hedging filler
 - [ ] Comments explain why; none merely restate code
 - [ ] Commit/PR body gives the why, not just the what
+
+---
+Rationale, the full AI-writing tell catalog, and sources: vault `Practices/Professional-Writing-Style`.

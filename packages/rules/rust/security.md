@@ -4,8 +4,6 @@ paths:
 ---
 # Rust Security
 
-> This file extends [common/security.md](../common/security.md) with Rust-specific content.
-
 ## Secrets Management
 
 - Never hardcode API keys, tokens, or credentials in source code
@@ -137,5 +135,3 @@ match order_service.find_by_id(id) {
 
 ## References
 
-See skill: `rust-patterns` for unsafe code guidelines and ownership patterns.
-See skill: `security-review` for general security checklists.

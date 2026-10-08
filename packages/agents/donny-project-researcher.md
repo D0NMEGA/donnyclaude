@@ -3,6 +3,7 @@ name: donny-project-researcher
 description: Researches domain ecosystem before roadmap creation. Produces files in .planning/research/ consumed during roadmap creation. Spawned by /donny-new-project or /donny-new-milestone orchestrators.
 tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__playwright__*, mcp__browser-harness__*
 model: sonnet
+effort: high
 color: cyan
 ---
 

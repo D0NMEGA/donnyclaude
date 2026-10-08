@@ -463,14 +463,17 @@ function applyInvocationFlags(installedSkillsDir, donnyclaudeSkillsSrc, topKAllo
 // CLAUDE.md gets only an idempotent, clearly-marked standards block appended.
 const DONNY_STD_BEGIN = '<!-- BEGIN donnyclaude standards (managed) -->';
 const DONNY_STD_END = '<!-- END donnyclaude standards (managed) -->';
-const DONNY_COMMON_RULES = [
-  'coding-style', 'writing-style', 'git-workflow', 'testing', 'security',
-  'patterns', 'performance', 'development-workflow', 'agents', 'hooks',
-];
-
+// Rules under ~/.claude/rules load on their own (Claude Code user rules), so the managed block
+// is a pointer, not a list of @imports (those would load every rule twice).
 function donnyStandardsBlock() {
-  const imports = DONNY_COMMON_RULES.map((r) => `@~/.claude/rules/common/${r}.md`).join('\n');
-  return `${DONNY_STD_BEGIN}\n${imports}\n${DONNY_STD_END}`;
+  return [
+    DONNY_STD_BEGIN,
+    'DonnyClaude operating guide, managed block. The coding standards live in ~/.claude/rules/common/',
+    '(coding-style, writing-style, git-workflow, testing, performance) and Claude Code loads them on its',
+    'own as user rules; language rules under ~/.claude/rules/<lang>/ load only when matching files are',
+    'touched. Workflow engine: /donny-help. Update this toolkit with: npx donnyclaude update.',
+    DONNY_STD_END,
+  ].join('\n');
 }
 
 function installOperatingGuide() {
@@ -753,9 +756,17 @@ function ownedFileMap() {
   return entries;
 }
 
+// Install rewrites one SKILL.md frontmatter key (disable-model-invocation, from
+// settings.json skills.autoInvoke), so that key alone never counts as drift.
+function comparable(path) {
+  const buf = readFileSync(path);
+  if (!path.endsWith('SKILL.md')) return buf;
+  return Buffer.from(buf.toString('utf-8').replace(/^disable-model-invocation:.*\n/m, ''));
+}
+
 function fileState(entry) {
   if (!existsSync(entry.dest)) return 'new';
-  return readFileSync(entry.src).equals(readFileSync(entry.dest)) ? 'unchanged' : 'differs';
+  return comparable(entry.src).equals(comparable(entry.dest)) ? 'unchanged' : 'differs';
 }
 
 function operatingGuideState() {

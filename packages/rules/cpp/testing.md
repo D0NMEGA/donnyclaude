@@ -38,7 +38,3 @@ Always run tests with sanitizers in CI:
 ```bash
 cmake -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined" ..
 ```
-
-## Reference
-
-See skill: `cpp-testing` for detailed C++ testing patterns, TDD workflow, and GoogleTest/GMock usage.

@@ -3,6 +3,7 @@ name: donny-integration-checker
 description: Verifies cross-phase integration and E2E flows. Checks that phases connect properly and user workflows complete end-to-end. Spawned by /donny-audit-milestone and /donny-execute-phase to check cross-phase wiring.
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
+effort: high
 color: blue
 ---
 

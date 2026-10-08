@@ -5,7 +5,7 @@ paths:
 ---
 # Swift Patterns
 
-> This file extends [common/patterns.md](../common/patterns.md) with Swift specific content.
+> Swift-specific rules; the shared rules live in common/coding-style.md and common/testing.md.
 
 ## Protocol-Oriented Design
 
@@ -62,5 +62,3 @@ struct UserService {
 
 ## References
 
-See skill: `swift-actor-persistence` for actor-based persistence patterns.
-See skill: `swift-protocol-di-testing` for protocol-based DI and testing.

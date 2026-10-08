@@ -3,6 +3,7 @@ name: donny-verifier
 description: Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report. Spawned by /donny-execute-phase (and /donny-quick) after a phase's plans run.
 tools: Read, Write, Bash, Grep, Glob
 model: opus
+effort: xhigh
 color: green
 ---
 

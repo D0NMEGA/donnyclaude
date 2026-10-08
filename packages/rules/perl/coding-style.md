@@ -40,7 +40,3 @@ Use **perlcritic** at severity 3 with themes: `core`, `pbp`, `security`.
 ```bash
 perlcritic --severity 3 --theme 'core || pbp || security' lib/
 ```
-
-## Reference
-
-See skill: `perl-patterns` for comprehensive modern Perl idioms and best practices.

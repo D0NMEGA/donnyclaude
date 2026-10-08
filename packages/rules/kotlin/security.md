@@ -5,8 +5,6 @@ paths:
 ---
 # Kotlin Security
 
-> This file extends [common/security.md](../common/security.md) with Kotlin and Android/KMP-specific content.
-
 ## Secrets Management
 
 - Never hardcode API keys, tokens, or credentials in source code

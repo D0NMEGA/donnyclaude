@@ -34,7 +34,3 @@ paths:
 
 - Throw exceptions for exceptional states; avoid returning `false`/`null` as hidden error channels in new code.
 - Convert framework/request input into validated DTOs before it reaches domain logic.
-
-## Reference
-
-See skill: `backend-patterns` for broader service/repository layering guidance.

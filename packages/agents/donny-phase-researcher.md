@@ -3,6 +3,7 @@ name: donny-phase-researcher
 description: Researches how to implement a phase before planning. Produces RESEARCH.md consumed by donny-planner. Spawned by /donny-plan-phase orchestrator.
 tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__playwright__*, mcp__browser-harness__*
 model: sonnet
+effort: high
 color: cyan
 ---
 

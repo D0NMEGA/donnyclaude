@@ -2,6 +2,47 @@
 
 All notable changes to donnyclaude are recorded here. Releases before v1.2.0 predate this changelog; see `git log --oneline` for history.
 
+## [3.3.0] - 2026-10-07
+
+The package now mirrors the live harness after the 2026-10-07 audit. `scripts/sync-from-live.mjs`
+(dry run by default, `--apply` to write) copies ~/.claude into `packages/` and moves anything the
+live tree no longer has into `packages/_archived-<component>/`, so a fresh install reproduces the
+lean set instead of the old catalog.
+
+### Added
+- `donny-council` skill + `donny/workflows/council.md`: a two-model design council (Claude Code and
+  Codex research a phase's open questions independently, argue for bounded rounds, write joint
+  decisions into the phase CONTEXT.md). Codex seat: `bin/cc-council` (persistent Codex thread,
+  live web search, read-only sandbox).
+- `bin/donny-run`: phase runner with a fresh `claude -p` context per step and file-based gates
+  (PLAN.md present, VERIFICATION verdict passed, Codex cross-review PASS, optional squash merge
+  per phase as `feat(<slug>): <phase>`), usage-limit backoff, `--resume`, `--dry-run`.
+- `bin/cc-codex` (Codex runs that notify the Claude session when done, tmux window when inside
+  tmux, pending/ack markers surfaced by `hooks/cc-codex-pending.sh`), `bin/cc-crossreview`,
+  `bin/cc-scrub-secrets` + `hooks/cc-scrub-secrets-hook.sh` (daily redaction of known secret
+  values in local transcripts), `bin/cc-docs-refresh` (vault mirror of the Claude Code docs),
+  `bin/bh-chrome`, `hooks/cc-session-cleanup.sh` (stops the session's browser-harness daemon,
+  commits the vault journal), `agents/claude-code-expert.md`, `skills/cc-docs`.
+- Agents carry `effort:` frontmatter (executor high; planner, verifier, debugger xhigh; writers
+  and mappers medium) so a session's effort no longer applies to every subagent.
+
+### Changed
+- Verification is behavior-based: the verifier runs the plan's acceptance command and records a
+  `## Verification run` section; the plan checker blocks plans without a runnable acceptance
+  command; execute-phase routes on `verdict:` and honors `test_command` from config.
+- Executor commits use `type(scope): description` subjects with a `Donny: phase, plan` trailer;
+  defaults are `branching_strategy: phase` and `commit_docs: false` (planning docs stay out of git).
+- Rules: language dirs trimmed to coding-style, patterns, security and testing (no `hooks.md`),
+  dangling links to removed common files and retired skills removed; `common/git-workflow.md`
+  gained the branches-and-history policy; `common/performance.md` describes model tiering.
+- `core/CLAUDE.md` is the audited operating guide; `core/settings-template.json` is the live
+  settings (hooks for cc-* and cco-* tools, effortLevel, skillOverrides, model alias).
+- `donnyclaude diff` ignores the `disable-model-invocation` key that install writes into SKILL.md.
+
+### Removed (archived under packages/_archived-*)
+- 27 agents, 57 commands and 45 skills from the ECC catalog that the live harness no longer
+  installs, plus the stale `gsd-*` hooks.
+
 ## [2.0.0] - 2026-06-19
 
 The `cco-*` substrate — a generation of harness work done on macOS (Claude Code 2.1.x, Opus) — lands in the package via three new install component types (`bin/`, `cco-memory/`, `statusline.py`) plus the hooks/skills/commands that drive them.

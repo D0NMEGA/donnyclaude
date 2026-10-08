@@ -110,6 +110,12 @@ WT=""                   # the worktree path (the single editable surface)
 BRANCH=""               # the scratch branch
 SURFACE_REPO=""         # the resolved surface git repo root
 CLEANUP_DONE=0
+# DREAM-01 (Phase 14): operator-named review-branch durability. Both default to today's behavior
+# (auto-named, ephemeral) so a default run is byte-equivalent. --branch sets the scratch-branch NAME;
+# --keep-branch skips ONLY the cleanup() `branch -D` (the worktree is STILL removed — the commits
+# live on the branch ref the operator reviews). --keep-branch REQUIRES --branch (parse_config guard).
+KEEP_BRANCH=0           # 1 => skip the cleanup() branch -D so the named branch persists past exit
+BRANCH_NAME=""          # operator-supplied scratch-branch name (overrides the auto dream/run-* name)
 
 # --------------------------------------------------------------------------------------------------
 # resolve_timeout — build a wall-clock wrapper prefix that ALWAYS applies (HARDEN-01/D-01). macOS
@@ -181,7 +187,7 @@ USAGE:
   cco-dream --metric '<cmd emitting ONE number>' --direction higher|lower --surface <git-repo-path> \
             [--max-iters N] [--total-ceiling C] [--per-iter-budget B] [--iter-timeout-sec S] \
             [--target T] [--log <path-no-ext>] [--model <m>] \
-            [--max-cost USD] [--verify-cmd '<cmd>'] [--feed-forward] [--dry-run]
+            [--max-cost USD] [--verify-cmd '<cmd>'] [--feed-forward] [--branch <name>] [--keep-branch] [--dry-run]
 
   A .cco/dream.yaml in the CURRENT directory supplies the same keys (metric, direction, surface,
   max_iters, total_ceiling, per_iter_budget, iter_timeout_sec, target, log). CLI flags OVERRIDE the yaml.
@@ -203,6 +209,12 @@ DEFAULTS: max_iters=6  total_ceiling=200000  per_iter_budget=50000  iter_timeout
                    attempt's prompt (fenced advisory-only). OFF by default. Only the runner-built
                    metric-delta summary is fed forward (never raw transcript/tool output) and it is
                    truncated/control-stripped/smuggling-neutralized first (sanitize_feedforward).
+  --branch <name> : name the scratch/review branch (overrides the auto dream/run-<ts>-<pid>-<rand>).
+                    A name collision fails fast (never clobbers an existing branch). Orthogonal to
+                    retention: --branch alone is named-but-still-ephemeral.
+  --keep-branch   : persist the branch past exit — skip the cleanup() `branch -D` so the kept commits
+                    remain on <name> for you to review/merge by hand (the worktree is STILL removed; the
+                    run NEVER auto-merges). REQUIRES --branch <name> (else exit 2).
 
   --dry-run : validate config + create/tear-down a worktree + run the green check ONCE with NO
               `claude -p` attempt and NO commit (the safe smoke path). Prints what WOULD run.
@@ -290,6 +302,8 @@ parse_config() {
       --max-cost)         MAX_COST="${2:-}"; shift 2 ;;      # LABS-02: cost-ceiling (USD); "" == unbounded
       --verify-cmd)       VERIFY_CMD="${2:-}"; shift 2 ;;    # LABS-02: verifyCompletion early-stop predicate
       --feed-forward)     FEED_FORWARD=1; shift ;;           # LABS-02: enable bounded+sanitized feed-forward (off by default)
+      --branch)           BRANCH_NAME="${2:-}"; shift 2 ;;   # DREAM-01: name the scratch/review branch (overrides auto dream/run-*)
+      --keep-branch)      KEEP_BRANCH=1; shift ;;            # DREAM-01: persist the branch past exit (skip cleanup() branch -D); REQUIRES --branch
       --dry-run)          DRY_RUN=1; shift ;;
       -h|--help)          usage; exit 0 ;;
       *) echo "cco-dream: unknown argument '$1'" >&2; usage; exit 2 ;;
@@ -317,6 +331,15 @@ parse_config() {
 
   if [ "$DIRECTION" != "higher" ] && [ "$DIRECTION" != "lower" ]; then
     echo "cco-dream: ERROR — --direction must be 'higher' or 'lower' (got '$DIRECTION')." >&2
+    exit 2
+  fi
+
+  # DREAM-01 (Phase 14, LOCKED operator decision): --keep-branch REQUIRES --branch <name>. A kept
+  # AUTO-named dream/run-* branch would be silently `branch -D`'d by the NEXT run's reconcile_orphans
+  # sweep (it reaps all refs/heads/dream/run-*). Requiring an operator name guarantees the kept ref is
+  # a non-dream/run-* branch reconcile structurally spares — closing the silent-data-loss footgun.
+  if [ "$KEEP_BRANCH" -eq 1 ] && [ -z "$BRANCH_NAME" ]; then
+    echo "cco-dream: ERROR — --keep-branch requires --branch <name> (a kept auto-named dream/run-* branch would be reaped by the next startup sweep)." >&2
     exit 2
   fi
 }
@@ -389,7 +412,10 @@ cleanup() {
       rmdir "$wt_parent" >/dev/null 2>&1 || true
     fi
   fi
-  if [ -n "$BRANCH" ] && [ -n "$SURFACE_REPO" ]; then
+  # DREAM-01: under --keep-branch, SKIP the branch -D so the (now worktree-less) named branch persists
+  # for the operator to review/merge. The `worktree remove --force` above is UNCHANGED — only the branch
+  # ref is kept; the ephemeral worktree is still torn down.
+  if [ -n "$BRANCH" ] && [ -n "$SURFACE_REPO" ] && [ "$KEEP_BRANCH" -ne 1 ]; then
     git -C "$SURFACE_REPO" branch -D "$BRANCH" >/dev/null 2>&1 || true
   fi
 }
@@ -527,7 +553,8 @@ gen_worktree_name() {
 # (the realpath-anchored temp prefix cleanup/reconcile key on).
 # --------------------------------------------------------------------------------------------------
 create_worktree() {
-  BRANCH="$(gen_worktree_name)"
+  # DREAM-01: honor an operator --branch name; otherwise the collision-proof auto name (unchanged default).
+  if [ -n "$BRANCH_NAME" ]; then BRANCH="$BRANCH_NAME"; else BRANCH="$(gen_worktree_name)"; fi
   WT="$(mktemp -d)/dream-wt"
   git -C "$SURFACE_REPO" worktree add "$WT" -b "$BRANCH" HEAD >/dev/null 2>&1 \
     || { echo "cco-dream: ERROR — could not create worktree at $WT." >&2; exit 4; }
@@ -1303,6 +1330,21 @@ if [ "${1:-}" = "--__selftest" ]; then
                     # not tear down the worktree the test is about to inspect.
                     trap - EXIT INT TERM
                     SURFACE_REPO="$1"; create_worktree; printf '%s' "$WT" ;;
+    keep_lifecycle) # DREAM-01 (Phase 14): drive the REAL create_worktree + a keep-commit + cleanup with
+                    # --keep-branch semantics, then print the surviving branch ref. $1=ready git repo,
+                    # $2=operator branch name. Proves criterion #1 (commit persists on <name>, worktree
+                    # gone) WITHOUT the full caffeinate/require_brains main path. Uses ONLY production
+                    # functions (create_worktree + the real cleanup) — no logic reimplementation.
+                    SURFACE_REPO="$1"; BRANCH_NAME="$2"; KEEP_BRANCH=1
+                    create_worktree
+                    # a deterministic KEEP commit onto $BRANCH inside the worktree (mirrors loop_body L1155-6)
+                    echo "keep-marker" > "$WT/dream-keep.txt"
+                    git -C "$WT" add -A >/dev/null 2>&1 || true
+                    git -C "$WT" commit -m "dream iter 1: keep_lifecycle selftest" >/dev/null 2>&1 || true
+                    cleanup   # the REAL EXIT-trap body: removes the worktree; with KEEP_BRANCH=1 SKIPS branch -D
+                    # print the surviving branch ref (empty if it was deleted) for the test to assert on
+                    git -C "$SURFACE_REPO" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null 2>&1 \
+                      && printf 'BRANCH_EXISTS %s' "$BRANCH" || printf 'BRANCH_GONE' ;;
     lock_pid)       _lock_pid "${1:-}" ;;             # print the pid= integer in a lock reason, or ''
     pid_alive)      _pid_alive "${1:-}" && echo alive || echo dead ;;
     preflight)      # RUNNER-02: run the REAL preflight_catastrophe on the candidate operator string

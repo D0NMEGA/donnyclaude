@@ -1,4 +1,8 @@
 {
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "permissions": {
     "deny": [
       "Read(./.env)",
@@ -9,85 +13,79 @@
       "Read(~/.ssh/**)",
       "Read(**/*.pem)",
       "Read(**/id_rsa)",
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~)",
-      "Bash(sudo rm *)",
-      "Bash(mkfs *)",
-      "Bash(dd *)",
-      "Bash(chmod -R 777 *)"
+      "Read(~/.npmrc)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/secrets/**)",
+      "Read(~/.zshenv)"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "bypassPermissions"
   },
-  "env": {
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "60"
-  },
-  "skills": {
-    "enabled": [],
-    "disabled": [],
-    "autoInvoke": {}
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "python3 \"$HOME/.claude/statusline.py\"",
-    "padding": 0
-  },
-  "alwaysThinkingEnabled": true,
-  "autoCompactEnabled": true,
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/donny-check-update.js\"" }
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/bin/bh-chrome\" >/dev/null",
+            "timeout": 30,
+            "async": true
+          }
         ]
       },
       {
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-cerebrum-recall.js\"", "timeout": 5 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/donny-check-update.js\"",
+            "timeout": 15
+          }
         ]
       },
       {
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-vault-audit-nudge.js\"", "timeout": 15 }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash|Edit|Write|MultiEdit",
-        "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-compact-nudge.js\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-cerebrum-recall.js\"",
+            "timeout": 5
+          }
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-lint-loop.js\"", "timeout": 15 }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/donny-prompt-guard.js\"", "timeout": 5 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-vault-audit-nudge.js\"",
+            "timeout": 15
+          }
         ]
       },
       {
-        "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-permission-guard.js\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-model-currency-nudge.js\"",
+            "timeout": 5
+          }
         ]
       },
       {
-        "matcher": "Read",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-file-index.js\"", "timeout": 5 }
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/cc-codex-pending.sh\"",
+            "timeout": 10
+          }
         ]
       },
       {
-        "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-cerebrum-check.js\"", "timeout": 5 }
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/cc-scrub-secrets-hook.sh\"",
+            "timeout": 120,
+            "async": true
+          }
         ]
       }
     ],
@@ -95,21 +93,21 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-precompact-snapshot.js\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-precompact-snapshot.js\"",
+            "timeout": 10
+          }
         ]
       },
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-vault-capture.js\"", "timeout": 10 }
-        ]
-      }
-    ],
-    "PostCompact": [
-      {
-        "matcher": "*",
-        "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-postcompact.js\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-vault-capture.js\"",
+            "timeout": 10
+          }
         ]
       }
     ],
@@ -117,31 +115,123 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-vault-capture.js\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-vault-capture.js\"",
+            "timeout": 10
+          }
         ]
       },
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-instinct-observe.js\"", "timeout": 5 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-instinct-observe.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/cc-session-cleanup.sh\"",
+            "timeout": 30
+          }
         ]
       }
     ],
-    "Stop": [
+    "PostCompact": [
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-green-gate.js\"", "timeout": 20 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-postcompact.js\"",
+            "timeout": 10
+          }
         ]
       }
     ],
-    "SubagentStop": [
+    "PreToolUse": [
       {
-        "matcher": "*",
+        "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "node \"$HOME/.claude/hooks/cco-green-gate.js\"", "timeout": 20 }
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/donny-prompt-guard.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-permission-guard.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/cco-cerebrum-check.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/cc-codex-pending.sh\"",
+            "timeout": 10
+          }
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "python3 \"$HOME/.claude/statusline.py\"",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "github@claude-plugins-official": false,
+    "swift-lsp@claude-plugins-official": true
+  },
+  "effortLevel": "xhigh",
+  "tui": "fullscreen",
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
+  "autoCompactEnabled": true,
+  "model": "opus",
+  "autoContinueAtUsageLimit": true,
+  "teammateMode": "auto",
+  "workflowSizeGuideline": "small",
+  "skillOverrides": {
+    "anthropic-skills:built-in-browser": "off",
+    "anthropic-skills:canvas-design": "off",
+    "anthropic-skills:chrome-browser": "off",
+    "anthropic-skills:computer-use": "off",
+    "anthropic-skills:deep-research": "off",
+    "anthropic-skills:docs": "off",
+    "anthropic-skills:import-memory": "off",
+    "anthropic-skills:internal-comms": "off",
+    "anthropic-skills:llm-council": "off",
+    "anthropic-skills:mcp-builder": "off",
+    "anthropic-skills:morning": "off",
+    "anthropic-skills:pdf": "off",
+    "anthropic-skills:pptx": "off",
+    "anthropic-skills:skill-creator": "off",
+    "anthropic-skills:theme-factory": "off",
+    "anthropic-skills:xlsx": "off"
   }
 }

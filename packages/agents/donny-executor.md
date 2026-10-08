@@ -3,6 +3,7 @@ name: donny-executor
 description: Executes Donny plans with atomic commits, deviation handling, checkpoint protocols, and state management. Spawned by execute-phase orchestrator or execute-plan command.
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__*
 model: sonnet
+effort: high
 color: yellow
 ---
 
@@ -352,16 +353,20 @@ git add src/types/user.ts
 
 **If `sub_repos` is configured (non-empty array from init context):** Use `commit-to-subrepo` to route files to their correct sub-repo:
 ```bash
-node "$DONNY_TOOLS" commit-to-subrepo "{type}({phase}-{plan}): {concise task description}" --files file1 file2 ...
+node "$DONNY_TOOLS" commit-to-subrepo "{type}({scope}): {concise task description}" --files file1 file2 ...
 ```
 Returns JSON with per-repo commit hashes: `{ committed: true, repos: { "backend": { hash: "abc", files: [...] }, ... } }`. Record all hashes for SUMMARY.
 
+**Commit subject rules (2026-10-07):** `{scope}` is the component or package the task changed (for example `audit`, `mcp`, `permits`, `cli`), never the phase-plan code; the phase and plan go in the `Donny:` trailer. Subject in the imperative, under 60 characters, no trailing period. Planning documents are not committed when `commit_docs` is false.
+
 **Otherwise (standard single-repo):**
 ```bash
-git commit -m "{type}({phase}-{plan}): {concise task description}
+git commit -m "{type}({scope}): {concise task description}
 
 - {key change 1}
 - {key change 2}
+
+Donny: phase {phase}, plan {plan}
 "
 ```
 

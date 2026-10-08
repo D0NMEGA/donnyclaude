@@ -719,7 +719,7 @@ describe('configGetDefaults, the D-07 table', () => {
   it('registers context_window, so a global value can take effect (D-18)', () => {
     assert.equal(
       CONFIG.VALID_CONFIG_KEYS.size,
-      50,
+      51,
       'Phase 24 left 47 registered keys, of which context_window was the 47th (read via ' +
         'config-get at plan-phase.md:30 and execute-phase.md:84); Phase 25 added the three ' +
         'workflow.codex_* keys. The size is a canary: a key added without a test lands here.',

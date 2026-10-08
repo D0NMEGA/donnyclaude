@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# cc-codex: run Codex (or any command) so the Claude Code session that started it learns when it
+# finishes, with the run visible in its own tmux window.
+#
+# Launch from Claude Code with the Bash tool's run_in_background=true. Inside tmux the command
+# runs in a new window (watch it live); this wrapper blocks on `tmux wait-for` until that window's
+# command exits, so the background job ends exactly when Codex does and Claude Code re-invokes the
+# session with a completion notification. Outside tmux the command runs directly.
+#
+# Usage:
+#   cc-codex exec [-C dir] [--model m] "<prompt>"   codex exec, read-only sandbox, answer captured
+#   cc-codex review [base-ref]                       cc-crossreview through the same path
+#   cc-codex run -- <command ...>                    any command
+#   cc-codex pending                                 finished jobs nobody has acknowledged (hooks use it)
+#   cc-codex ack <id>|all                            mark job(s) reviewed
+#
+# A job lives in ~/.cache/cc-codex/<id>/: cmd.txt, prompt.txt, log.txt (stdout+stderr), output.md
+# (the answer), exit, started, finished, status, and an `unreviewed` marker until acked.
+set -euo pipefail
+
+ROOT="${CC_CODEX_DIR:-$HOME/.cache/cc-codex}"
+mkdir -p "$ROOT"
+
+usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+
+cmd="${1:-}"; [ $# -gt 0 ] && shift
+case "$cmd" in
+  pending)
+    for d in "$ROOT"/*/; do
+      [ -e "$d/unreviewed" ] || continue
+      id=$(basename "$d"); ex=$(cat "$d/exit" 2>/dev/null || echo '?')
+      echo "cc-codex job $id finished (exit $ex) at $(cat "$d/finished" 2>/dev/null): read ${d}output.md (log: ${d}log.txt), act on it, then run: cc-codex ack $id"
+    done
+    exit 0 ;;
+  ack)
+    if [ "${1:-}" = all ]; then rm -f "$ROOT"/*/unreviewed; else rm -f "$ROOT/${1:?job id required}/unreviewed"; fi
+    exit 0 ;;
+  exec|review|run) ;;
+  *) usage ;;
+esac
+
+id="$(date +%Y%m%dT%H%M%S)-$$"
+job="$ROOT/$id"; mkdir -p "$job"
+model="gpt-6-astra"; dir="$PWD"
+
+case "$cmd" in
+  exec)
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -C) dir="$2"; shift 2 ;;
+        --model) model="$2"; shift 2 ;;
+        --) shift; break ;;
+        *) break ;;
+      esac
+    done
+    printf '%s' "${1:?prompt required}" > "$job/prompt.txt"
+    # codex refuses a directory outside a git work tree unless told to skip the check
+    skipgit=""; git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || skipgit="--skip-git-repo-check "
+    runcmd="cd $(printf %q "$dir") && codex exec ${skipgit}--model $(printf %q "$model") -s read-only --output-last-message $(printf %q "$job/output.md") \"\$(cat $(printf %q "$job/prompt.txt"))\""
+    ;;
+  review)
+    runcmd="cd $(printf %q "$dir") && bash $(printf %q "$HOME/.claude/bin/cc-crossreview") $(printf '%q ' "$@")| tee $(printf %q "$job/output.md")"
+    ;;
+  run)
+    [ "${1:-}" = "--" ] && shift
+    [ $# -gt 0 ] || usage
+    runcmd="cd $(printf %q "$dir") && $(printf '%q ' "$@")| tee $(printf %q "$job/output.md")"
+    ;;
+esac
+
+printf '%s\n' "$runcmd" > "$job/cmd.txt"
+date -u +%FT%TZ > "$job/started"; echo running > "$job/status"
+
+# The runner records the exit code of the pipeline's first command (codex, cc-crossreview, or the
+# user's command), not tee's.
+runner="$job/runner.sh"
+cat > "$runner" <<EOF
+#!/usr/bin/env bash
+set -o pipefail
+( $runcmd ) >> "$job/log.txt" 2>&1
+echo \$? > "$job/exit"
+EOF
+chmod +x "$runner"
+
+if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+  chan="cc-codex-$id"
+  if tmux new-window -d -n "codex-${id#*T}" "bash $(printf %q "$runner"); tmux wait-for -S $(printf %q "$chan")" 2>/dev/null; then
+    echo "cc-codex $id: running in tmux window codex-${id#*T}; waiting for it to finish"
+    tmux wait-for "$chan"
+  else
+    echo "cc-codex $id: tmux window failed to open; running here"
+    bash "$runner"
+  fi
+else
+  bash "$runner"
+fi
+
+date -u +%FT%TZ > "$job/finished"; echo done > "$job/status"; touch "$job/unreviewed"
+ex=$(cat "$job/exit" 2>/dev/null || echo 1)
+echo "CC-CODEX DONE id=$id exit=$ex output=$job/output.md log=$job/log.txt"
+echo "--- output ---"
+cat "$job/output.md" 2>/dev/null || echo "(no output.md written; read the log)"
+exit "$ex"

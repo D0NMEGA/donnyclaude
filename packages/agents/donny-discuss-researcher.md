@@ -3,6 +3,7 @@ name: donny-discuss-researcher
 description: Researches one discuss-phase gray area (--mode external) or extracts codebase assumptions (--mode assumptions). Spawned by /donny-discuss-phase.
 tools: Read, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__playwright__*, mcp__browser-harness__*
 model: sonnet
+effort: high
 color: cyan
 ---
 

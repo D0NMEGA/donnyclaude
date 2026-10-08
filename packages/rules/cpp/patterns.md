@@ -10,8 +10,6 @@ paths:
 ---
 # C++ Patterns
 
-> This file extends [common/patterns.md](../common/patterns.md) with C++ specific content.
-
 ## RAII (Resource Acquisition Is Initialization)
 
 Tie resource lifetime to object lifetime:
@@ -45,7 +43,3 @@ private:
 - Use exceptions for exceptional conditions
 - Use `std::optional` for values that may not exist
 - Use `std::expected` (C++23) or result types for expected failures
-
-## Reference
-
-See skill: `cpp-coding-standards` for comprehensive C++ patterns and anti-patterns.

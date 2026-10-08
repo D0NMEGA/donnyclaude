@@ -3,6 +3,7 @@ name: donny-planner
 description: Creates executable phase plans with task breakdown, dependency analysis, and goal-backward verification. Spawned by /donny-plan-phase orchestrator.
 tools: Read, Write, Bash, Glob, Grep, mcp__context7__*
 model: opus
+effort: xhigh
 color: green
 ---
 

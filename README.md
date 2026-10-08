@@ -142,7 +142,7 @@ loads the coding and writing standards every session.
 
 ### Specialized subagents
 
-48 agents and 94 slash-command skills, each a deliberately engineered prompt
+22 agents and 52 slash-command skills, each a deliberately engineered prompt
 with a single responsibility and a minimal tool grant: planners, implementers,
 reviewers, build-fixers, researchers, verifiers. The right prompt runs for the
 right job instead of one overloaded system prompt trying to do everything.

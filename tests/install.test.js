@@ -66,14 +66,14 @@ describe('Package structure', () => {
     assert.ok(existsSync(join(ROOT, 'templates', 'planning', 'config.json')));
   });
 
-  it('has 70+ skills', () => {
+  it('has 40+ skills', () => {
     const count = countDirItems(join(ROOT, 'packages', 'skills'));
-    assert.ok(count >= 70, `Expected 70+ skills, got ${count}`);
+    assert.ok(count >= 40, `Expected 40+ skills, got ${count}`);
   });
 
-  it('has 40+ agents', () => {
+  it('has 20+ agents', () => {
     const count = countDirItems(join(ROOT, 'packages', 'agents'));
-    assert.ok(count >= 40, `Expected 40+ agents, got ${count}`);
+    assert.ok(count >= 20, `Expected 20+ agents, got ${count}`);
   });
 });
 
@@ -239,18 +239,15 @@ describe('Operating guide', () => {
   const GUIDE = join(ROOT, 'packages', 'core', 'CLAUDE.md');
   const BEGIN = '<!-- BEGIN donnyclaude standards (managed) -->';
   const END = '<!-- END donnyclaude standards (managed) -->';
-  const RULES = ['coding-style', 'writing-style', 'git-workflow', 'testing', 'security',
-    'patterns', 'performance', 'development-workflow', 'agents', 'hooks'];
 
   function block() {
-    return `${BEGIN}\n${RULES.map(r => `@~/.claude/rules/common/${r}.md`).join('\n')}\n${END}`;
+    return `${BEGIN}\nmanaged pointer block\n${END}`;
   }
-
-  it('imports the common rules inside a managed block', () => {
+  it('points at the common rules from a managed block', () => {
     const content = readFileSync(GUIDE, 'utf-8');
     assert.ok(content.includes(BEGIN) && content.includes(END), 'managed markers missing');
-    assert.ok(content.includes('@~/.claude/rules/common/writing-style.md'), 'writing-style import missing');
-    assert.ok(content.includes('@~/.claude/rules/common/coding-style.md'), 'coding-style import missing');
+    assert.ok(content.includes('~/.claude/rules/common/'), 'pointer to the rules dir missing');
+    assert.ok(!/^@~\/\.claude\/rules/m.test(content), 'rules must not be @imported (they load on their own)');
   });
 
   it('fresh install copies the whole guide', () => {
@@ -305,7 +302,7 @@ describe('Fresh install simulation', () => {
     const dest = join(FRESH_CLAUDE, 'skills');
     cpSync(src, dest, { recursive: true, force: true });
     assert.ok(existsSync(dest));
-    assert.ok(countDirItems(dest) >= 90);
+    assert.ok(countDirItems(dest) >= 40);
   });
 
   it('copies agents to fresh directory', () => {
@@ -313,7 +310,7 @@ describe('Fresh install simulation', () => {
     const dest = join(FRESH_CLAUDE, 'agents');
     cpSync(src, dest, { recursive: true, force: true });
     assert.ok(existsSync(dest));
-    assert.ok(countDirItems(dest) >= 40);
+    assert.ok(countDirItems(dest) >= 20);
   });
 
   it('copies rules with language subdirectories', () => {
@@ -345,7 +342,7 @@ describe('Fresh install simulation', () => {
     const dest = join(FRESH_CLAUDE, 'commands');
     cpSync(src, dest, { recursive: true, force: true });
     assert.ok(existsSync(dest));
-    assert.ok(countDirItems(dest) >= 50);
+    assert.ok(countDirItems(dest) >= 5);
   });
 });
 
@@ -458,6 +455,23 @@ describe('Lifecycle commands', () => {
     assert.ok(!existsSync(TEST_CLAUDE_HOME), 'dry run must not create ~/.claude');
   });
 
+  it('diff ignores the disable-model-invocation key that install writes into SKILL.md', () => {
+    cleanTestDir();
+    mkdirSync(join(TEST_CLAUDE_HOME, 'skills', 'web-research'), { recursive: true });
+    const shipped = readFileSync(join(ROOT, 'packages', 'skills', 'web-research', 'SKILL.md'), 'utf-8');
+    writeFileSync(
+      join(TEST_CLAUDE_HOME, 'skills', 'web-research', 'SKILL.md'),
+      shipped.replace(/^disable-model-invocation:.*\n/m, '').replace('---\n', '---\ndisable-model-invocation: true\n')
+    );
+    let out = '';
+    try {
+      out = execSync(`node ${BIN} diff`, { encoding: 'utf-8', env: envHome });
+    } catch (e) {
+      out = e.stdout;
+    }
+    assert.ok(!/web-research\/SKILL\.md/.test(out), 'an install-written key alone is not drift');
+  });
+
   it('diff reports a locally modified shipped file and exits 1', () => {
     cleanTestDir();
     mkdirSync(join(TEST_CLAUDE_HOME, 'rules', 'common'), { recursive: true });
@@ -465,7 +479,7 @@ describe('Lifecycle commands', () => {
       join(ROOT, 'packages', 'rules', 'common', 'testing.md'),
       join(TEST_CLAUDE_HOME, 'rules', 'common', 'testing.md')
     );
-    writeFileSync(join(TEST_CLAUDE_HOME, 'rules', 'common', 'security.md'), 'locally changed\n');
+    writeFileSync(join(TEST_CLAUDE_HOME, 'rules', 'common', 'coding-style.md'), 'locally changed\n');
     let code = 0;
     let out = '';
     try {
@@ -475,7 +489,7 @@ describe('Lifecycle commands', () => {
       out = e.stdout;
     }
     assert.equal(code, 1, 'diff must exit 1 when drift exists');
-    assert.match(out, /security\.md/, 'diff must name the modified file');
+    assert.match(out, /coding-style\.md/, 'diff must name the modified file');
     assert.match(out, /unchanged/, 'diff must print a summary');
   });
 

@@ -361,6 +361,9 @@ function configGetDefaults() {
     // loadConfig has these two and buildNewProjectConfig does not (core.cjs:242, :364).
     context_window: 200000,
     response_language: null,
+    // Project regression command run by execute-phase's gate (e.g. "uv run pytest -q").
+    // null: fall back to the detected toolchain (package.json, go.mod, uv.lock).
+    test_command: null,
     git: {
       ...base.git,
       // NOT 'main'. Without --raw, output() prints the JSON form, so a string default

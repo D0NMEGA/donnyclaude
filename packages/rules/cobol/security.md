@@ -9,8 +9,6 @@ paths:
 ---
 # COBOL Security
 
-> This file extends [common/security.md](../common/security.md) with COBOL-specific content.
-
 ## Input Validation
 
 - Validate all `ACCEPT` and `CICS RECEIVE` data before processing

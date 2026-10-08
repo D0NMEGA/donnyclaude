@@ -3,6 +3,7 @@ name: donny-plan-checker
 description: Verifies plans will achieve phase goal before execution. Goal-backward analysis of plan quality. Spawned by /donny-plan-phase orchestrator.
 tools: Read, Bash, Glob, Grep
 model: opus
+effort: high
 color: green
 ---
 

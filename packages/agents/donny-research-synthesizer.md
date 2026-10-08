@@ -3,6 +3,7 @@ name: donny-research-synthesizer
 description: Synthesizes research outputs from parallel researcher agents into SUMMARY.md. Spawned by /donny-new-project after 4 researcher agents complete.
 tools: Read, Write, Bash
 model: sonnet
+effort: high
 color: purple
 ---
 

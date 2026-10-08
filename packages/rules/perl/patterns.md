@@ -8,8 +8,6 @@ paths:
 ---
 # Perl Patterns
 
-> This file extends [common/patterns.md](../common/patterns.md) with Perl-specific content.
-
 ## Repository Pattern
 
 Use **DBI** or **DBIx::Class** behind an interface:
@@ -70,7 +68,3 @@ Use **cpanfile** + **carton** for reproducible installs:
 carton install
 carton exec prove -lr t/
 ```
-
-## Reference
-
-See skill: `perl-patterns` for comprehensive modern Perl patterns and idioms.

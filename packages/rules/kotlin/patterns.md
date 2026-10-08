@@ -5,8 +5,6 @@ paths:
 ---
 # Kotlin Patterns
 
-> This file extends [common/patterns.md](../common/patterns.md) with Kotlin and Android/KMP-specific content.
-
 ## Dependency Injection
 
 Prefer constructor injection. Use Koin (KMP) or Hilt (Android-only):
@@ -142,5 +140,3 @@ val client = httpClient {
 
 ## References
 
-See skill: `kotlin-coroutines-flows` for detailed coroutine patterns.
-See skill: `android-clean-architecture` for module and layer patterns.

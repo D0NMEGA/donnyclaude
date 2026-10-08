@@ -73,4 +73,4 @@ Before marking work complete:
 - [ ] No premature abstraction (YAGNI): minimal code for the task at hand
 
 ---
-The Simplicity, Surgical Changes, and Common Failure Modes sections are adapted from Andrej Karpathy's "CLAUDE.md Field Notes."
+The Simplicity, Surgical Changes, and Common Failure Modes sections are adapted from Andrej Karpathy's "CLAUDE.md Field Notes." Full 10 rules and rationale: vault `Reference/Karpathy-CLAUDE-md-Field-Notes`.

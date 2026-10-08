@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# donny-run: drive Donny phases semi-autonomously with a fresh Claude Code context per step.
+#
+# Each step is its own `claude -p` process (the equivalent of /clear between steps), so no step
+# inherits another's context. Gates between steps are files Donny already writes, never prose:
+#   council  -> {phase}/council/DECISIONS.md must exist          (only with --council)
+#   plan     -> at least one {phase}/*-PLAN.md must exist
+#   execute  -> {phase}/*-VERIFICATION.md must carry verdict: passed
+#   review   -> cc-crossreview (Codex, read-only) must print VERDICT: PASS   (skip: --no-review)
+#   merge    -> with --merge, squash-merge the phase branch into the base branch as one commit
+#               "feat(<phase-slug>): <phase name>" and stay on the base branch, so the next phase
+#               branches from merged main (Donny's branching_strategy=phase leaves merging to you)
+# A failed gate stops the run and leaves the log path; fix, then rerun with --resume.
+# Inside tmux every step runs in its own window (watch it live); the runner waits for it.
+#
+# Usage: donny-run [-C project] <first-phase> [<last-phase>] [--council] [--no-review] [--merge]
+#                  [--model m] [--effort e] [--resume] [--dry-run]
+set -uo pipefail
+
+project="$PWD"; council=0; review=1; merge=0; model="${DONNY_RUN_MODEL:-opus}"; effort="${DONNY_RUN_EFFORT:-xhigh}"
+resume=0; dry=0; first=""; last=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -C) project="$2"; shift 2 ;;
+    --council) council=1; shift ;;
+    --no-review) review=0; shift ;;
+    --merge) merge=1; shift ;;
+    --model) model="$2"; shift 2 ;;
+    --effort) effort="$2"; shift 2 ;;
+    --resume) resume=1; shift ;;
+    --dry-run) dry=1; shift ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) if [ -z "$first" ]; then first="$1"; elif [ -z "$last" ]; then last="$1"; else echo "unexpected: $1" >&2; exit 2; fi; shift ;;
+  esac
+done
+[ -n "$first" ] || { echo "usage: donny-run [-C project] <first-phase> [<last-phase>] [--council] [--no-review] [--merge] [--resume] [--dry-run]" >&2; exit 2; }
+last="${last:-$first}"
+cd "$project" || exit 2
+[ -d .planning ] || { echo "donny-run: no .planning in $project" >&2; exit 2; }
+
+RUN_DIR=".planning/runner"; mkdir -p "$RUN_DIR"
+LOG="$RUN_DIR/run-$(date +%Y%m%dT%H%M%S).log"
+say() { printf '%s %s\n' "$(date +%T)" "$*" | tee -a "$LOG"; }
+
+phase_dir() {  # NN -> .planning/phases/NN-*
+  local p; p=$(printf '%02d' "$1" 2>/dev/null || echo "$1")
+  ls -d .planning/phases/"$p"-* 2>/dev/null | head -1
+}
+
+# run_step <phase> <name> <claude prompt>: fresh claude -p, logged, tmux window when available.
+run_step() {
+  local phase="$1" name="$2" prompt="$3" marker="$RUN_DIR/$1-$2.done" log="$RUN_DIR/$1-$2.log"
+  if [ "$resume" = 1 ] && [ -e "$marker" ]; then say "phase $phase $name: done earlier, skipping"; return 0; fi
+  local cmd="claude -p $(printf %q "$prompt") --dangerously-skip-permissions --model $(printf %q "$model") --effort $(printf %q "$effort")"
+  say "phase $phase $name: $cmd"
+  [ "$dry" = 1 ] && return 0
+  local attempt=0
+  while :; do
+    attempt=$((attempt + 1))
+    if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+      local chan="donny-run-$$-$phase-$name"
+      tmux new-window -d -n "donny-$phase-$name" "cd $(printf %q "$PWD") && $cmd > $(printf %q "$log") 2>&1 < /dev/null; echo \$? > $(printf %q "$log.exit"); tmux wait-for -S $(printf %q "$chan")" \
+        && tmux wait-for "$chan" || { bash -c "$cmd" > "$log" 2>&1 < /dev/null; echo $? > "$log.exit"; }
+    else
+      bash -c "$cmd" > "$log" 2>&1 < /dev/null; echo $? > "$log.exit"
+    fi
+    local ex; ex=$(cat "$log.exit" 2>/dev/null || echo 1)
+    # Usage limit: wait for the window to reset instead of failing the run (at most 6 hours).
+    if grep -q -i -E 'usage limit|rate limit|out of extra usage|limit reached' "$log" && [ "$attempt" -le 36 ]; then
+      say "phase $phase $name: usage limit hit; retrying in 10 minutes (attempt $attempt)"; sleep 600; continue
+    fi
+    [ "$ex" = 0 ] && { touch "$marker"; return 0; }
+    say "phase $phase $name: claude exited $ex; see $log"; return 1
+  done
+}
+
+gate_fail() { say "STOP: $*"; exit 1; }
+
+for ((phase = first; phase <= last; phase++)); do
+  say "=== phase $phase ==="
+  if [ "$council" = 1 ]; then
+    run_step "$phase" council "/donny-council $phase --auto" || exit 1
+    [ "$dry" = 1 ] || [ -s "$(phase_dir "$phase")/council/DECISIONS.md" ] || gate_fail "phase $phase: council wrote no DECISIONS.md"
+  fi
+  run_step "$phase" plan "/donny-plan-phase $phase --auto" || exit 1
+  [ "$dry" = 1 ] || ls "$(phase_dir "$phase")"/*-PLAN.md >/dev/null 2>&1 || gate_fail "phase $phase: no PLAN.md written"
+  run_step "$phase" execute "/donny-execute-phase $phase --no-transition" || exit 1
+  if [ "$dry" = 0 ]; then
+    verdict=$(grep -h '^verdict:' "$(phase_dir "$phase")"/*-VERIFICATION.md 2>/dev/null | tail -1 | cut -d: -f2 | tr -d ' ')
+    [ "$verdict" = passed ] || gate_fail "phase $phase: verification verdict is '${verdict:-missing}' (see $(phase_dir "$phase"))"
+    say "phase $phase: verification passed"
+  fi
+  if [ "$review" = 1 ]; then
+    base=$(git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null || echo "")
+    say "phase $phase review: cc-crossreview ${base:+$base}"
+    if [ "$dry" = 0 ]; then
+      out="$RUN_DIR/$phase-review.md"
+      bash "$HOME/.claude/bin/cc-crossreview" ${base:+"$base"} > "$out" 2>&1
+      grep -q 'VERDICT: PASS' "$out" || gate_fail "phase $phase: Codex review did not pass (see $out)"
+      say "phase $phase: Codex review PASS"
+    fi
+  fi
+  if [ "$merge" = 1 ]; then
+    branch=$(git branch --show-current); basebr=$(git show-ref --verify -q refs/heads/main && echo main || echo master)
+    pdir=$(phase_dir "$phase"); slug=$(basename "${pdir:-phase-$phase}" | sed 's/^[0-9]*-//'); name=$(echo "$slug" | tr '-' ' ')
+    if [ "$branch" = "$basebr" ] || [ -z "$branch" ]; then
+      say "phase $phase merge: already on $basebr, nothing to merge"
+    else
+      say "phase $phase merge: squash $branch into $basebr as feat($slug): $name"
+      if [ "$dry" = 0 ]; then
+        git checkout -q "$basebr" && git merge --squash "$branch" >/dev/null \
+          && git reset -q HEAD .planning/ 2>/dev/null; git commit -q -m "feat($slug): $name" -m "Phase $phase, squashed from $branch. Verification: passed. Codex review: $([ "$review" = 1 ] && echo PASS || echo skipped)." \
+          || gate_fail "phase $phase: squash merge of $branch into $basebr failed; resolve by hand"
+        git diff --quiet || git stash -q -u  # commit_docs=false leaves .planning changes unstaged; keep the tree clean for the next phase
+        say "phase $phase merge: $(git log -1 --format='%h %s')"
+      fi
+    fi
+  fi
+done
+say "done: phases $first..$last complete. Next: /donny-complete-milestone when the milestone is finished (squash-merges phase branches)."

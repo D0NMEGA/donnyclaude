@@ -9,6 +9,7 @@ tools:
   - Glob
   - Grep
 model: haiku
+effort: medium
 color: purple
 ---
 

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# cc-crossreview: ask Codex (gpt-6-astra, read-only sandbox) to review the pending git change.
+# Usage: cc-crossreview [base-ref]   (default: review uncommitted changes; with a ref, review ref..HEAD)
+# Verified 2026-10-07 on codex-cli 0.156.0: `codex exec` with a prompt works; `codex exec review --uncommitted`
+# cannot be combined with a custom prompt, so this uses `codex exec` and asks for a VERDICT line.
+set -euo pipefail
+base="${1:-}"
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+out="$(mktemp -t crossreview.XXXXXX)"
+if [[ -n "$base" ]]; then diffcmd="git diff ${base}...HEAD"; else diffcmd="git diff; git diff --cached"; fi
+prompt="You are a cross-model code reviewer. Run \`${diffcmd}\` and \`git status --porcelain\` in ${root}, read any file you need, and report ONLY:
+1. Correctness bugs and silent behaviour changes, each with file:line, severity (P0/P1/P2), and a one-line fix.
+2. Missing or weakened tests for the changed behaviour.
+3. A final line: VERDICT: PASS or VERDICT: BLOCK (BLOCK if any P0/P1).
+Do not modify files. Be terse. ASCII only."
+( cd "$root" && codex exec --model gpt-6-astra -s read-only --output-last-message "$out" "$prompt" >/dev/null )
+cat "$out"; echo
+grep -q 'VERDICT: PASS' "$out" && exit 0 || exit 1

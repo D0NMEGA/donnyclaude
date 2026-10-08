@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // cco-hook-version: 1
 // Green-Before-Done gate (FORCE-01/02) on BOTH Stop (main agent) and SubagentStop (a finishing
-// subagent, e.g. a donny-executor). At the moment work is declared "done", it re-checks the project's
+// subagent, e.g. a gsd-executor). At the moment work is declared "done", it re-checks the project's
 // lint/test bar — the SAME ruff/type/pytest bar cco-lint-loop already computes (D-02; this file
 // MIRRORS those helpers inline so the v1 PostToolUse chain stays byte-for-byte untouched) — scoped
 // to the project at the input `cwd`. If the bar is RED it BLOCKS completion with the binary-verified
@@ -66,7 +66,17 @@ function run(bin, args, cwd) {
     });
     return { code: 0, out: out || "" };
   } catch (err) {
-    return { code: typeof err.status === "number" ? err.status : 1, out: (err.stdout || "") + (err.stderr || "") };
+    // A tool KILLED by the timeout (no numeric exit status, died by signal) is INCONCLUSIVE, not
+    // failing: we never saw its verdict. Reporting it red makes a slow-but-passing suite
+    // indistinguishable from a broken one - e.g. a 8.04s pytest against an 8.00s budget flips
+    // red/green with machine load. Degrade silently instead, matching this hook's documented
+    // fail-OPEN posture for absent/degraded tools. `timedOut` lets callers skip it explicitly.
+    const killedByTimeout = err.killed === true || typeof err.status !== "number";
+    return {
+      code: killedByTimeout ? 0 : err.status,
+      timedOut: killedByTimeout,
+      out: (err.stdout || "") + (err.stderr || ""),
+    };
   }
 }
 

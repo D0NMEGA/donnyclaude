@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# cc-council: the Codex seat of a two-model design council (Claude Code + Codex).
+#
+# Claude does its own research in the main thread (browser-harness, Context7, PubMed/arXiv/
+# bioRxiv MCPs, WebSearch) and writes CLAUDE-RESEARCH.md; this script runs the Codex side in
+# one persistent Codex thread so the two can argue over several rounds. Codex runs read-only
+# with live web search (codex --search), inside the project directory so it can read the code.
+# Launch each step from Claude Code with run_in_background=true; inside tmux it gets its own
+# window. Artifacts live in <dir> (normally .planning/phases/NN-name/council/).
+#
+# Usage:
+#   cc-council research <dir> <brief.md> [-C project] [--model m]   -> <dir>/CODEX-RESEARCH.md
+#   cc-council reply    <dir> <message.md>                            -> <dir>/codex-reply-N.md
+#   cc-council decide   <dir>                                         -> <dir>/DECISIONS-CODEX.md
+#   cc-council status   <dir>
+#
+# Every step appends to <dir>/TRANSCRIPT.md. The Codex thread id is kept in <dir>/codex-thread
+# so reply/decide continue the same conversation (codex exec resume <id>).
+set -euo pipefail
+
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+
+cmd="${1:-}"; dir="${2:-}"; [ -n "$cmd" ] && [ -n "$dir" ] || usage
+shift 2
+mkdir -p "$dir"; dir="$(cd "$dir" && pwd)"
+model="${CC_COUNCIL_MODEL:-gpt-6-astra}"
+project="$(cat "$dir/project" 2>/dev/null || pwd)"
+
+stamp() { date -u +%FT%TZ; }
+append_transcript() {  # <heading> <file>
+  { printf '\n## %s (%s)\n\n' "$1" "$(stamp)"; cat "$2"; printf '\n'; } >> "$dir/TRANSCRIPT.md"
+}
+
+# run_codex <outfile> <promptfile> [resume]
+run_codex() {
+  local out="$1" promptf="$2" mode="${3:-new}" step events tid=""
+  # find, not ls: a glob with no match must not trip set -e/pipefail
+  step=$(find "$dir" -maxdepth 1 -name 'events-*.jsonl' | wc -l | tr -d ' '); step=$((step + 1))
+  events="$dir/events-$step.jsonl"
+  local skipgit=""; git -C "$project" rev-parse --is-inside-work-tree >/dev/null 2>&1 || skipgit="--skip-git-repo-check "
+  local base="cd $(printf %q "$project") && codex --search exec"
+  if [ "$mode" = resume ]; then
+    tid="$(cat "$dir/codex-thread" 2>/dev/null || true)"
+    [ -n "$tid" ] || { echo "cc-council: no codex-thread in $dir; run research first" >&2; exit 1; }
+    base="$base resume $tid"
+  fi
+  # resume inherits the thread's sandbox and rejects -s; a new thread gets read-only explicitly
+  local sandbox="-s read-only "; [ "$mode" = resume ] && sandbox=""
+  local run="$base ${skipgit}${sandbox}--model $(printf %q "$model") --json -o $(printf %q "$out") - < $(printf %q "$promptf") > $(printf %q "$events") 2>> $(printf %q "$dir/codex.log")"
+  if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+    local chan="cc-council-$$-$step"
+    if tmux new-window -d -n "council-$step" "bash -c $(printf %q "$run"); tmux wait-for -S $(printf %q "$chan")" 2>/dev/null; then
+      tmux wait-for "$chan"
+    else
+      bash -c "$run" || true
+    fi
+  else
+    bash -c "$run" || true
+  fi
+  if [ "$mode" = new ] && [ ! -s "$dir/codex-thread" ]; then
+    python3 -I - "$events" > "$dir/codex-thread" <<'PY' || true
+import json, sys
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    try:
+        e = json.loads(line)
+    except ValueError:
+        continue
+    if e.get("type") == "thread.started" and e.get("thread_id"):
+        print(e["thread_id"]); break
+PY
+  fi
+  [ -s "$out" ] || { echo "cc-council: Codex wrote no answer; see $dir/codex.log and $events" >&2; exit 1; }
+}
+
+case "$cmd" in
+  research)
+    brief="${1:?brief.md required}"; shift || true
+    while [ $# -gt 0 ]; do case "$1" in -C) project="$2"; shift 2 ;; --model) model="$2"; shift 2 ;; *) usage ;; esac; done
+    project="$(cd "$project" && pwd)"; printf '%s\n' "$project" > "$dir/project"
+    cp "$brief" "$dir/BRIEF.md"
+    p="$dir/prompt-research.md"
+    {
+      cat <<'TXT'
+You are the Codex seat of a two-model design council (Claude Code is the other seat). The project is checked out in the current directory; read it where relevant. Research the brief below rigorously before answering:
+- Use web search for primary sources: official docs, specs, standards, papers, changelogs, maintainer threads. Grade every source A (primary), B (practitioner report), or C (single anecdote) and give its URL.
+- Prefer evidence over opinion. Say "not verified" wherever you could not confirm something.
+- Do not propose code edits; this is research and decision support.
+Answer as one Markdown document with exactly these sections:
+# Codex research
+## Summary (5 bullets)
+## Findings (each: claim, evidence, source URL + grade)
+## Options (table: option | pros | cons | risk | effort)
+## Recommendation (with confidence and the main reason)
+## Open questions for Claude
+TXT
+      printf '\n---\n# Brief\n\n'; cat "$brief"
+    } > "$p"
+    run_codex "$dir/CODEX-RESEARCH.md" "$p" new
+    append_transcript "Codex research" "$dir/CODEX-RESEARCH.md"
+    echo "CC-COUNCIL DONE step=research output=$dir/CODEX-RESEARCH.md thread=$(cat "$dir/codex-thread" 2>/dev/null)"
+    ;;
+  reply)
+    msg="${1:?message.md required}"
+    n=$(find "$dir" -maxdepth 1 -name 'codex-reply-*.md' | wc -l | tr -d ' '); n=$((n + 1))
+    cp "$msg" "$dir/claude-msg-$n.md"; append_transcript "Round $n - Claude" "$msg"
+    p="$dir/prompt-reply-$n.md"
+    {
+      cat <<'TXT'
+Claude, the other council seat, did its own research and replied below. Respond point by point: where you agree, where you disagree and why (with evidence and URLs), and what that changes in your recommendation. Verify any new claim you can with web search or by reading the repository. Finish with:
+## Current position (your updated recommendation, one paragraph)
+## Still open (numbered list, or "none")
+TXT
+      printf '\n---\n# Claude says\n\n'; cat "$msg"
+    } > "$p"
+    run_codex "$dir/codex-reply-$n.md" "$p" resume
+    append_transcript "Round $n - Codex" "$dir/codex-reply-$n.md"
+    echo "CC-COUNCIL DONE step=reply round=$n output=$dir/codex-reply-$n.md"
+    ;;
+  decide)
+    p="$dir/prompt-decide.md"
+    cat > "$p" <<'TXT'
+Give your final position for this council as Markdown with exactly these sections:
+# Codex decisions
+## Decisions (numbered; each: the decision, one-line rationale, evidence refs)
+## Dissent (anything you still disagree with Claude on, and why; or "none")
+## Risks to watch during implementation
+## Acceptance checks (runnable commands or observable behaviors that would prove the phase works)
+TXT
+    run_codex "$dir/DECISIONS-CODEX.md" "$p" resume
+    append_transcript "Codex final position" "$dir/DECISIONS-CODEX.md"
+    echo "CC-COUNCIL DONE step=decide output=$dir/DECISIONS-CODEX.md"
+    ;;
+  status)
+    echo "dir: $dir"; echo "project: $project"; echo "thread: $(cat "$dir/codex-thread" 2>/dev/null || echo none)"
+    ls -1 "$dir" | sed 's/^/  /'
+    ;;
+  *) usage ;;
+esac

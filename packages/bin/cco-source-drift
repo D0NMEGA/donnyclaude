@@ -1,0 +1,444 @@
+#!/usr/bin/env python3
+# cco-tool-version: 1
+"""cco-source-drift — agent-runnable, read-only git source-drift detector for the vault.
+
+A structural sibling of cco-vault-audit (DETECT-02). For each vault note that declares a
+*resolvable git* source mapping, it computes a deterministic git drift signal and emits a
+machine-readable JSON worklist — sibling to `cco-vault-audit --json` — that Phase 16's
+`cco-vault-dream` merges alongside the audit stream. It writes NOTHING (no note edits, no
+commits, no branches): read-only git porcelain (`rev-parse`/`log`/`rev-list`) + `os.stat`
+and file reads only. No embeddings, no LLM — the deliberate anti-RECALL-02 design: the
+signal is a trivially-auditable `git log` count, not a similarity score.
+
+The note→source map convention (green-field; see 15-RESEARCH.md §2):
+  * A note declares its tracked source via a `source:` frontmatter field (the field name is
+    configurable via --source-field, default "source"). The detector is VALUE-DRIVEN, not
+    name-driven: a `source:` entry is a tracking map ONLY when its value resolves to a git
+    work tree. A citation string ("Banister, Atomic Habits") does NOT resolve → it simply
+    falls through to IGNORED (not drift, not even unresolved). This sidesteps the PKM
+    `source: = citation` collision without renaming.
+  * The value is either a string path (`~/Desktop/foo` or a subpath `~/Desktop/foo/.planning`,
+    `~`/$ENV-expanded) OR an inline mapping `source: {repo: ~/Desktop/foo, path: docs}`.
+    The enclosing repo is resolved with `git -C <path> rev-parse --show-toplevel`; the subpath
+    is `<path>` relative to that toplevel (or "." for the repo root).
+  * A repo-root `<vault>/.cco/vault-dream.yaml` (a tiny stdlib `key: value` reader under a
+    `notes:` block — NO PyYAML) is a per-note fallback table. Frontmatter `source:` WINS over
+    the YAML entry when both exist (per-note is more local).
+
+Drift signal (per mapped note, scoped to the mapped subpath — precise, low-noise):
+  commits_since = git -C <repo> rev-list --count --since=<note.updated> HEAD -- <subpath>
+  src_commit_iso = git -C <repo> log -1 --format=%cI -- <subpath>     (committer date, ISO-8601)
+  src_mtime      = max os.path.getmtime over <the resolved path, recursively>  (uncommitted edits)
+  drifted        = (commits_since >= 1) OR (src_mtime > note.updated_epoch)
+For a date-only `updated:`, the comparison is at DAY granularity and same-day is NOT drifted
+(conservative — avoids a note edited the same day as a source commit flapping).
+
+A `drift_ignore: true` frontmatter boolean SUPPRESSES a note from `drifted` (counted under
+`suppressed` for transparency) — distinct from Phase 16's `pinned`. A note with no mapped
+source is absent from ALL output (drift is undefined without a source; never flagged on age
+alone). A `source:` that does not resolve to a git work tree lands ONLY in `unresolved_sources`.
+
+Usage:
+    cco-source-drift [VAULT] [--json] [--source-field NAME]
+Env:
+    VAULT   default vault path (fallback: ~/vault)
+Exit: 0 no drift · 1 drift found · 2 no vault found.
+
+Security (threat model T-15-01/02/03): every path is passed to git as ARGV (never shell=True),
+and git options are ALWAYS terminated with `--` before the subpath. An untrusted `source:`
+value (a typo, a stale Windows path like C:/Users/…, a crafted `--upload-pack=` string) cannot
+inject a git option or escape into arbitrary reads beyond rev-parse/log/rev-list/os.stat — a
+value that does not resolve to a git work tree is reported in `unresolved_sources`, never
+followed. NB: copies the minimal FM/SKIP_DIRS/os.walk logic from cco-vault-audit byte-identical
+(D-13) rather than refactoring the proven sibling into a shared module.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+# --- Copied byte-identical from cco-vault-audit (so both detectors agree on parsing) ---------------
+SKIP_DIRS = {".git", ".obsidian", ".trash", "node_modules", ".smart-env"}  # cco-vault-audit L37
+FM = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)                     # cco-vault-audit L43
+FIELD = re.compile(r"^([\w-]+)\s*:\s*(.*)$")                                # cco-vault-audit L116-117
+
+# An inline `source: {repo: <p>, path: <s>}` mapping value (stdlib parse, no PyYAML).
+_MAP_REPO = re.compile(r"repo\s*:\s*([^,}]+)")
+_MAP_PATH = re.compile(r"path\s*:\s*([^,}]+)")
+
+
+def _strip(v: str) -> str:
+    """Strip surrounding quotes/whitespace from a raw frontmatter value."""
+    return v.strip().strip("\"'").strip()
+
+
+def parse_fm(txt: str) -> tuple[dict[str, str], bool]:
+    """Return (present_fields, has_fm). Mirrors cco-vault-audit's per-line field extraction.
+
+    The value is the RAW (quote-stripped) text after the first colon — enough for `updated:`,
+    a string `source:` path, an inline `source: {repo:, path:}` map, and a `drift_ignore:` bool.
+    """
+    m = FM.match(txt)
+    if not m:
+        return {}, False
+    fields: dict[str, str] = {}
+    for line in m.group(1).splitlines():
+        fm = FIELD.match(line)
+        if fm:
+            fields[fm.group(1).lower()] = _strip(fm.group(2))
+    return fields, True
+
+
+def read_yaml_fallback(vault: str) -> dict[str, str]:
+    """Parse <vault>/.cco/vault-dream.yaml → {note_relpath: raw_source_value}.
+
+    Tiny hand-rolled `key: value` reader for the entries under a top-level `notes:` block
+    (NO PyYAML — stdlib only, D-06 of §7). Returns {} if the file is absent/unreadable.
+    """
+    path = os.path.join(vault, ".cco", "vault-dream.yaml")
+    if not os.path.isfile(path):
+        return {}
+    out: dict[str, str] = {}
+    in_notes = False
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return {}
+    for raw in lines:
+        line = raw.rstrip("\n")
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        # A top-level (column-0) `notes:` opens the block; any other column-0 key closes it.
+        if not line[:1].isspace():
+            in_notes = line.strip().rstrip(":").strip() == "notes"
+            continue
+        if not in_notes:
+            continue
+        fm = FIELD.match(line.strip())
+        if fm:
+            out[_strip(fm.group(1))] = _strip(fm.group(2))  # _strip removes any surrounding quotes
+    return out
+
+
+def load_map(vault: str, source_field: str) -> tuple[dict[str, dict], list[str]]:
+    """Walk *.md notes (reusing cco-vault-audit's os.walk + SKIP_DIRS) and build the source map.
+
+    Returns (mapping, all_notes) where mapping = {note_relpath: {"source", "updated", "ignore"}}
+    for notes that declare <source_field>: (frontmatter merged OVER the YAML fallback —
+    frontmatter wins). Notes with neither field are simply absent from the mapping (criterion 4).
+    """
+    yaml_map = read_yaml_fallback(vault)
+    mapping: dict[str, dict] = {}
+    all_notes: list[str] = []
+
+    mds: list[str] = []
+    for root, dirs, files in os.walk(vault):                 # cco-vault-audit L71-75
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fn in files:
+            if fn.endswith(".md"):
+                fp = os.path.join(root, fn)
+                if os.path.islink(fp):  # never follow a symlinked note out of the vault
+                    continue
+                mds.append(fp)
+
+    for p in mds:
+        rel = os.path.relpath(p, vault).replace(os.sep, "/")
+        all_notes.append(rel)
+        try:
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                txt = fh.read()
+        except OSError:
+            continue
+        fields, _ = parse_fm(txt)
+        src = fields.get(source_field) or yaml_map.get(rel)  # frontmatter wins over YAML
+        if not src:
+            continue
+        mapping[rel] = {
+            "source": src,
+            "updated": fields.get("updated"),
+            "ignore": fields.get("drift_ignore", "").strip().lower() in ("true", "yes", "1"),
+        }
+    return mapping, all_notes
+
+
+def resolve_source(value: str):
+    """Resolve a raw `source:` value to (repo_toplevel, subpath, target) or None.
+
+    Accepts a string path OR an inline `{repo: <p>, path: <s>}` mapping. `~`/$ENV-expanded.
+    The enclosing repo is found via `git -C <path> rev-parse --show-toplevel` (argv, read-only);
+    a value that does not resolve to a git work tree → None (⇒ unresolved_sources). subpath is
+    <path> relative to the toplevel, or "." for the repo root. NEVER shell=True.
+    """
+    repo_hint: str | None = None
+    path_hint: str | None = None
+    v = value.strip()
+    if v.startswith("{"):  # inline mapping
+        rm = _MAP_REPO.search(v)
+        pm = _MAP_PATH.search(v)
+        if rm:
+            repo_hint = _strip(rm.group(1))
+        if pm:
+            path_hint = _strip(pm.group(1))
+        base = repo_hint
+        sub_rel = path_hint
+    else:  # string path (repo root OR subpath)
+        base = v
+        sub_rel = None
+
+    if not base:
+        return None
+    base_exp = os.path.expandvars(os.path.expanduser(base))
+    # The path we actually point at (repo[/subpath]) — used for both resolution and mtime.
+    target = base_exp
+    if sub_rel:
+        target = os.path.join(base_exp, os.path.expandvars(os.path.expanduser(sub_rel)))
+    if not os.path.exists(target):
+        return None
+
+    try:
+        top = subprocess.run(
+            ["git", "-C", base_exp, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=10,  # bounded — a slow/networked/huge source repo must not hang the unattended loop
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if top.returncode != 0 or not top.stdout.strip():
+        return None
+    toplevel = top.stdout.strip()
+
+    # subpath = target relative to the toplevel (".", or the relpath if inside).
+    try:
+        rel = os.path.relpath(target, toplevel)
+    except ValueError:
+        return None
+    if rel == "." or rel == "":
+        subpath = "."
+    elif rel.startswith(".."):
+        return None  # target escapes the repo — refuse (T-15-01)
+    else:
+        subpath = rel.replace(os.sep, "/")
+    return toplevel, subpath, target
+
+
+def parse_updated(s: str | None):
+    """Permissive stdlib parse → (datetime_or_none, is_date_only). None if missing/unparseable."""
+    if not s:
+        return None, False
+    s = s.strip().strip("\"'").strip()
+    if not s:
+        return None, False
+    # Full ISO datetime first.
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt, False
+    except ValueError:
+        pass
+    # Date-only YYYY-MM-DD fallback.
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        y, mo, d = (int(g) for g in m.groups())
+        try:
+            return datetime(y, mo, d, tzinfo=timezone.utc), True
+        except ValueError:
+            return None, False
+    return None, False
+
+
+def _walk_mtime(target: str) -> float:
+    """Newest mtime under <target> (recursive for a dir, the file's mtime for a file)."""
+    newest = 0.0
+    if os.path.isfile(target):
+        try:
+            return os.path.getmtime(target)
+        except OSError:
+            return 0.0
+    for root, dirs, files in os.walk(target):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fn in files:
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(root, fn)))
+            except OSError:
+                continue
+    return newest
+
+
+def drift_for(repo: str, subpath: str, target: str, note_updated: str | None) -> dict:
+    """Compute the deterministic git drift signal for one mapped note (read-only porcelain).
+
+    commits_since is scoped to <subpath> and to commits NEWER than note_updated (`--since`).
+    Every git call passes the subpath as ARGV after a `--` option terminator (T-15-02).
+    """
+    dt, date_only = parse_updated(note_updated)
+
+    # commits_since: count of commits touching <subpath> with committer-date > note_updated.
+    commits_since = 0
+    if dt is not None:
+        since_arg = dt.date().isoformat() if date_only else dt.isoformat()
+        try:
+            rl = subprocess.run(
+                ["git", "-C", repo, "rev-list", "--count", f"--since={since_arg}", "HEAD", "--", subpath],
+                capture_output=True,
+                text=True,
+                timeout=30,  # bounded — rev-list over a huge history must not hang the unattended loop
+            )
+            if rl.returncode == 0 and rl.stdout.strip().isdigit():
+                commits_since = int(rl.stdout.strip())
+        except subprocess.TimeoutExpired:
+            commits_since = 0  # a slow/hung repo reads as "no measurable drift", never a hang
+
+    # src_commit_iso: the latest source commit touching <subpath> (committer date, ISO-8601).
+    try:
+        lg = subprocess.run(
+            ["git", "-C", repo, "log", "-1", "--format=%cI", "--", subpath],
+            capture_output=True,
+            text=True,
+            timeout=10,  # bounded (see above)
+        )
+        src_commit_iso = lg.stdout.strip() if lg.returncode == 0 else ""
+    except subprocess.TimeoutExpired:
+        src_commit_iso = ""
+
+    # src_mtime: secondary signal — catches UNCOMMITTED working-tree edits.
+    src_mtime = _walk_mtime(target)
+
+    drifted = commits_since >= 1
+    if not drifted and dt is not None and src_mtime > 0:
+        note_epoch = dt.timestamp()
+        if date_only:
+            # Day granularity: same-day is NOT drift (conservative).
+            try:
+                mtime_day = datetime.fromtimestamp(src_mtime, tz=timezone.utc).date()
+            except (OverflowError, OSError, ValueError):
+                mtime_day = dt.date()
+            drifted = mtime_day > dt.date()
+        else:
+            drifted = src_mtime > note_epoch
+
+    return {
+        "commits_since": commits_since,
+        "src_commit_iso": src_commit_iso,
+        "src_mtime": src_mtime,
+        "drifted": drifted,
+    }
+
+
+def scan(vault: str, source_field: str) -> dict:
+    """Build the JSON worklist (sibling of cco-vault-audit --json). Read-only throughout."""
+    mapping, _ = load_map(vault, source_field)
+
+    drifted: list[dict] = []
+    unresolved: list[dict] = []
+    suppressed: list[str] = []
+
+    for note in sorted(mapping):
+        info = mapping[note]
+        src_val = info["source"]
+        resolved = resolve_source(src_val)
+        if resolved is None:
+            unresolved.append(
+                {"note": note, "source": src_val, "reason": "not a git work tree"}
+            )
+            continue
+        repo, subpath, target = resolved
+        sig = drift_for(repo, subpath, target, info["updated"])
+        if not sig["drifted"]:
+            continue
+        if info["ignore"]:
+            suppressed.append(note)
+            continue
+        drifted.append(
+            {
+                "note": note,
+                "source": src_val,
+                "repo": repo,
+                "subpath": subpath,
+                "commits_since": sig["commits_since"],
+                "src_commit_iso": sig["src_commit_iso"],
+                "src_mtime": sig["src_mtime"],
+                "note_updated": info["updated"],
+            }
+        )
+
+    return {
+        "vault": vault,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "total_mapped": len(mapping),
+        "total_drifted": len(drifted),
+        "drifted": drifted,
+        "unresolved_sources": unresolved,
+        "suppressed": suppressed,
+    }
+
+
+def render(r: dict) -> str:
+    """Human-readable summary mirroring cco-vault-audit's render() (counts + sections + verdict)."""
+    L = [
+        f"SOURCE DRIFT — {r['vault']}  "
+        f"({r['total_mapped']} mapped · {r['total_drifted']} drifted · "
+        f"{len(r['unresolved_sources'])} unresolved · {len(r['suppressed'])} suppressed)"
+    ]
+    if r["drifted"]:
+        L.append("\nDRIFTED (source moved since the note's updated:):")
+        for e in r["drifted"]:
+            L.append(
+                f"  - {e['note']}  →  {e['source']}  "
+                f"[{e['commits_since']} commit(s) since {e['note_updated']}; "
+                f"src {e['src_commit_iso'] or '?'}]"
+            )
+    if r["unresolved_sources"]:
+        L.append("\nUNRESOLVED SOURCES (source: declared but not a git work tree):")
+        for e in r["unresolved_sources"]:
+            L.append(f"  - {e['note']}  →  {e['source']}  ({e['reason']})")
+    if r["suppressed"]:
+        L.append(f"\nSUPPRESSED (drift_ignore: true): {len(r['suppressed'])}")
+        L += [f"  - {n}" for n in r["suppressed"]]
+    L.append(
+        "\nVERDICT: "
+        + (
+            f"{r['total_drifted']} note(s) DRIFTED — review against source"
+            if r["total_drifted"]
+            else "NO DRIFT (every mapped note is current with its source)"
+        )
+    )
+    return "\n".join(L)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description="Read-only deterministic git source-drift detector for the vault "
+        "(sibling of cco-vault-audit)."
+    )
+    ap.add_argument(
+        "vault",
+        nargs="?",
+        default=os.environ.get("VAULT", os.path.expanduser("~/vault")),
+    )
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument(
+        "--source-field",
+        default="source",
+        help="frontmatter field naming the tracked source (default: source) — the collision "
+        "escape hatch for operators who use source: for citations.",
+    )
+    a = ap.parse_args()
+    vault = os.path.abspath(os.path.expanduser(a.vault))
+    if not os.path.isdir(vault):
+        print(f"cco-source-drift: no vault at {vault}", file=sys.stderr)
+        return 2
+    r = scan(vault, a.source_field)
+    print(json.dumps(r, indent=2) if a.json else render(r))
+    return 1 if r["total_drifted"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

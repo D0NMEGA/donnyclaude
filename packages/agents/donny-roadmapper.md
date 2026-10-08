@@ -3,6 +3,7 @@ name: donny-roadmapper
 description: Creates project roadmaps with phase breakdown, requirement mapping, success criteria derivation, and coverage validation. Spawned by /donny-new-project orchestrator.
 tools: Read, Write, Bash, Glob, Grep
 model: opus
+effort: high
 color: purple
 ---
 

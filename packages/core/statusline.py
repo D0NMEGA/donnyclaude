@@ -29,6 +29,7 @@ R = "\033[0m"
 def c(x): return f"\033[{x}m"
 DIM, BOLD = c("2"), c("1")
 GREEN, YELLOW, RED, CYAN, GREY, MAG = c("38;5;77"), c("38;5;214"), c("38;5;203"), c("38;5;45"), c("38;5;244"), c("38;5;177")
+AMBER = c("38;5;179")  # folder label: distinct from model cyan and effort magenta
 
 def heat(p): return GREEN if p < 50 else (YELLOW if p < 80 else RED)
 
@@ -118,9 +119,23 @@ def main():
 
     lines = []
 
-    # line 1: model · effort · think · context
+    # line 1: folder · model · effort · think · context
+    # Folder FIRST: the native "(shift+tab to cycle)" line is CLI chrome with no config hook,
+    # and narrow tmux panes truncate line 1 after the model - so a trailing folder would be
+    # cut off exactly where pane identity matters most. project_dir over current_dir: it is
+    # where the session launched and does not move if the session cds mid-run.
+    ws = d.get("workspace") or {}
+    proj = ws.get("project_dir") or ws.get("current_dir") or os.getcwd()
+    folder = os.path.basename(os.path.normpath(proj)) if proj else ""
+    wt = ws.get("git_worktree")
+    l1 = ""
+    if folder:
+        l1 += f"{BOLD}{AMBER}{folder}{R}"
+        if wt:
+            l1 += f"{DIM}:{R}{AMBER}{wt}{R}"
+        l1 += f"{DIM} · {R}"
     model = (d.get("model") or {}).get("display_name") or (d.get("model") or {}).get("id") or "?"
-    l1 = f"{BOLD}{CYAN}{model}{R}"
+    l1 += f"{BOLD}{CYAN}{model}{R}"
     eff = (d.get("effort") or {}).get("level")
     if eff:
         l1 += f"{DIM} · {R}{(MAG if eff in ('max','xhigh') else GREY)}{eff}{R}"
@@ -157,7 +172,6 @@ def main():
         l1 += f"{DIM} · {R}{GREEN}+{la or 0}{R}/{RED}-{lr or 0}{R}"
 
     # git segment from cwd via a cached subprocess (STATUS-02, C-1: those workspace git keys are absent in 2.1.177)
-    ws = d.get("workspace") or {}
     cwd = ws.get("current_dir") or os.getcwd()
     sid = d.get("session_id") or ""
     br = git_branch(cwd, sid)
