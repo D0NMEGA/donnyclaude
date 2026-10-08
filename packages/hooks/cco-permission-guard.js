@@ -34,6 +34,10 @@
 // subpath under home (rm -rf ~/.cache is the user's call). Tokens are post-normalization (quotes
 // stripped, whitespace collapsed).
 function isCatastrophicTarget(tok) {
+  // A path BELOW a temp root (/tmp, /var/tmp, /var/folders, and their /private/ aliases on
+  // macOS) is scratch space, not a system dir. The roots themselves stay protected.
+  // (2026-10-07: the 2026-09-22 audit's P1 false positive, also hit by Claude Code's scratchpad.)
+  if (/^\/(private\/)?(tmp|var\/tmp|var\/folders)\/.+/.test(tok)) return false;
   return (
     /^~\/?$/.test(tok) ||                 // ~ or ~/
     /^\$HOME\/?$/.test(tok) ||            // $HOME or $HOME/
