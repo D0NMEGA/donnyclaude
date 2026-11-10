@@ -1,6 +1,6 @@
 ---
 name: donny-update
-description: "Updates the installed Donny toolkit from the local source repo using a git-tag version check (no npm), then always reapplies local patches atomically. Use to sync ~/.claude with the donny repo after it advances, or to restore local modifications the redeploy overwrote. Modifies the global install, so it does not auto-run inside donny-autonomous."
+description: "Disabled. Prints how the Donny toolkit is deployed (changed files copied from the donnyclaude repository into ~/.claude) and installs nothing."
 disable-model-invocation: true
 allowed-tools:
   - Read

@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { safeReadFile, loadConfig, normalizePhaseName, escapeRegex, execGit, findPhaseInternal, getMilestoneInfo, stripShippedMilestones, extractCurrentMilestone, planningDir, planningRoot, output, error, checkAgentsInstalled } = require('./core.cjs');
-const { extractFrontmatter, parseMustHavesBlock } = require('./frontmatter.cjs');
+const { extractFrontmatter, parseMustHavesBlock, verificationVerdict } = require('./frontmatter.cjs');
 const { writeStateMd } = require('./state.cjs');
 
 /**
@@ -243,10 +243,11 @@ function classifyVerbResult(verb, captured, opts) {
     // input simply has not been written yet, which is neither a pass nor a defect.
     case 'phase-verified': {
       if (j.status === 'missing') return res('not_yet', 'no VERIFICATION.md in the phase yet', []);
-      if (j.verified === true) return res('pass', 'VERIFICATION.md status is "passed"', []);
-      // The J1 defect, stated in the record rather than left for the reader to infer: v5.0
-      // Phase 19 shipped `status: PASS` and read as unverified for a month.
-      const d = `VERIFICATION.md status is "${j.status}"; the engine matches the literal lowercase "passed"`;
+      if (j.verified === true) return res('pass', 'VERIFICATION.md verdict is "passed"', []);
+      // Name both fields: verificationVerdict needs verdict passed AND a status that does not
+      // contradict it, so the reader has to see which of the two held the phase back.
+      const d = `VERIFICATION.md verdict is "${j.verdict || 'unknown'}" (status "${j.status}"); ` +
+        'only verdict passed with status PASS or passed verifies a phase';
       return res('error', d, [d]);
     }
 
@@ -281,7 +282,9 @@ function classifyVerbResult(verb, captured, opts) {
     // rather than not_yet.
     case 'ui-reviewed': {
       if (j.status === 'missing') return res('not_applicable', 'no UI-REVIEW.md; not a UI phase', []);
-      if (j.status === 'passed') return res('pass', 'UI review passed', []);
+      // donny-ui-auditor writes PASS|FAIL|PARTIAL; legacy files say passed. Same rule as
+      // VERIFICATION.md, applied to the status-only UI-REVIEW.md frontmatter.
+      if (verificationVerdict({ status: j.status }).verified) return res('pass', 'UI review passed', []);
       const d = `UI review status is "${j.status}"`;
       return res('warning', d, [d]);
     }
@@ -1176,15 +1179,15 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   //
   // Three failing states, not two. Besides "missing" and "empty", a SUMMARY can carry the key
   // in a form that parses as a STRING (a trailing inline comment defeats the endsWith(']')
-  // test at frontmatter.cjs:55) or can have its whole frontmatter shadowed by a body '---'
-  // pair (extractFrontmatter takes the LAST block, frontmatter.cjs:16-17). Both look correct
-  // to a human reader and are invisible to every checker, which is the July J2 defect.
+  // test in extractFrontmatter). It looks correct to a human reader and is invisible to
+  // every checker. (A body '---' pair used to shadow the whole block too, the July J2
+  // defect; extractFrontmatter now reads the leading block only.)
   const fm = extractFrontmatter(content);
   const rcRaw = fm['requirements-completed'];
   const requirementsCompleted = Array.isArray(rcRaw) ? rcRaw : null;
   if (requirementsCompleted === null) {
     errors.push(rcRaw === undefined
-      ? 'requirements-completed missing from SUMMARY frontmatter (or shadowed by a body --- pair)'
+      ? 'requirements-completed missing from SUMMARY frontmatter'
       : 'requirements-completed is not a YAML list (a trailing inline comment makes it parse as a string)');
   } else if (requirementsCompleted.length === 0) {
     errors.push('requirements-completed is empty');
@@ -1210,6 +1213,24 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   output(result, raw, passed ? 'passed' : 'failed');
 }
 
+// workflow.plan_budget_kb: the size above which one PLAN.md draws a warning. Project config
+// first, then the global defaults (the same file config-get reads, so DONNY_HOME is honoured),
+// then 30. Read here because loadConfig() exposes a fixed set of keys and this one is advisory.
+function planBudgetKb(cwd) {
+  const { loadGlobalDefaults } = require('./config.cjs');
+  let project = {};
+  try {
+    project = JSON.parse(require('fs').readFileSync(path.join(cwd, '.planning', 'config.json'), 'utf-8'));
+  } catch (e) {
+    // no project config, or unreadable: the global layer decides
+  }
+  for (const layer of [project, loadGlobalDefaults()]) {
+    const kb = Number(layer && layer.workflow && layer.workflow.plan_budget_kb);
+    if (Number.isFinite(kb) && kb > 0) return kb;
+  }
+  return 30;
+}
+
 function cmdVerifyPlanStructure(cwd, filePath, raw) {
   if (!filePath) { error('file path required'); }
   const fullPath = path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath);
@@ -1219,6 +1240,13 @@ function cmdVerifyPlanStructure(cwd, filePath, raw) {
   const fm = extractFrontmatter(content);
   const errors = [];
   const warnings = [];
+
+  // Size budget, warning only: a long plan is paid for again by every executor that loads it.
+  const budgetKb = planBudgetKb(cwd);
+  const sizeKb = Math.round(Buffer.byteLength(content, 'utf-8') / 1024);
+  if (sizeKb > budgetKb) {
+    warnings.push(`Plan is ${sizeKb} KB, over the ${budgetKb} KB budget (workflow.plan_budget_kb): cut context restated from CONTEXT.md and code listings, or split the plan`);
+  }
 
   // Check required frontmatter fields
   const required = ['phase', 'plan', 'type', 'wave', 'depends_on', 'files_modified', 'autonomous', 'must_haves'];
@@ -1362,12 +1390,15 @@ function cmdVerifyPlanGraph(cwd, phaseArg, raw) {
 
 // --- Verification-status gate ---
 // Deterministic counterpart to the prose "check VERIFICATION.md status" gate. A phase
-// is verified ONLY when its VERIFICATION.md frontmatter status === 'passed'. ship and
-// complete-milestone must block on this before an irreversible/outward action instead of
-// trusting file-existence (init phase-op's has_verification) plus an LLM glance.
+// is verified ONLY when verificationVerdict says so (verdict passed, status not
+// contradicting it). ship and complete-milestone must block on this before an
+// irreversible/outward action instead of trusting file-existence (init phase-op's
+// has_verification) plus an LLM glance. `status` is the raw frontmatter value, reported
+// as written so callers can show it.
 function phaseVerificationVerdict(fm) {
   const status = (fm && fm.status) ? String(fm.status).trim() : 'unknown';
-  return { verified: status === 'passed', status };
+  const { verdict, verified } = verificationVerdict(fm);
+  return { verified, verdict, status };
 }
 
 function cmdVerifyPhaseVerified(cwd, phaseArg, raw) {
@@ -1381,17 +1412,20 @@ function cmdVerifyPhaseVerified(cwd, phaseArg, raw) {
     if (match) dir = path.join(phasesRoot, match);
   }
   if (!(fs.existsSync(dir) && fs.statSync(dir).isDirectory())) {
-    output({ verified: false, status: 'missing', error: 'Phase directory not found', phase: phaseArg }, raw, 'missing');
+    output({ verified: false, verdict: 'missing', outcome: 'missing', status: 'missing', error: 'Phase directory not found', phase: phaseArg }, raw, 'missing');
     return;
   }
   const vfiles = fs.readdirSync(dir).filter(f => /-VERIFICATION\.md$/i.test(f)).sort();
   if (vfiles.length === 0) {
-    output({ verified: false, status: 'missing', phase: path.basename(dir) }, raw, 'missing');
+    output({ verified: false, verdict: 'missing', outcome: 'missing', status: 'missing', phase: path.basename(dir) }, raw, 'missing');
     return;
   }
   const fm = extractFrontmatter(safeReadFile(path.join(dir, vfiles[vfiles.length - 1])) || '');
   const v = phaseVerificationVerdict(fm);
-  output({ verified: v.verified, status: v.status, score: fm.score ?? null, phase: path.basename(dir) }, raw, v.verified ? 'verified' : 'unverified');
+  // `outcome` is the one value a caller may branch on: `passed` only when the phase is verified.
+  // A `verdict: passed` that the status contradicts is `unknown`, so no route can read it as success.
+  const outcome = v.verified ? 'passed' : (v.verdict === 'passed' ? 'unknown' : v.verdict);
+  output({ verified: v.verified, verdict: v.verdict, outcome, status: v.status, score: fm.score ?? null, phase: path.basename(dir) }, raw, v.verified ? 'verified' : 'unverified');
 }
 
 // donny-ui-auditor writes an exact UI-REVIEW.md frontmatter contract and states the
@@ -1534,9 +1568,17 @@ function cmdVerifyThreatsClear(cwd, phaseArg, raw) {
 }
 
 // audit-milestone 5d Status Determination Matrix, as a pure lookup. Inputs: the assigned
-// phase's VERIFICATION verdict (passed | gaps_found | missing | ...) and whether the
+// phase's VERIFICATION verdict as coverageVerdict derives it from verificationVerdict
+// (passed | gaps_found | human_needed | unknown | missing) and whether the
 // requirement is listed in a phase SUMMARY's requirements-completed. The REQUIREMENTS
 // checkbox never changes the status - it only flags a stale checkbox (handled in aggregate).
+function coverageVerdict(v) {
+  if (v.verified) return 'passed';
+  // A passed verdict whose status contradicts it (PARTIAL, FAIL) is not a clean pass, so
+  // it must not reach the matrix as one.
+  return v.verdict === 'passed' ? 'unknown' : v.verdict;
+}
+
 function requirementCoverageStatus({ verification, summaryListed }) {
   const v = String(verification || 'missing').trim().toLowerCase();
   if (v === 'passed') return summaryListed ? 'satisfied' : 'partial';
@@ -1629,7 +1671,7 @@ function cmdVerifyMilestoneCoverage(cwd, raw) {
       let verification = 'missing';
       if (vfiles.length) {
         const fm = extractFrontmatter(safeReadFile(path.join(full, vfiles[vfiles.length - 1])) || '');
-        verification = phaseVerificationVerdict(fm).status;
+        verification = coverageVerdict(phaseVerificationVerdict(fm));
       }
       for (const sf of files.filter(f => /-SUMMARY\.md$/i.test(f) || f === 'SUMMARY.md')) {
         const rc = extractFrontmatter(safeReadFile(path.join(full, sf)) || '')['requirements-completed'];

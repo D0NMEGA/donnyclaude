@@ -4,6 +4,7 @@ description: Verifies factual claims in generated docs against the live codebase
 tools: Read, Write, Bash, Grep, Glob
 model: haiku
 effort: medium
+autoCompactWindow: 200000
 color: orange
 ---
 

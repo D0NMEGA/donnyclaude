@@ -4,6 +4,7 @@ description: Validates UI-SPEC.md design contracts against 6 quality dimensions.
 tools: Read, Bash, Glob, Grep
 model: haiku
 effort: medium
+autoCompactWindow: 200000
 color: cyan
 ---
 

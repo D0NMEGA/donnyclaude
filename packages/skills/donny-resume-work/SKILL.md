@@ -6,7 +6,7 @@ allowed-tools:
   - Bash
   - Write
   - AskUserQuestion
-  - SlashCommand
+  - Skill
 ---
 
 

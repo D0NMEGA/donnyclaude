@@ -79,10 +79,13 @@ cat .planning/config.json 2>/dev/null || true
 ```bash
 # Count outstanding items in current phase
 OUTSTANDING=""
-for f in .planning/phases/XX-current/*-UAT.md .planning/phases/XX-current/*-VERIFICATION.md; do
+for f in .planning/phases/XX-current/*-UAT.md; do
   [ -f "$f" ] || continue
   grep -q "result: pending\|result: blocked\|status: partial\|status: human_needed\|status: diagnosed" "$f" && OUTSTANDING="$OUTSTANDING\n$(basename $f)"
 done
+# VERIFICATION.md verdict comes from the engine, not a grep: human_needed and gaps_found are debt.
+VERDICT=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified .planning/phases/XX-current --pick outcome 2>/dev/null || echo "")
+case "$VERDICT" in human_needed|gaps_found|unknown) OUTSTANDING="$OUTSTANDING\nVERIFICATION.md ($VERDICT)";; esac
 ```
 
 **If OUTSTANDING is not empty:**
@@ -446,7 +449,7 @@ Next: Phase [X+1] - [Name]
 ⚡ Auto-continuing: Plan Phase [X+1] in detail
 ```
 
-Exit skill and invoke SlashCommand("/donny-plan-phase [X+1] --auto ${DONNY_WS}")
+Exit skill and invoke Skill(skill="donny-plan-phase", args="[X+1] --auto ${DONNY_WS}")
 
 **If CONTEXT.md does NOT exist:**
 
@@ -458,7 +461,7 @@ Next: Phase [X+1] - [Name]
 ⚡ Auto-continuing: Discuss Phase [X+1] first
 ```
 
-Exit skill and invoke SlashCommand("/donny-discuss-phase [X+1] --auto ${DONNY_WS}")
+Exit skill and invoke Skill(skill="donny-discuss-phase", args="[X+1] --auto ${DONNY_WS}")
 
 </if>
 
@@ -590,10 +593,10 @@ Phase {X} marked complete.
 
 🎉 Milestone {version} is 100% complete - all {N} phases finished!
 
-⚡ Auto-continuing: Complete milestone and archive
+Next: run /donny-complete-milestone {version} ${DONNY_WS}
 ```
 
-Exit skill and invoke SlashCommand("/donny-complete-milestone {version} ${DONNY_WS}")
+Print that exact command and stop. Do NOT invoke `donny-complete-milestone` through `Skill()`: it archives the milestone and is irreversible, so it is a user-only skill.
 
 </if>
 

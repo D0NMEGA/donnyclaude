@@ -125,7 +125,7 @@ Ask user via AskUserQuestion:
 
 Handle responses:
 - "Verify work": `Skill(skill="donny-verify-work")`  then loop to dashboard.
-- "Complete milestone": `Skill(skill="donny-complete-milestone")` then exit.
+- "Complete milestone": do NOT call `donny-complete-milestone` through `Skill()` (it archives the milestone and is irreversible, so it is user-only). Print `Run /donny-complete-milestone yourself to archive this milestone.` then go to the exit step.
 - "Exit manager": Go to exit step.
 
 **If NOT all_complete**, build compound options from `recommended_actions`:
@@ -224,6 +224,7 @@ Planning runs autonomously. Spawn a background agent that delegates to the Skill
 ```
 Task(
   description="Plan phase {N}: {phase_name}",
+  model="opus",
   run_in_background=true,
   prompt="You are running the Donny plan-phase workflow for phase {N} of the project.
 
@@ -233,9 +234,9 @@ Goal: {goal}
 Manager flags: {manager_flags.plan}
 
 Run the plan-phase Skill with any configured manager flags:
-Skill(skill=\"donny-plan-phase\", args=\"{N} --auto {manager_flags.plan}\")
+Skill(skill=\"donny-plan-phase\", args=\"{N} --auto --no-advance {manager_flags.plan}\")
 
-This delegates to the full plan-phase pipeline including local patches, research, plan-checker, and all quality gates.
+This delegates to the full plan-phase pipeline including local patches, research, plan-checker, and all quality gates. `--no-advance` keeps plan-phase from chaining into execute-phase, because the manager dispatches execution as its own step.
 
 Important: You are running in the background. Do NOT use AskUserQuestion - make autonomous decisions based on project context. If you hit a blocker, write it to STATE.md as a blocker and stop. Do NOT silently work around permission or file access errors - let them fail so the manager can surface them with resolution hints. Do NOT use --no-verify on git commits."
 )
@@ -256,6 +257,7 @@ Execution runs autonomously. Spawn a background agent that delegates to the Skil
 ```
 Task(
   description="Execute phase {N}: {phase_name}",
+  model="opus",
   run_in_background=true,
   prompt="You are running the Donny execute-phase workflow for phase {N} of the project.
 
@@ -309,7 +311,7 @@ Classify the error:
   - **question:** "Phase {N} failed - permission denied for `{tool_or_command}`. Want me to add it to settings.local.json so it's allowed?"
   - **options:** "Add permission and retry" / "Run this phase inline instead" / "Skip and continue"
   - "Add permission and retry": Use `Skill(skill="update-config")` to add the permission to `settings.local.json`, then re-spawn the background agent. Loop to dashboard.
-  - "Run this phase inline instead": Dispatch the same action inline via the appropriate Skill - use `Skill(skill="donny-plan-phase", args="{N}")` if the failed action was planning, or `Skill(skill="donny-execute-phase", args="{N}")` if the failed action was execution. Loop to dashboard after.
+  - "Run this phase inline instead": Dispatch the same action inline via the appropriate Skill - use `Skill(skill="donny-plan-phase", args="{N} --no-advance")` if the failed action was planning, or `Skill(skill="donny-execute-phase", args="{N}")` if the failed action was execution. Loop to dashboard after.
   - "Skip and continue": Loop to dashboard (phase stays in current state).
 
 **Other errors** (git lock, file conflict, logic error, etc.):
@@ -317,7 +319,7 @@ Classify the error:
   - **question:** "Background agent for Phase {N} encountered an issue: {error}. What next?"
   - **options:** "Retry" / "Run inline instead" / "Skip and continue" / "View details"
   - "Retry": Re-spawn the same background agent. Loop to dashboard.
-  - "Run inline instead": Dispatch the action inline via the appropriate Skill - use `Skill(skill="donny-plan-phase", args="{N}")` if the failed action was planning, or `Skill(skill="donny-execute-phase", args="{N}")` if the failed action was execution. Loop to dashboard after.
+  - "Run inline instead": Dispatch the action inline via the appropriate Skill - use `Skill(skill="donny-plan-phase", args="{N} --no-advance")` if the failed action was planning, or `Skill(skill="donny-execute-phase", args="{N}")` if the failed action was execution. Loop to dashboard after.
   - "Skip and continue": Loop to dashboard (phase stays in current state).
   - "View details": Read STATE.md blockers section, display, then re-present options.
 
@@ -358,7 +360,7 @@ Display final status with progress bar:
 - [ ] Dashboard refreshes pick up changes from background agents via disk state
 - [ ] Background agent completion triggers notification and dashboard refresh
 - [ ] Background agent errors present retry/skip options
-- [ ] All-complete state offers verify-work and complete-milestone
+- [ ] All-complete state offers verify-work and prints the complete-milestone command for the user (never calls it)
 - [ ] Exit shows final status with resume instructions
 - [ ] "Other" free-text input parsed for phase number and action
 - [ ] Manager loop continues until user exits or milestone completes

@@ -8,8 +8,9 @@ tools:
   - Bash
   - Glob
   - Grep
-model: haiku
+model: sonnet
 effort: high
+autoCompactWindow: 200000
 color: red
 ---
 

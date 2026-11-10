@@ -90,7 +90,7 @@
  * Verification Suite:
  *   verify plan-structure <file>       Check PLAN.md structure + tasks
  *   verify plan-graph <phase>          Check dep graph: acyclic, resolvable, wave-ordered
- *   verify phase-verified <phase>      Parse VERIFICATION.md status (verified iff status: passed)
+ *   verify phase-verified <phase>      Parse VERIFICATION.md (verified iff verdict passed and status not FAIL/PARTIAL)
  *   verify phase-completeness <phase>  Check all plans have summaries
  *   verify references <file>           Check @-refs + paths resolve
  *   verify commits <h1> [h2] ...      Batch verify commit hashes

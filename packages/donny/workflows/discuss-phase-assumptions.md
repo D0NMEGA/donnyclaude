@@ -310,7 +310,7 @@ Parse the subagent's response. Extract:
 If research topics were flagged, spawn a general-purpose research agent:
 
 ```
-Task(subagent_type="general-purpose", prompt="""
+Task(subagent_type="general-purpose", model="sonnet", prompt="""
 Research the following topics for Phase {PHASE}: {phase_name}.
 
 Topics needing research:

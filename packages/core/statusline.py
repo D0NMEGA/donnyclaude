@@ -112,7 +112,9 @@ def main():
             dbg["get_terminal_size"] = list(shutil.get_terminal_size((0, 0)))
         except Exception:
             pass
-        with open(os.path.expanduser("~/.claude/statusline-last.json"), "w") as f:
+        # Per config dir, so each account's rate_limits stay separate (~/.claude/bin/cc-account).
+        cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+        with open(os.path.join(cfg, "statusline-last.json"), "w") as f:
             json.dump({"payload": d, "_diag": dbg}, f)
     except Exception:
         pass
@@ -147,10 +149,18 @@ def main():
     if pct is None and size and cw.get("total_input_tokens"):
         pct = cw["total_input_tokens"] / size * 100
     if pct is not None:
+        # used_percentage is measured against the model's full window, so the compaction mark is
+        # the configured auto-compact window as a share of it (95 when none is configured).
+        thr = 95.0
         try:
-            thr = float(os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "60"))
-        except ValueError:
-            thr = 60.0
+            win = os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW")
+            if not win:
+                with open(os.path.expanduser("~/.claude/settings.json")) as f:
+                    win = json.load(f).get("autoCompactWindow")
+            if win and size:
+                thr = max(1.0, min(100.0, float(str(win).lower().replace("k", "000")) / size * 100))
+        except (OSError, ValueError, TypeError):
+            pass
         label = "1M" if (size or 0) >= 1_000_000 else (f"{size//1000}k" if size else "")
         ut = cw.get("total_input_tokens")
         tok = f" {DIM}{ut/1000:.0f}k/{label}{R}" if ut and ut >= 1000 else ""

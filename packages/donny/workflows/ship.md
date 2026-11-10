@@ -44,10 +44,10 @@ Verify the work is ready to ship:
    ```bash
    node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${phase_dir}"
    ```
-   Returns `{ verified, status, score, phase }` by parsing VERIFICATION.md's `status` field, not mere file existence.
-   - `verified: true` (status `passed`): proceed.
-   - status `human_needed`: proceed ONLY after explicit user approval.
-   - status `gaps_found` / `partial` / `failed`, or `missing`: STOP. Do not push or open a PR - the phase is not verified. Tell the user to run `/donny-verify-work` first. Continue only if the user explicitly passes `--allow-unverified`, and if so the PR body MUST report the real `status`, never "Verified".
+   Returns `{ verified, verdict, status, score, phase }`. The engine reads VERIFICATION.md's `verdict` and `status` together (not mere file existence): `verified` is true only for `verdict: passed` with `status: PASS` (or a legacy `status: passed`). Key on `verified` and `verdict`, never on `status` alone; `status` is the raw value, reported as written.
+   - `verified: true` (verdict `passed`): proceed.
+   - verdict `human_needed`: proceed ONLY after explicit user approval.
+   - verdict `gaps_found` / `unknown` / `missing`, or verdict `passed` with `verified: false` (its status says PARTIAL or FAIL): STOP. Do not push or open a PR - the phase is not verified. Tell the user to run `/donny-verify-work` first. Continue only if the user explicitly passes `--allow-unverified`, and if so the PR body MUST report the real verdict, never "Verified".
 
 2. **Clean working tree?**
    ```bash
@@ -166,7 +166,7 @@ Read ROADMAP.md for phase goal. Read VERIFICATION.md for verification status.
 
 **Phase {N}: {Name}**
 **Goal:** {goal from ROADMAP.md}
-**Status:** {real status from the preflight verify phase-verified gate - "Verified" ONLY when status is `passed`; otherwise the actual status, e.g. "Human verification needed" or "Gaps found". Never print "Verified" for an unverified phase.}
+**Status:** {real verdict from the preflight verify phase-verified gate - "Verified" ONLY when `verified` is true; otherwise the actual verdict, e.g. "Human verification needed" or "Gaps found". Never print "Verified" for an unverified phase.}
 
 {One paragraph synthesized from SUMMARY.md files - what was built}
 ```
@@ -194,7 +194,7 @@ For each SUMMARY.md in the phase directory:
 ```markdown
 ## Verification
 
-- {`[x]` only if status is `passed`, else `[ ]`} Automated verification: {real status from VERIFICATION.md}
+- {`[x]` only if the gate returned `verified: true`, else `[ ]`} Automated verification: {real verdict and status from the phase-verified gate}
 - {human verification items from VERIFICATION.md, if any}
 ```
 
@@ -269,7 +269,7 @@ node "$HOME/.claude/donny/bin/donny-tools.cjs" commit "docs(${padded_phase}): sh
 PR: #{number} ({url})
 Branch: {branch} -> ${BASE_BRANCH}
 Commits: {count}
-Verification: {real status from the phase-verified gate - "Passed" only when status is `passed`}
+Verification: {real verdict from the phase-verified gate - "Passed" only when `verified` is true}
 Requirements: {N} REQ-IDs addressed
 
 Next steps:

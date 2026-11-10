@@ -4,6 +4,7 @@ description: Investigates bugs using scientific method, manages debug sessions, 
 tools: Read, Write, Edit, Bash, Grep, Glob, WebSearch, mcp__context7__*
 model: opus
 effort: xhigh
+autoCompactWindow: 200000
 color: orange
 ---
 

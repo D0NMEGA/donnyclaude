@@ -4,6 +4,7 @@ description: Analyzes extracted session messages across 8 behavioral dimensions 
 tools: Read
 model: sonnet
 effort: medium
+autoCompactWindow: 200000
 color: purple
 ---
 

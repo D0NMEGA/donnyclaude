@@ -56,7 +56,7 @@ case "$cmd" in
     printf '%s' "${1:?prompt required}" > "$job/prompt.txt"
     # codex refuses a directory outside a git work tree unless told to skip the check
     skipgit=""; git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || skipgit="--skip-git-repo-check "
-    runcmd="cd $(printf %q "$dir") && codex exec ${skipgit}--model $(printf %q "$model") -s read-only --output-last-message $(printf %q "$job/output.md") \"\$(cat $(printf %q "$job/prompt.txt"))\""
+    runcmd="cd $(printf %q "$dir") && codex exec ${skipgit}--model $(printf %q "$model") -s read-only --output-last-message $(printf %q "$job/output.md") \"\$(cat $(printf %q "$job/prompt.txt"))\" </dev/null"
     ;;
   review)
     runcmd="cd $(printf %q "$dir") && bash $(printf %q "$HOME/.claude/bin/cc-crossreview") $(printf '%q ' "$@")| tee $(printf %q "$job/output.md")"
@@ -64,7 +64,9 @@ case "$cmd" in
   run)
     [ "${1:-}" = "--" ] && shift
     [ $# -gt 0 ] || usage
-    runcmd="cd $(printf %q "$dir") && $(printf '%q ' "$@")| tee $(printf %q "$job/output.md")"
+    # stdin is closed: outside tmux it is an open pipe, and `codex exec` waits on it forever
+    # (2026-11-10: a review sat 32 minutes on "Reading additional input from stdin").
+    runcmd="cd $(printf %q "$dir") && $(printf '%q ' "$@")</dev/null | tee $(printf %q "$job/output.md")"
     ;;
 esac
 

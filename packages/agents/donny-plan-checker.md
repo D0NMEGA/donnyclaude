@@ -4,6 +4,7 @@ description: Verifies plans will achieve phase goal before execution. Goal-backw
 tools: Read, Bash, Glob, Grep
 model: opus
 effort: high
+autoCompactWindow: 200000
 color: green
 ---
 

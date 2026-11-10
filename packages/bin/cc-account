@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""Claude Code account rollover: launch on the first claude.ai account with usage left.
+
+Two accounts, two config dirs (Claude Code docs, authentication, "Log in with multiple
+accounts"). Each dir has its own login; everything shareable is a symlink into ~/.claude.
+
+  personal  ~/.claude       default, no CLAUDE_CONFIG_DIR
+  eid       ~/.claude-eid   CLAUDE_CONFIG_DIR=~/.claude-eid
+
+  cc-account pick     print the CLAUDE_CONFIG_DIR to launch with ("" = default). Called by
+                      the claude() function in ~/.zshrc; CC_ACCOUNT=personal|eid forces one.
+  cc-account mark     StopFailure hook (matcher rate_limit): record that this session's
+                      account hit a usage limit and post a macOS notification.
+  cc-account status   show what pick sees for each account.
+  cc-account link     (re)build the symlinks in ~/.claude-eid; pick runs it before using eid.
+  cc-account clear A  drop the limit mark of account A.
+
+An account counts as exhausted until a reset time taken from its last statusline payload
+(a rate_limits window at 100%) or from a mark. Payloads are attributed to an account by
+their transcript_path, so a statusline-last.json written by the other account is never
+credited to the wrong one. A running session cannot change account: /exit, then
+`claude -c` resumes the same conversation on whichever account pick chooses.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+HOME = Path.home()
+PRIMARY = HOME / ".claude"
+ACCOUNTS = (("personal", PRIMARY), ("eid", HOME / ".claude-eid"))  # preference order
+STATE = PRIMARY / "state" / "account-rollover"
+# Claude Code 2.1.312 renamed the "session limit" to the "5-hour limit"; Fable-family models
+# have their own weekly share. A model-specific hit has no window here and falls back to the
+# percentage check below.
+LIMIT_RE = re.compile(r"hit your (session|5-hour|weekly|opus|sonnet|fable|mythos) limit", re.IGNORECASE)
+WINDOW_OF = {"session": "five_hour", "5-hour": "five_hour", "weekly": "seven_day"}
+FALLBACK_HOLD_S = 5 * 3600  # a mark with no known reset time holds one session window
+NEAR_FULL = 98  # a rate_limit error below this usage is a transient 429, not a usage limit
+# Per-account state that must stay separate between the two config dirs.
+NO_LINK = {
+    ".claude.json", ".credentials.json", ".DS_Store", "cache", "daemon", "daemon.log",
+    "daemon-auth-cooldown", "daemon-auth-status.json", "debug", "mcp-needs-auth-cache.json",
+    "session-env", "sessions", "stats-cache.json", "statsig", "statusline-last.json",
+    "telemetry", "plugins", "skills",
+}
+FARMS = ("plugins", "skills")  # linked entry by entry: their synced/ comes from claude.ai
+FARM_SKIP = {"synced", ".trash"}
+
+
+def account_of(config_dir: str | None) -> str:
+    path = os.path.abspath(os.path.expanduser(config_dir)) if config_dir else str(PRIMARY)
+    for name, d in ACCOUNTS:
+        if path == str(d):
+            return name
+    return Path(path).name
+
+
+def logged_in(name: str, d: Path) -> bool:
+    if d == PRIMARY:
+        return True
+    try:
+        return b'"oauthAccount"' in (d / ".claude.json").read_bytes()
+    except OSError:
+        return False
+
+
+def read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_json(path: Path, data: dict, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, indent=2)
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def payloads() -> dict[str, dict]:
+    """Newest statusline payload per account, attributed by transcript_path."""
+    newest: dict[str, tuple[float, dict]] = {}
+    for _, d in ACCOUNTS:
+        f = d / "statusline-last.json"
+        try:
+            mtime = f.stat().st_mtime
+        except OSError:
+            continue
+        payload = read_json(f).get("payload")
+        if not isinstance(payload, dict):
+            continue
+        transcript = str(payload.get("transcript_path") or "")
+        owner = next((n for n, a in ACCOUNTS if transcript.startswith(str(a) + os.sep)),
+                     account_of(str(d)))
+        if owner not in newest or mtime > newest[owner][0]:
+            newest[owner] = (mtime, payload)
+    return {k: v[1] for k, v in newest.items()}
+
+
+def windows(payload: dict | None) -> dict[str, dict]:
+    limits = (payload or {}).get("rate_limits") or {}
+    return {k: v for k, v in limits.items() if k in WINDOW_OF.values() and isinstance(v, dict)}
+
+
+def exhausted_until(acct: str, pl: dict[str, dict], now: float) -> float:
+    until = 0.0
+    for win in windows(pl.get(acct)).values():
+        if (win.get("used_percentage") or 0) >= 100:
+            until = max(until, float(win.get("resets_at") or 0))
+    mark = read_json(STATE / f"{acct}.json")
+    if mark:
+        until = max(until, float(mark.get("resets_at") or 0))
+    return until if until > now else 0.0
+
+
+def fmt(ts: float) -> str:
+    return time.strftime("%a %H:%M", time.localtime(ts)) if ts else "?"
+
+
+def notify(text: str) -> None:
+    if os.environ.get("CC_ACCOUNT_NO_NOTIFY"):
+        return
+    script = f'display notification {json.dumps(text)} with title "Claude Code"'
+    try:
+        subprocess.run(["osascript", "-e", script], timeout=5, check=False, capture_output=True)
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # a missed notification must never break the hook
+
+
+def link_entries(src: Path, dst: Path, skip: set[str]) -> None:
+    for entry in src.iterdir():
+        link = dst / entry.name
+        if entry.name not in skip and not link.exists() and not link.is_symlink():
+            link.symlink_to(entry)
+
+
+def cmd_link() -> int:
+    target = dict(ACCOUNTS)["eid"]
+    target.mkdir(mode=0o700, exist_ok=True)
+    link_entries(PRIMARY, target, NO_LINK)
+    for farm in FARMS:
+        (target / farm).mkdir(exist_ok=True)
+        link_entries(PRIMARY / farm, target / farm, FARM_SKIP)
+    seed = target / ".claude.json"
+    if not seed.exists():  # user-scope MCP servers live in .claude.json, not in settings
+        servers = read_json(HOME / ".claude.json").get("mcpServers") or {}
+        write_json(seed, {"mcpServers": servers}, mode=0o600)
+    return 0
+
+
+def cmd_mark() -> int:
+    try:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    if not isinstance(event, dict) or event.get("error") != "rate_limit":
+        return 0
+    acct = account_of(os.environ.get("CLAUDE_CONFIG_DIR"))
+    msg = str(event.get("last_assistant_message") or "")[:300]
+    hit = LIMIT_RE.search(msg)
+    limits = windows(payloads().get(acct))
+    win = WINDOW_OF.get(hit.group(1).lower()) if hit else None
+    if win is None:
+        pct, win = max(((v.get("used_percentage") or 0, k) for k, v in limits.items()),
+                       default=(0, None))
+        if not hit and pct < NEAR_FULL:
+            return 0
+    now = time.time()
+    resets = float((limits.get(win) or {}).get("resets_at") or 0) if win else 0.0
+    write_json(STATE / f"{acct}.json", {
+        "account": acct, "marked_at": now, "window": win, "message": msg,
+        "resets_at": resets if resets > now else now + FALLBACK_HOLD_S,
+    })
+    notify(f"{acct} account hit its usage limit. Type /exit, then run claude -c "
+           "to continue on the other account.")
+    return 0
+
+
+def cmd_pick() -> int:
+    ready = [(n, d) for n, d in ACCOUNTS if logged_in(n, d)]
+    forced = os.environ.get("CC_ACCOUNT")
+    if forced:
+        chosen = next((a for a in ready if a[0] == forced), None)
+        if chosen is None:
+            print(f"cc-account: {forced} is not logged in; using personal", file=sys.stderr)
+            chosen = ready[0]
+    else:
+        now, pl = time.time(), payloads()
+        held = [(exhausted_until(n, pl, now), n, d) for n, d in ready]
+        free = [h for h in held if h[0] == 0.0]
+        until, name, d = free[0] if free else min(held)
+        chosen = (name, d)
+        if not free and len(ready) == 1:
+            print(f"cc-account: {name} is at its limit until {fmt(until)} and no other "
+                  "account is logged in (see cc-account status)", file=sys.stderr)
+        elif not free:
+            print(f"cc-account: every account is at its limit; starting on {name} "
+                  f"(frees first, {fmt(until)})", file=sys.stderr)
+        elif name != ready[0][0]:
+            print(f"cc-account: {ready[0][0]} is at its limit until {fmt(held[0][0])}; "
+                  f"starting on {name}", file=sys.stderr)
+    if chosen[1] != PRIMARY:
+        cmd_link()
+    print("" if chosen[1] == PRIMARY else str(chosen[1]))
+    return 0
+
+
+def cmd_status() -> int:
+    now, pl = time.time(), payloads()
+    for name, d in ACCOUNTS:
+        use = ", ".join(f"{k} {v.get('used_percentage')}% (resets {fmt(v.get('resets_at') or 0)})"
+                        for k, v in windows(pl.get(name)).items()) or "no statusline data"
+        until = exhausted_until(name, pl, now)
+        state = f"at limit until {fmt(until)}" if until else "available"
+        print(f"{name:9s} {d}  logged_in={logged_in(name, d)}  {use}  -> {state}")
+    return 0
+
+
+def cmd_clear(acct: str) -> int:
+    (STATE / f"{acct}.json").unlink(missing_ok=True)
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    cmds = {"pick": cmd_pick, "mark": cmd_mark, "status": cmd_status, "link": cmd_link}
+    if len(argv) == 3 and argv[1] == "clear":
+        return cmd_clear(argv[2])
+    if len(argv) != 2 or argv[1] not in cmds:
+        print(__doc__, file=sys.stderr)
+        return 2
+    return cmds[argv[1]]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

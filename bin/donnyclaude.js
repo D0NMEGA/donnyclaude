@@ -33,6 +33,11 @@ const DEFAULT_TOP_K_AUTOINVOKE_SKILLS = Object.freeze([
   'donny-next',
   'donny-verify-work',
   'donny-ship',
+  // Workflows call these through Skill(); a hidden skill cannot be loaded by the model.
+  'donny-council',
+  'donny-audit-milestone',
+  'donny-ui-phase',
+  'donny-ui-review',
   'web-research',
 ]);
 
@@ -469,9 +474,9 @@ function donnyStandardsBlock() {
   return [
     DONNY_STD_BEGIN,
     'DonnyClaude operating guide, managed block. The coding standards live in ~/.claude/rules/common/',
-    '(coding-style, writing-style, git-workflow, testing, performance) and Claude Code loads them on its',
+    '(coding-style, writing-style, git-workflow, testing) and Claude Code loads them on its',
     'own as user rules; language rules under ~/.claude/rules/<lang>/ load only when matching files are',
-    'touched. Workflow engine: /donny-help. Update this toolkit with: npx donnyclaude update.',
+    'touched. Workflow engine: /donny-help.',
     DONNY_STD_END,
   ].join('\n');
 }

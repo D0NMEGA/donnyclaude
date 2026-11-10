@@ -262,7 +262,7 @@ The discuss step in `--auto` mode MUST NOT loop. If CONTEXT.md already exists af
 **If `INTERACTIVE` is set:** Run the standard discuss-phase skill inline (asks interactive questions, waits for user answers). This preserves user input on all design decisions while keeping plan+execute out of the main context:
 
 ```
-Skill(skill="donny:discuss-phase", args="${PHASE_NUM}")
+Skill(skill="donny-discuss-phase", args="${PHASE_NUM}")
 ```
 
 **If `INTERACTIVE` is NOT set:** Execute the smart_discuss step for this phase (batch table proposals, auto-optimized).
@@ -321,17 +321,18 @@ UI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-UI-SPEC.md 2>/dev/null | head -1)
 ```
 Agent(
   description="Plan phase ${PHASE_NUM}: ${PHASE_NAME}",
+  model="opus",
   run_in_background=true,
-  prompt="Run plan-phase for phase ${PHASE_NUM}: Skill(skill=\"donny:plan-phase\", args=\"${PHASE_NUM}\")"
+  prompt="Run plan-phase for phase ${PHASE_NUM}: Skill(skill=\"donny-plan-phase\", args=\"${PHASE_NUM} --no-advance\")"
 )
 ```
 
 Store the agent task_id. After discuss for the next phase completes (or if no next phase), wait for the plan agent to finish before proceeding to execute.
 
-**If `INTERACTIVE` is NOT set (default):** Run plan inline as before.
+**If `INTERACTIVE` is NOT set (default):** Run plan inline as before. `--no-advance` stops plan-phase from auto-advancing into execute-phase, because this workflow runs execution as its own step 3c.
 
 ```
-Skill(skill="donny-plan-phase", args="${PHASE_NUM}")
+Skill(skill="donny-plan-phase", args="${PHASE_NUM} --no-advance")
 ```
 
 **Replan-escalation check (bounded auto-loop):** plan-phase escalates instead of force-proceeding when the plan<->check loop hits `max_replan_iterations` with unresolved issues. If it left a checkpoint, the plans did NOT pass the checker; do not execute them.
@@ -349,8 +350,9 @@ Verify plan produced output - re-run `init phase-op` and check `has_plans`. If f
 ```
 Agent(
   description="Execute phase ${PHASE_NUM}: ${PHASE_NAME}",
+  model="opus",
   run_in_background=true,
-  prompt="Run execute-phase for phase ${PHASE_NUM}: Skill(skill=\"donny:execute-phase\", args=\"${PHASE_NUM} --no-transition\")"
+  prompt="Run execute-phase for phase ${PHASE_NUM}: Skill(skill=\"donny-execute-phase\", args=\"${PHASE_NUM} --no-transition\")"
 )
 ```
 
@@ -369,8 +371,12 @@ Skill(skill="donny-execute-phase", args="${PHASE_NUM} --no-transition")
 After execute-phase returns (or the execute agent completes), read the verification result:
 
 ```bash
-VERIFY_STATUS=$(grep -h "^verdict:" "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
+VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${PHASE_DIR}" --pick outcome 2>/dev/null || echo "")
 ```
+
+`verify phase-verified` reads the newest VERIFICATION.md and returns JSON with `verified` (boolean) and `verdict` (`passed`, `gaps_found`, or `human_needed`); `--pick outcome` prints just the verdict.
+
+`outcome` is `passed` only when `verified` is true. Treat `unknown`, `missing` or an empty result as a blocker (go to handle_blocker): the verification record is absent or contradicts itself.
 
 Where `PHASE_DIR` comes from the `init phase-op` call already made in step 3a. If the variable is not in scope, re-fetch:
 
@@ -380,7 +386,7 @@ PHASE_STATE=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" init phase-op ${PHA
 
 Parse `phase_dir` from the JSON.
 
-**If VERIFY_STATUS is empty** (no VERIFICATION.md or no status field):
+**If VERIFY_STATUS is empty** (no VERIFICATION.md or no verdict in the command output):
 
 Go to handle_blocker: "Execute phase ${PHASE_NUM} did not produce verification results."
 
@@ -430,7 +436,7 @@ Ask user via AskUserQuestion:
 On **"Run gap closure"**: Execute gap closure cycle (limit: 1 attempt):
 
 ```
-Skill(skill="donny-plan-phase", args="${PHASE_NUM} --gaps")
+Skill(skill="donny-plan-phase", args="${PHASE_NUM} --gaps --no-advance")
 ```
 
 Verify gap plans were created - re-run `init phase-op ${PHASE_NUM}` and check `has_plans`. If no new gap plans -> go to handle_blocker: "Gap closure planning for phase ${PHASE_NUM} did not produce plans."
@@ -442,7 +448,7 @@ Skill(skill="donny-execute-phase", args="${PHASE_NUM} --no-transition")
 
 Re-read verification status:
 ```bash
-VERIFY_STATUS=$(grep -h "^verdict:" "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
+VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${PHASE_DIR}" --pick outcome 2>/dev/null || echo "")
 ```
 
 If `passed` or `human_needed`: Route normally (continue or ask user as above).
@@ -842,7 +848,7 @@ Decisions captured: {count} across {area_count} areas
  Completed through phase ${TO_PHASE} as requested.
  Remaining phases were not executed.
 
- Resume with: /donny:autonomous --from ${next_incomplete_phase}
+ Resume with: /donny-autonomous --from ${next_incomplete_phase}
 ```
 
 Proceed directly to lifecycle step (which handles partial completion - skips audit/complete/cleanup since not all phases are done). Exit cleanly.
@@ -900,7 +906,7 @@ If all phases complete, proceed to lifecycle step.
 
 Exit cleanly.
 
-**Otherwise:** After all phases complete, run the milestone lifecycle sequence: audit -> complete -> cleanup.
+**Otherwise:** After all phases complete, run the milestone lifecycle: audit, then print the complete and cleanup commands for the user (both are user-only).
 
 Display lifecycle transition banner:
 
@@ -909,7 +915,7 @@ Display lifecycle transition banner:
  DONNY ► AUTONOMOUS ▸ LIFECYCLE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
- All phases complete -> Starting lifecycle: audit -> complete -> cleanup
+ All phases complete -> Starting lifecycle: audit, then complete and cleanup commands for you to run
  Milestone: {milestone_version} - {milestone_name}
 ```
 
@@ -969,9 +975,11 @@ On **"Continue with tech debt"**: Display `Audit ⏭ Tech debt acknowledged - pr
 
 On **"Stop"**: Go to handle_blocker with "User stopped - tech debt to address. Run /donny-audit-milestone to review details."
 
-**5b. Complete Milestone**
+**5b. Complete milestone (user runs it)**
 
-**Guard - orphan phase directories.** `donny-complete-milestone` counts accomplishments from `.planning/phases/`. Directories left over from a prior, already-archived milestone make it miscount, prepend a garbled MILESTONES entry, and can target ROADMAP.md for deletion. Before completing, check that every `.planning/phases/<dir>` maps to a phase number in the current ROADMAP.md:
+`donny-complete-milestone` archives the milestone and rewrites ROADMAP.md, and `donny-cleanup` deletes phase directories. Both are irreversible, so they are user-only skills: do NOT call them through `Skill()`. Print the commands and stop.
+
+**Guard - orphan phase directories.** `donny-complete-milestone` counts accomplishments from `.planning/phases/`. Directories left over from a prior, already-archived milestone make it miscount, prepend a garbled MILESTONES entry, and can target ROADMAP.md for deletion. Check that every `.planning/phases/<dir>` maps to a phase number in the current ROADMAP.md:
 
 ```bash
 ROADMAP_PHASES=$(grep -oE 'Phase[[:space:]]+[0-9]+' .planning/ROADMAP.md 2>/dev/null | grep -oE '[0-9]+' | sort -u)
@@ -984,47 +992,30 @@ for d in .planning/phases/*/; do
 done
 ```
 
-**If `ORPHANS` is non-empty:** do NOT call complete-milestone yet. Show the orphan directories and ask via AskUserQuestion:
-- **Archive orphans first** - run `Skill(skill="donny-cleanup")` to archive the stale directories, then re-run this guard.
-- **Continue anyway** - proceed knowing the accomplishment count may be off (not recommended).
-- **Stop** - go to handle_blocker so the user can sort the directories out manually.
-
-Only once `.planning/phases/` is free of orphans (or the user explicitly chose to continue) call:
+Display the next steps and stop (do not invoke either skill):
 
 ```
-Skill(skill="donny-complete-milestone", args="${milestone_version}")
+Next, in this order:
+  1. /donny-cleanup                          (only if orphan directories were found: ${ORPHANS})
+  2. /donny-complete-milestone ${milestone_version}
+  3. /donny-cleanup                          (archive the finished phase directories)
+Run these yourself: both are irreversible, so the workflow does not call them.
 ```
 
-After complete-milestone returns, verify it produced output:
+Omit step 1 when `ORPHANS` is empty.
 
-```bash
-ls .planning/milestones/v${milestone_version}-ROADMAP.md 2>/dev/null || true
-```
+**5c. Final summary**
 
-If the archive file does not exist, go to handle_blocker: "Complete milestone did not produce expected archive files."
-
-**5c. Cleanup**
-
-```
-Skill(skill="donny-cleanup")
-```
-
-Cleanup shows its own dry-run and asks user for approval internally - this is an acceptable pause per CTRL-01 since it's an explicit decision about file deletion.
-
-**5d. Final Completion**
-
-Display final completion banner:
+Display the final banner:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- DONNY ► AUTONOMOUS ▸ COMPLETE
+ DONNY ► AUTONOMOUS ▸ PHASES COMPLETE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  Milestone: {milestone_version} - {milestone_name}
- Status: Complete ✅
- Lifecycle: audit ✅ -> complete ✅ -> cleanup ✅
-
- Ship it!
+ Phases: complete ✅    Audit: done ✅
+ Lifecycle: audit ✅ -> complete (run /donny-complete-milestone ${milestone_version}) -> cleanup (run /donny-cleanup)
 ```
 
 </step>
@@ -1088,9 +1079,8 @@ Log `Phase {N} ⏭ {Name} - Skipped by user` and proceed to iterate.
 - [ ] Audit invoked via Skill(skill="donny-audit-milestone")
 - [ ] Audit result routing: passed -> auto-continue, gaps_found -> user decides, tech_debt -> user decides
 - [ ] Audit technical failure (no file/no status) routes to handle_blocker
-- [ ] Complete-milestone invoked via Skill() with ${milestone_version} arg
-- [ ] Cleanup invoked via Skill() - internal confirmation is acceptable (CTRL-01)
-- [ ] Final completion banner displayed after lifecycle
+- [ ] Complete-milestone and cleanup are NOT called via Skill(); the exact slash commands are printed for the user
+- [ ] Final summary banner displayed after audit
 - [ ] Progress bar uses phase number / total milestone phases (not position among incomplete), with fallback display when phase numbers exceed total
 - [ ] Smart discuss documents relationship to discuss-phase with CTRL-03 note
 - [ ] Frontend phases get UI-SPEC generated before planning (step 3a.5) if not already present
@@ -1110,7 +1100,7 @@ Log `Phase {N} ⏭ {Name} - Skipped by user` and proceed to iterate.
 - [ ] `--to N` compatible with `--from N` (run phases from M to N)
 - [ ] `--to N` handle_blocker resume message preserves --to flag
 - [ ] `--to N` skips lifecycle when not all milestone phases complete
-- [ ] `--interactive` runs discuss inline via donny:discuss-phase (asks questions, waits for user)
+- [ ] `--interactive` runs discuss inline via donny-discuss-phase (asks questions, waits for user)
 - [ ] `--interactive` dispatches plan and execute as background agents (context isolation)
 - [ ] `--interactive` enables pipeline parallelism: discuss Phase N+1 while Phase N builds
 - [ ] `--interactive` main context only accumulates discuss conversations (lean)

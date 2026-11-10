@@ -5,19 +5,23 @@
 # inherits another's context. Gates between steps are files Donny already writes, never prose:
 #   council  -> {phase}/council/DECISIONS.md must exist          (only with --council)
 #   plan     -> at least one {phase}/*-PLAN.md must exist
-#   execute  -> {phase}/*-VERIFICATION.md must carry verdict: passed
-#   review   -> cc-crossreview (Codex, read-only) must print VERDICT: PASS   (skip: --no-review)
+#   execute  -> `donny-tools verify phase-verified` must report verified: true
+#   review   -> cc-crossreview (Codex, read-only) must exit 0 and end with VERDICT: PASS, reviewing
+#               the diff since the commit recorded when the phase started   (skip: --no-review)
 #   merge    -> with --merge, squash-merge the phase branch into the base branch as one commit
 #               "feat(<phase-slug>): <phase name>" and stay on the base branch, so the next phase
 #               branches from merged main (Donny's branching_strategy=phase leaves merging to you)
 # A failed gate stops the run and leaves the log path; fix, then rerun with --resume.
+# A step's completion marker is written only after its gate passed and records the commit it passed
+# at; --resume skips a step only while that commit is still in HEAD's history.
+# DONNY_RUN_RETRY_SECS (default 600) sets the wait between usage-limit retries.
 # Inside tmux every step runs in its own window (watch it live); the runner waits for it.
 #
 # Usage: donny-run [-C project] <first-phase> [<last-phase>] [--council] [--no-review] [--merge]
 #                  [--model m] [--effort e] [--resume] [--dry-run]
 set -uo pipefail
 
-project="$PWD"; council=0; review=1; merge=0; model="${DONNY_RUN_MODEL:-opus}"; effort="${DONNY_RUN_EFFORT:-xhigh}"
+project="$PWD"; council=0; review=1; merge=0; model="${DONNY_RUN_MODEL:-opus}"; effort="${DONNY_RUN_EFFORT:-high}"
 resume=0; dry=0; first=""; last=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -36,21 +40,60 @@ done
 [ -n "$first" ] || { echo "usage: donny-run [-C project] <first-phase> [<last-phase>] [--council] [--no-review] [--merge] [--resume] [--dry-run]" >&2; exit 2; }
 last="${last:-$first}"
 cd "$project" || exit 2
+TOOLS="$HOME/.claude/donny/bin/donny-tools.cjs"
 [ -d .planning ] || { echo "donny-run: no .planning in $project" >&2; exit 2; }
 
 RUN_DIR=".planning/runner"; mkdir -p "$RUN_DIR"
 LOG="$RUN_DIR/run-$(date +%Y%m%dT%H%M%S).log"
 say() { printf '%s %s\n' "$(date +%T)" "$*" | tee -a "$LOG"; }
 
-phase_dir() {  # NN -> .planning/phases/NN-*
-  local p; p=$(printf '%02d' "$1" 2>/dev/null || echo "$1")
-  ls -d .planning/phases/"$p"-* 2>/dev/null | head -1
+phase_dir() {  # N or N.M -> .planning/phases/NN-* or NN.M-*; only the integer part is zero-padded
+  local int="${1%%.*}" rest p
+  rest="${1#"$int"}"
+  p=$(printf '%02d' "$((10#$int))" 2>/dev/null || echo "$int")
+  ls -d .planning/phases/"$p$rest"-* 2>/dev/null | head -1
+}
+
+# phase_list: ROADMAP phase numbers from `roadmap analyze`, filtered numerically to [first, last]
+# (segment by segment, so 1.1 sorts after 1 and before 2). One per line.
+phase_list() {
+  local json; json=$(node "$TOOLS" roadmap analyze 2>/dev/null) || return 1
+  printf '%s' "$json" | node -e '
+const fs = require("fs");
+let s = fs.readFileSync(0, "utf8").trim();
+if (s.startsWith("@file:")) s = fs.readFileSync(s.slice(6), "utf8");  // large payloads land in a tmpfile
+const seg = (v) => String(v).split(".").map((x) => parseInt(x, 10) || 0);
+const cmp = (a, b) => { const x = seg(a), y = seg(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
+const [lo, hi] = process.argv.slice(1);
+const nums = (JSON.parse(s).phases || []).map((p) => String(p.number)).filter((n) => cmp(n, lo) >= 0 && cmp(n, hi) <= 0);
+nums.sort(cmp);
+process.stdout.write([...new Set(nums)].join("\n"));
+' "$first" "$last"
+}
+
+# marker_ok <file>: the marker records a commit that is still part of HEAD's history.
+marker_ok() {
+  local sha; sha=$(cat "$1" 2>/dev/null) || return 1
+  [ -n "$sha" ] && git merge-base --is-ancestor "$sha" HEAD 2>/dev/null
+}
+
+# marker_is_head <file>: the marker's commit is exactly HEAD. The review uses this one, because a
+# review of an ancestor says nothing about commits made after it.
+marker_is_head() {
+  local sha; sha=$(cat "$1" 2>/dev/null) || return 1
+  [ -n "$sha" ] && [ "$sha" = "$(git rev-parse HEAD 2>/dev/null)" ]
+}
+
+# mark_done <phase> <step>: call only after the step's gate validated.
+mark_done() {
+  [ "$dry" = 1 ] && return 0
+  git rev-parse HEAD > "$RUN_DIR/$1-$2.done" 2>/dev/null || : > "$RUN_DIR/$1-$2.done"
 }
 
 # run_step <phase> <name> <claude prompt>: fresh claude -p, logged, tmux window when available.
 run_step() {
-  local phase="$1" name="$2" prompt="$3" marker="$RUN_DIR/$1-$2.done" log="$RUN_DIR/$1-$2.log"
-  if [ "$resume" = 1 ] && [ -e "$marker" ]; then say "phase $phase $name: done earlier, skipping"; return 0; fi
+  local phase="$1" name="$2" prompt="$3" marker="$RUN_DIR/$1-$2.done" log="$RUN_DIR/$1-$2.log"  # marker: see mark_done
+  if [ "$resume" = 1 ] && marker_ok "$marker"; then say "phase $phase $name: done earlier, skipping"; return 0; fi
   local cmd="claude -p $(printf %q "$prompt") --dangerously-skip-permissions --model $(printf %q "$model") --effort $(printf %q "$effort")"
   say "phase $phase $name: $cmd"
   [ "$dry" = 1 ] && return 0
@@ -65,54 +108,103 @@ run_step() {
       bash -c "$cmd" > "$log" 2>&1 < /dev/null; echo $? > "$log.exit"
     fi
     local ex; ex=$(cat "$log.exit" 2>/dev/null || echo 1)
-    # Usage limit: wait for the window to reset instead of failing the run (at most 6 hours).
-    if grep -q -i -E 'usage limit|rate limit|out of extra usage|limit reached' "$log" && [ "$attempt" -le 36 ]; then
-      say "phase $phase $name: usage limit hit; retrying in 10 minutes (attempt $attempt)"; sleep 600; continue
+    # A successful step is never retried, whatever its log says. Only a failed step whose log TAIL
+    # reports a usage limit waits for the window to reset (at most 36 attempts, 6 hours at the default).
+    [ "$ex" = 0 ] && return 0
+    if tail -n 40 "$log" | grep -a -q -i -E 'usage limit|rate limit|out of extra usage|limit reached' && [ "$attempt" -le 36 ]; then
+      local secs="${DONNY_RUN_RETRY_SECS:-600}"
+      say "phase $phase $name: usage limit hit; retrying in ${secs}s (attempt $attempt)"; sleep "$secs"; continue
     fi
-    [ "$ex" = 0 ] && { touch "$marker"; return 0; }
     say "phase $phase $name: claude exited $ex; see $log"; return 1
   done
 }
 
 gate_fail() { say "STOP: $*"; exit 1; }
 
-for ((phase = first; phase <= last; phase++)); do
+verified_flag() {  # phase -> true | false | error, from the JSON `verify phase-verified` prints
+  node "$TOOLS" verify phase-verified "$(phase_dir "$1")" 2>/dev/null | node -e '
+let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
+  try { process.stdout.write(JSON.parse(s).verified === true ? "true" : "false"); } catch { process.stdout.write("error"); }
+});'
+}
+
+phases=$(phase_list) || gate_fail "could not read phases from 'roadmap analyze' (is .planning/ROADMAP.md present?)"
+[ -n "$phases" ] || gate_fail "no phase between $first and $last in ROADMAP.md"
+
+for phase in $phases; do
   say "=== phase $phase ==="
+  # A squash merge leaves the step markers pointing at commits that are no longer in HEAD's history,
+  # so a merged phase is remembered by its own marker (the squash commit) and skipped on --resume.
+  if [ "$resume" = 1 ] && marker_ok "$RUN_DIR/$phase-merged.done"; then
+    say "phase $phase: squash-merged earlier, skipping"
+    continue
+  fi
+  # The review diff is "everything since this point". merge-base against main would equal HEAD when the
+  # run is on main and show nothing, so the start commit is recorded here and reused on --resume.
+  start_file="$RUN_DIR/$phase-start.sha"
+  if [ "$resume" = 1 ] && [ -s "$start_file" ]; then start=$(cat "$start_file")
+  else
+    # --merge squashes every commit the phase branch has, so the review has to cover them all:
+    # start from the merge-base with the base branch. On the base branch that is HEAD itself.
+    basebr0=$(git show-ref --verify -q refs/heads/main && echo main || echo master)
+    start=$(git merge-base HEAD "$basebr0" 2>/dev/null || git rev-parse HEAD 2>/dev/null || echo "")
+    [ "$dry" = 1 ] || printf '%s\n' "$start" > "$start_file"
+  fi
   if [ "$council" = 1 ]; then
     run_step "$phase" council "/donny-council $phase --auto" || exit 1
     [ "$dry" = 1 ] || [ -s "$(phase_dir "$phase")/council/DECISIONS.md" ] || gate_fail "phase $phase: council wrote no DECISIONS.md"
+    mark_done "$phase" council
   fi
-  run_step "$phase" plan "/donny-plan-phase $phase --auto" || exit 1
+  # --no-advance: plan-phase --auto otherwise chains into execution, which would run execute inside this step.
+  run_step "$phase" plan "/donny-plan-phase $phase --auto --no-advance" || exit 1
   [ "$dry" = 1 ] || ls "$(phase_dir "$phase")"/*-PLAN.md >/dev/null 2>&1 || gate_fail "phase $phase: no PLAN.md written"
+  mark_done "$phase" plan
   run_step "$phase" execute "/donny-execute-phase $phase --no-transition" || exit 1
   if [ "$dry" = 0 ]; then
-    verdict=$(grep -h '^verdict:' "$(phase_dir "$phase")"/*-VERIFICATION.md 2>/dev/null | tail -1 | cut -d: -f2 | tr -d ' ')
-    [ "$verdict" = passed ] || gate_fail "phase $phase: verification verdict is '${verdict:-missing}' (see $(phase_dir "$phase"))"
+    verified=$(verified_flag "$phase")
+    [ "$verified" = true ] || gate_fail "phase $phase: verify phase-verified reported verified=$verified (see $(phase_dir "$phase"))"
     say "phase $phase: verification passed"
   fi
+  mark_done "$phase" execute
   if [ "$review" = 1 ]; then
-    base=$(git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null || echo "")
-    say "phase $phase review: cc-crossreview ${base:+$base}"
+    say "phase $phase review: cc-crossreview ${start:-<no start commit>}"
     if [ "$dry" = 0 ]; then
-      out="$RUN_DIR/$phase-review.md"
-      bash "$HOME/.claude/bin/cc-crossreview" ${base:+"$base"} > "$out" 2>&1
-      grep -q 'VERDICT: PASS' "$out" || gate_fail "phase $phase: Codex review did not pass (see $out)"
-      say "phase $phase: Codex review PASS"
+      if [ "$resume" = 1 ] && marker_is_head "$RUN_DIR/$phase-review.done"; then
+        say "phase $phase review: passed earlier, skipping"
+      else
+        out="$RUN_DIR/$phase-review.md"
+        [ -n "$start" ] && git rev-parse --verify -q "$start^{commit}" >/dev/null || gate_fail "phase $phase: no usable start commit ($start_file); cannot review"
+        # An empty diff means nothing was built (or it was never committed); that is not a pass.
+        git diff --quiet "$start...HEAD" && gate_fail "phase $phase: no committed changes since $start; refusing to treat an empty review as a pass"
+        bash "$HOME/.claude/bin/cc-crossreview" "$start" > "$out" 2>&1; rc=$?
+        final=$(grep -a '^VERDICT:' "$out" | tail -1 | tr -d '\r' | sed 's/[[:space:]]*$//')
+        { [ "$rc" = 0 ] && [ "$final" = "VERDICT: PASS" ]; } || gate_fail "phase $phase: Codex review did not pass (exit $rc, final verdict '${final:-none}'; see $out)"
+        say "phase $phase: Codex review PASS"
+        mark_done "$phase" review
+      fi
     fi
   fi
   if [ "$merge" = 1 ]; then
     branch=$(git branch --show-current); basebr=$(git show-ref --verify -q refs/heads/main && echo main || echo master)
-    pdir=$(phase_dir "$phase"); slug=$(basename "${pdir:-phase-$phase}" | sed 's/^[0-9]*-//'); name=$(echo "$slug" | tr '-' ' ')
+    pdir=$(phase_dir "$phase"); slug=$(basename "${pdir:-phase-$phase}" | sed 's/^[0-9.]*-//'); name=$(echo "$slug" | tr '-' ' ')
     if [ "$branch" = "$basebr" ] || [ -z "$branch" ]; then
       say "phase $phase merge: already on $basebr, nothing to merge"
     else
       say "phase $phase merge: squash $branch into $basebr as feat($slug): $name"
       if [ "$dry" = 0 ]; then
-        git checkout -q "$basebr" && git merge --squash "$branch" >/dev/null \
-          && git reset -q HEAD .planning/ 2>/dev/null; git commit -q -m "feat($slug): $name" -m "Phase $phase, squashed from $branch. Verification: passed. Codex review: $([ "$review" = 1 ] && echo PASS || echo skipped)." \
+        # Never hide the user's files: .planning/ may be dirty (commit_docs=false), nothing else may be.
+        dirty=$(git status --porcelain --untracked-files=all -- . ':(exclude).planning')
+        [ -z "$dirty" ] || gate_fail "phase $phase: uncommitted changes outside .planning/ would be mixed into the merge; commit or stash them yourself, then rerun with --resume:
+$dirty"
+        # Every step must succeed for the commit to run. Only the unstaging of .planning/ may fail
+        # harmlessly (nothing of it staged, or no such path).
+        { git checkout -q "$basebr" \
+          && git merge --squash "$branch" >/dev/null \
+          && { git reset -q HEAD -- .planning/ 2>/dev/null || true; } \
+          && git commit -q -m "feat($slug): $name" -m "Phase $phase, squashed from $branch. Verification: passed. Codex review: $([ "$review" = 1 ] && echo PASS || echo skipped)."; } \
           || gate_fail "phase $phase: squash merge of $branch into $basebr failed; resolve by hand"
-        git diff --quiet || git stash -q -u  # commit_docs=false leaves .planning changes unstaged; keep the tree clean for the next phase
         say "phase $phase merge: $(git log -1 --format='%h %s')"
+        git rev-parse HEAD > "$RUN_DIR/$phase-merged.done"
       fi
     fi
   fi

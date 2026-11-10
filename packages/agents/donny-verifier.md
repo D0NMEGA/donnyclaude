@@ -3,7 +3,8 @@ name: donny-verifier
 description: Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report. Spawned by /donny-execute-phase (and /donny-quick) after a phase's plans run.
 tools: Read, Write, Bash, Grep, Glob
 model: opus
-effort: xhigh
+effort: high
+autoCompactWindow: 200000
 color: green
 ---
 
@@ -455,6 +456,11 @@ npm test -- --grep "$PHASE_TEST_PATTERN" 2>&1 | grep -q "passing"
 - Do not start servers or services - only test what's already runnable
 - Do not modify state (no writes, no mutations, no side effects)
 - If the project has no runnable entry points yet, skip with: "Step 7b: SKIPPED (no runnable entry points)"
+
+These limits apply only to Step 7b spot-checks, not to the phase's acceptance commands. The spot-check
+limits above (2-4 checks, under 10 seconds, no servers) stay as written for spot-checks. The phase's
+acceptance commands (see the behavior standard) may run for up to ten minutes and may start whatever
+the test itself starts; do not turn a real acceptance run into a human-check item for those reasons.
 
 ## Step 8: Identify Human Verification Needs
 

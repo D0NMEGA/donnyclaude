@@ -137,7 +137,7 @@ It does a local git-tag version check against the donny repo, redeploys via the 
 
 **`/donny-docs-update [--verify-only|--force]`** - generate or update project documentation (README, ARCHITECTURE, API, and more), each file fact-checked against the live codebase by subagents.
 
-**`/donny-update`** - sync the install from the local donny repo (git-tag check, no npm) and reapply local patches atomically.
+**`/donny-update`** - disabled; prints how the toolkit is deployed (changed files copied from the donnyclaude repository) and installs nothing.
 
 **`/donny-help`** - show this reference.
 

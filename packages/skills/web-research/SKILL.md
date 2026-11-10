@@ -1,6 +1,6 @@
 ---
 name: web-research
-description: Default method for ANY web search, web research, or "find the best tools/libraries/papers/prior-art" task — including GSD research phases and gsd-plan. Use browser-harness (real Chrome, beats blocks/logins) plus the multi-source scrapers in ~/Developer/scrapers. Prefer this over WebSearch/WebFetch/Exa for anything beyond a trivial single-fact lookup.
+description: Default method for ANY web search, web research, or "find the best tools/libraries/papers/prior-art" task, including Donny research phases and /donny-plan-phase. Use browser-harness (real Chrome, beats blocks/logins) plus the multi-source scrapers in ~/Developer/scrapers. Prefer this over WebSearch/WebFetch/Exa for anything beyond a trivial single-fact lookup.
 disable-model-invocation: false
 ---
 
@@ -15,7 +15,7 @@ orchestrator (async fan-out with per-source status + an on-disk HTTP cache). All
 a consistent JSON envelope into `~/Developer/scrapers/out/`; the digest `.md` opens with a
 per-source status table (ok / empty / no_key + latency).
 
-**One command for a research topic (use this for GSD research / gsd-plan):**
+**One command for a research topic (use this for Donny research phases):**
 ```bash
 # Run under the project's uv env — a bare system python3 lacks the uv-managed deps
 # (httpx/hishel/bm25s/model2vec/…) and dies with `ModuleNotFoundError: hishel`:

@@ -24,9 +24,6 @@ When creating PRs:
 4. Include test plan with TODOs
 5. Push with `-u` flag if new branch
 
-> For the full development process (planning, TDD, code review) before git operations,
-> see [development-workflow.md](./development-workflow.md).
-
 ## Branches and history (2026-10-07)
 
 - Each Donny phase runs on its own branch (`branching_strategy: phase`); main only receives
