@@ -18,10 +18,12 @@ import { buildPlanningFixture, cleanupFixture, validPlanContent } from './helper
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOLS = resolve(__dirname, '..', 'packages/donny/bin/donny-tools.cjs');
 
-function planStructure(root, planPath, home) {
+function planStructure(root, planPath, home, extraEnv = {}) {
+  const env = { ...process.env, HOME: home, ...extraEnv };
+  if (!('DONNY_HOME' in extraEnv)) delete env.DONNY_HOME;
   const out = execFileSync('node', [TOOLS, 'verify', 'plan-structure', planPath, '--cwd', root], {
     encoding: 'utf-8',
-    env: { ...process.env, HOME: home },
+    env,
   });
   return JSON.parse(out);
 }
@@ -62,6 +64,27 @@ describe('verify plan-structure: size budget', () => {
   it('uses workflow.plan_budget_kb from the project config', () => {
     const f = fixtureWithPlan(40, { plan_budget_kb: 60 });
     try {
+      assert.equal(overBudget(planStructure(f.root, f.plan, f.home)).length, 0);
+    } finally { cleanupFixture(f.root); }
+  });
+
+  it('reads the global layer from DONNY_HOME when it is set, as config-get does', () => {
+    const f = fixtureWithPlan(40);
+    try {
+      mkdirSync(join(f.home, '.donny'), { recursive: true });
+      writeFileSync(join(f.home, '.donny', 'defaults.json'), JSON.stringify({ workflow: { plan_budget_kb: 10 } }));
+      const other = join(f.root, 'other-donny-home');
+      mkdirSync(other, { recursive: true });
+      writeFileSync(join(other, 'defaults.json'), JSON.stringify({ workflow: { plan_budget_kb: 100 } }));
+      assert.equal(overBudget(planStructure(f.root, f.plan, f.home, { DONNY_HOME: other })).length, 0);
+    } finally { cleanupFixture(f.root); }
+  });
+
+  it('lets the project value win over the global one', () => {
+    const f = fixtureWithPlan(40, { plan_budget_kb: 60 });
+    try {
+      mkdirSync(join(f.home, '.donny'), { recursive: true });
+      writeFileSync(join(f.home, '.donny', 'defaults.json'), JSON.stringify({ workflow: { plan_budget_kb: 10 } }));
       assert.equal(overBudget(planStructure(f.root, f.plan, f.home)).length, 0);
     } finally { cleanupFixture(f.root); }
   });

@@ -1214,21 +1214,19 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
 }
 
 // workflow.plan_budget_kb: the size above which one PLAN.md draws a warning. Project config
-// first, then ~/.donny/defaults.json, then 30. Read directly because loadConfig() exposes a
-// fixed set of keys and this one is advisory.
+// first, then the global defaults (the same file config-get reads, so DONNY_HOME is honoured),
+// then 30. Read here because loadConfig() exposes a fixed set of keys and this one is advisory.
 function planBudgetKb(cwd) {
-  const layers = [
-    path.join(cwd, '.planning', 'config.json'),
-    path.join(require('os').homedir(), '.donny', 'defaults.json'),
-  ];
-  for (const file of layers) {
-    try {
-      const parsed = JSON.parse(require('fs').readFileSync(file, 'utf-8'));
-      const kb = Number(parsed && parsed.workflow && parsed.workflow.plan_budget_kb);
-      if (Number.isFinite(kb) && kb > 0) return kb;
-    } catch (e) {
-      // absent or unreadable layer: fall through to the next one
-    }
+  const { loadGlobalDefaults } = require('./config.cjs');
+  let project = {};
+  try {
+    project = JSON.parse(require('fs').readFileSync(path.join(cwd, '.planning', 'config.json'), 'utf-8'));
+  } catch (e) {
+    // no project config, or unreadable: the global layer decides
+  }
+  for (const layer of [project, loadGlobalDefaults()]) {
+    const kb = Number(layer && layer.workflow && layer.workflow.plan_budget_kb);
+    if (Number.isFinite(kb) && kb > 0) return kb;
   }
   return 30;
 }

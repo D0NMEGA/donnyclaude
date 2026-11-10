@@ -252,6 +252,19 @@ describe('donny-run merge', () => {
     assert.equal(fs.readFileSync(join(repo, '.planning/STATE.md'), 'utf-8'), 'dirty planning file\n');
   });
 
+  it('--resume skips a phase that was already squash-merged', () => {
+    onPhaseBranch(false);
+    const r1 = run(['1', '--no-review', '--merge'], { STUB_COMMIT_FILE: 'file.txt' });
+    assert.equal(r1.status, 0, r1.out);
+    const mainAfter = git('rev-parse', 'main');
+    const callsAfter = calls().length;
+    const r2 = run(['1', '--no-review', '--merge', '--resume'], { STUB_COMMIT_FILE: 'file.txt' });
+    assert.equal(r2.status, 0, r2.out);
+    assert.match(r2.out, /squash-merged earlier, skipping/);
+    assert.equal(calls().length, callsAfter, 'no step of the merged phase ran again');
+    assert.equal(git('rev-parse', 'main'), mainAfter, 'main gained no second commit');
+  });
+
   it('a failed merge creates no commit', () => {
     onPhaseBranch(true);
     const mainBefore = git('rev-parse', 'main');

@@ -133,6 +133,12 @@ phases=$(phase_list) || gate_fail "could not read phases from 'roadmap analyze' 
 
 for phase in $phases; do
   say "=== phase $phase ==="
+  # A squash merge leaves the step markers pointing at commits that are no longer in HEAD's history,
+  # so a merged phase is remembered by its own marker (the squash commit) and skipped on --resume.
+  if [ "$resume" = 1 ] && marker_ok "$RUN_DIR/$phase-merged.done"; then
+    say "phase $phase: squash-merged earlier, skipping"
+    continue
+  fi
   # The review diff is "everything since this point". merge-base against main would equal HEAD when the
   # run is on main and show nothing, so the start commit is recorded here and reused on --resume.
   start_file="$RUN_DIR/$phase-start.sha"
@@ -192,6 +198,7 @@ $dirty"
           && git commit -q -m "feat($slug): $name" -m "Phase $phase, squashed from $branch. Verification: passed. Codex review: $([ "$review" = 1 ] && echo PASS || echo skipped)."; } \
           || gate_fail "phase $phase: squash merge of $branch into $basebr failed; resolve by hand"
         say "phase $phase merge: $(git log -1 --format='%h %s')"
+        git rev-parse HEAD > "$RUN_DIR/$phase-merged.done"
       fi
     fi
   fi
