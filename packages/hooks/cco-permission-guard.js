@@ -52,6 +52,7 @@ const S = "\u0002"; // placeholder: the output of a command substitution (unknow
 const P = "\u0003"; // placeholder: the output of `$(pwd)` (the tracked cwd)
 const D = "\u0004"; // prefix: the ${...} that follows sat inside double quotes
 const GONE = Symbol("unset"); // value of a variable removed with `unset`
+const ABSENT = Symbol("absent"); // a `local` shadowed a name that had no value
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 const SKIP_WORDS = new Set([
   "command", "builtin", "exec", "time", "nohup", "caffeinate", "stdbuf",
@@ -917,7 +918,7 @@ function analyzeCmds(cmds, env, depth) {
     const closes = c.words.filter((w) => w === "}").length;
     const declares = plain(c.words[0]) === "function" ? plain(c.words[1] || "") : null;
     if (!fn && !env.inFn && opens && (fnPending || declares)) {
-      fn = { name: fnPending || declares, start: ci, depth: 0, saved: snapshot() };
+      fn = { name: fnPending || declares, start: ci, depth: 0, saved: snapshot(), openLen: open.length };
       env.inFn = true;
     }
     fnPending = c.fn ? plain(c.words[c.words.length - 1]) : null;
@@ -935,7 +936,11 @@ function analyzeCmds(cmds, env, depth) {
         const first = cmds[fn.start];
         const at = first.words.indexOf("{") + 1;
         const head = { ...first, words: first.words.slice(at), quoted: (first.quoted || []).slice(at) };
-        const body = [head, ...cmds.slice(fn.start + 1, ci + 1)].filter((b) => b.words.length);
+        // scopes become relative to the body, so the body's own top level has none
+        const base = first.scopes.length;
+        const body = [head, ...cmds.slice(fn.start + 1, ci + 1)]
+          .filter((b) => b.words.length)
+          .map((b) => ({ ...b, scopes: b.scopes.slice(base) }));
         if (/^[A-Za-z_][A-Za-z0-9_:.-]*$/.test(fn.name || "")) env.fns.set(fn.name, body);
       }
     }
@@ -944,8 +949,15 @@ function analyzeCmds(cmds, env, depth) {
     if (!env.inFn && !c.fn && env.fns.has(r.name) && env.calls.n++ < 200) {
       // a call: the body runs now, in this shell, so its effects on cwd and variables stay.
       // The cap keeps a body that calls itself many times from running the hook into its timeout.
+      const frame = new Map(); // what `local` shadows during this call: name -> earlier value
+      (env.frames = env.frames || []).push(frame);
       const hit = analyzeCmds(env.fns.get(r.name), env, depth + 1);
+      env.frames.pop();
       if (hit) return hit;
+      for (const [name, prev] of frame) {
+        if (prev === ABSENT) env.vars.delete(name);
+        else env.vars.set(name, prev);
+      }
     }
     const args = r.args;
     const pargs = args.map(plain);
@@ -956,13 +968,15 @@ function analyzeCmds(cmds, env, depth) {
       pipe.unshift(cmds[j]);
       link = cmds[j];
     }
-    const sub = (cwd, loose) => ({
+    // the state a new shell starts with; `nounset` is true when it is started with -u
+    const sub = (cwd, loose, nounset) => ({
       cwd,
       vars: new Map(env.vars),
       loose: loose || env.loose || !!env.inFn,
+      nounset: !!nounset,
       calls: env.calls,
     });
-    const inner = (text, cwd, loose) => analyze(text, sub(cwd, loose), depth + 1);
+    const inner = (text, cwd, loose, nounset) => analyze(text, sub(cwd, loose, nounset), depth + 1);
     // Text a shell reading stdin on this command would run: heredocs, here-strings, piped echo.
     const fed = () => {
       const texts = [...c.heredocs];
@@ -972,9 +986,9 @@ function analyzeCmds(cmds, env, depth) {
       }
       return texts;
     };
-    const anyHit = (texts, cwd, loose) => {
+    const anyHit = (texts, cwd, loose, nounset) => {
       for (const t of texts) {
-        const hit = t ? inner(t, cwd, loose) : null;
+        const hit = t ? inner(t, cwd, loose, nounset) : null;
         if (hit) return hit;
       }
       return null;
@@ -1016,8 +1030,17 @@ function analyzeCmds(cmds, env, depth) {
         for (const p of pargs) if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) env.vars.set(p, GONE);
       }
     } else if (["export", "local", "declare", "readonly", "typeset"].includes(r.name)) {
+      // inside a called function, `local`, `declare` and `typeset` bind until the call returns
+      const scoped =
+        r.name !== "export" && r.name !== "readonly" && !pargs.some((p) => /^-[A-Za-z]*g/.test(p));
+      const frame = scoped && env.frames && env.frames.length ? env.frames[env.frames.length - 1] : null;
       for (const w of args) {
-        if (IS_ASSIGNMENT.test(w)) recordAssignment(w, env);
+        const m = IS_ASSIGNMENT.exec(w);
+        const bare = !m && /^[A-Za-z_][A-Za-z0-9_]*$/.test(plain(w)) ? plain(w) : null;
+        const name = m ? m[1] : bare;
+        if (frame && name && !frame.has(name)) frame.set(name, env.vars.has(name) ? env.vars.get(name) : ABSENT);
+        if (m) recordAssignment(w, env);
+        else if (frame && bare) env.vars.set(bare, "");
         else if (/[$\u0002\u0003]/.test(plain(w))) env.loose = true; // names computed at run time
       }
     } else if (r.name === "for" && pargs[1] === "in") {
@@ -1031,8 +1054,16 @@ function analyzeCmds(cmds, env, depth) {
     } else if (SHELLS.has(r.name)) {
       let f = 0;
       let cmdString = null;
-      while (f < args.length && pargs[f].startsWith("-")) {
-        if (!pargs[f].startsWith("--") && pargs[f].includes("c")) {
+      let strict = false; // started with -u or -o nounset
+      while (f < args.length && /^[-+]/.test(pargs[f])) {
+        const p = pargs[f];
+        const cluster = !p.startsWith("--");
+        if (cluster && p[0] === "-" && p.includes("u")) strict = true;
+        if (cluster && p.endsWith("o")) {
+          if (p[0] === "-" && pargs[f + 1] === "nounset") strict = true;
+          f++; // the option name that follows -o
+        }
+        if (cluster && p[0] === "-" && p.includes("c")) {
           cmdString = args[f + 1];
           break;
         }
@@ -1040,13 +1071,21 @@ function analyzeCmds(cmds, env, depth) {
       }
       // with no script operand the shell reads its commands from stdin
       const hit =
-        cmdString != null ? inner(plain(cmdString), env.cwd) : f >= args.length ? anyHit(fed(), env.cwd) : null;
+        cmdString != null
+          ? inner(plain(cmdString), env.cwd, false, strict)
+          : f >= args.length
+            ? anyHit(fed(), env.cwd, false, strict)
+            : null;
       if (hit) return hit;
     } else if (r.name === "eval") {
-      // the same shell runs the text: its options, cwd and variables carry in and back out
-      const hit = analyze(pargs.join(" "), env, depth + 1);
+      // The same shell runs the text after expanding it once, so its options, cwd and variables
+      // carry in and back out. Text we cannot see (a substitution, an unknown variable) may set
+      // any variable; text we can see does only what the analysis saw.
+      const parts = args.map((w) => expandWord(w, env));
+      const text = parts.map((p, k) => (p == null ? pargs[k] : p.split(G).join(""))).join(" ");
+      const hit = analyze(text, env, depth + 1);
       if (hit) return hit;
-      env.loose = true; // evaluated text may set any variable
+      if (parts.some((p) => p == null)) env.loose = true;
     } else if (r.name === "." || r.name === "source") {
       if (/^\/dev\/(stdin|fd\/0)$/.test(pargs[0] || "")) {
         for (const t of fed()) {
@@ -1127,7 +1166,12 @@ function analyzeCmds(cmds, env, depth) {
           .slice(e + 1, j)
           .map((w) => w.split(M + "{" + M + "}").join(S).split("{}").join(S));
         const hit = block.length
-          ? analyzeCmds([{ words: block, quoted: [], sep: "start", heredocs: [], scopes: [] }], sub(env.cwd, true), depth + 1)
+          ? analyzeCmds(
+              [{ words: block, quoted: [], sep: "start", heredocs: [], scopes: [] }],
+              // -execdir runs in the directory of each match, which is not known here
+              sub(/dir$/.test(expr[e]) ? null : env.cwd, true),
+              depth + 1
+            )
           : null;
         if (hit) return hit;
         e = j;
@@ -1147,6 +1191,17 @@ function analyzeCmds(cmds, env, depth) {
     // command's own operands were judged, so expansion within one command stays left to right.
     for (const w of c.words) if (/\$\{[A-Za-z_][A-Za-z0-9_]*:?=/.test(w)) expandWord(w, env);
   }
+  // Leaving this command list: a subshell or a definition still open at its end must not change
+  // the state of whatever runs next (the commands after an eval or after a function call).
+  const outer = fn && fn.openLen === 0 ? fn.saved : open.length ? open[0] : fn ? fn.saved : null;
+  if (outer) {
+    env.cwd = outer.cwd;
+    env.vars = outer.vars;
+    env.loose = outer.loose;
+    env.nounset = outer.nounset;
+    env.cdUnset = outer.cdUnset;
+  }
+  if (fn) env.inFn = false;
   return null;
 }
 
