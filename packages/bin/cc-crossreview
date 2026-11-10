@@ -13,6 +13,6 @@ prompt="You are a cross-model code reviewer. Run \`${diffcmd}\` and \`git status
 2. Missing or weakened tests for the changed behaviour.
 3. A final line: VERDICT: PASS or VERDICT: BLOCK (BLOCK if any P0/P1).
 Do not modify files. Be terse. ASCII only."
-( cd "$root" && codex exec --model gpt-6-astra -s read-only --output-last-message "$out" "$prompt" >/dev/null )
+( cd "$root" && codex exec --model gpt-6-astra -s read-only --output-last-message "$out" "$prompt" </dev/null >/dev/null )
 cat "$out"; echo
 grep -q 'VERDICT: PASS' "$out" && exit 0 || exit 1

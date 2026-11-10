@@ -559,8 +559,9 @@ The orchestrator parses this artifact without an LLM, so the shape is exact.
   ---
 
   (Place these keys first; the existing SUMMARY frontmatter keys - subsystem, tags, dependency graph, tech-stack, key-files, decisions, metrics - follow in the same block.)
-- The frontmatter MUST also carry `requirements-completed: [REQ-IDs from the plan's requirements field that this summary closes]`;
-  an empty list `[]` is allowed when the plan names none. The `verify-summary` check requires this field.
+- The frontmatter also carries `requirements-completed: [REQ-IDs from the plan's requirements field that this summary closes]`,
+  written as a plain YAML list with no trailing comment. `verify-summary` rejects a missing, empty or commented list, so
+  if the plan names no requirement, say so under deviations and in your return message instead of writing `[]`.
 - status semantics:
   - PASS = all tasks executed and committed, every verification/success-criteria command green, no deferred or escalated items.
   - PARTIAL = produced, but with flagged gaps: deferred items, an escalation to donny-debugger, [ASSUMED] choices, or auth gates still open.

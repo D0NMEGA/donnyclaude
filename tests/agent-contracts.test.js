@@ -94,3 +94,14 @@ test('verifier scopes the spot-check limits to the spot-check step', () => {
     /These limits apply only to Step 7b spot-checks, not to the phase's acceptance commands\./
   );
 });
+
+// The summary validator fails an empty requirements-completed list; the executor must not be
+// told an empty list is fine (cross-review finding, 2026-11-10).
+import { test as _test } from 'node:test';
+import _assert from 'node:assert/strict';
+import { readFileSync as _read } from 'node:fs';
+_test('the executor contract does not permit an empty requirements-completed list', () => {
+  const text = _read(new URL('../packages/agents/donny-executor.md', import.meta.url), 'utf-8');
+  _assert.match(text, /rejects a missing, empty or commented list/);
+  _assert.doesNotMatch(text, /empty list `\[\]` is allowed/);
+});
