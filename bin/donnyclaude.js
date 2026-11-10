@@ -474,7 +474,7 @@ function donnyStandardsBlock() {
   return [
     DONNY_STD_BEGIN,
     'DonnyClaude operating guide, managed block. The coding standards live in ~/.claude/rules/common/',
-    '(coding-style, writing-style, git-workflow, testing, performance) and Claude Code loads them on its',
+    '(coding-style, writing-style, git-workflow, testing) and Claude Code loads them on its',
     'own as user rules; language rules under ~/.claude/rules/<lang>/ load only when matching files are',
     'touched. Workflow engine: /donny-help.',
     DONNY_STD_END,

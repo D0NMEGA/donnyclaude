@@ -1,6 +1,6 @@
 ---
 name: donny-autonomous
-description: "Runs all remaining milestone phases end to end - discuss, plan, execute, verify per phase - pausing only for decisions or blockers, then audits, completes, and cleans up the milestone. Use when you want to advance the roadmap hands-off; scope with --from, --to, or --only N, or --interactive to answer discuss questions inline."
+description: "Runs all remaining milestone phases end to end - discuss, plan, execute, verify per phase - pausing only for decisions or blockers, then audits the milestone and prints the commands that complete and clean it up. Use when you want to advance the roadmap hands-off; scope with --from, --to, or --only N, or --interactive to answer discuss questions inline."
 argument-hint: "[--from N] [--to N] [--only N] [--interactive]"
 allowed-tools:
   - Read
