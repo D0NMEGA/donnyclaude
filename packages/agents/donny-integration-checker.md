@@ -4,6 +4,7 @@ description: Verifies cross-phase integration and E2E flows. Checks that phases 
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
 effort: high
+autoCompactWindow: 200000
 color: blue
 ---
 

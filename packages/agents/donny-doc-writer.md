@@ -4,6 +4,7 @@ description: Writes and updates project documentation. Spawned with a doc_assign
 tools: Read, Bash, Grep, Glob, Write
 model: haiku
 effort: medium
+autoCompactWindow: 200000
 color: purple
 ---
 

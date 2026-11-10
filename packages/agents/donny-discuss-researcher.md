@@ -4,6 +4,7 @@ description: Researches one discuss-phase gray area (--mode external) or extract
 tools: Read, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__playwright__*, mcp__browser-harness__*
 model: sonnet
 effort: high
+autoCompactWindow: 200000
 color: cyan
 ---
 

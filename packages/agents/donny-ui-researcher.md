@@ -4,6 +4,7 @@ description: Produces UI-SPEC.md design contract for frontend phases. Reads upst
 tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__playwright__*
 model: sonnet
 effort: medium
+autoCompactWindow: 200000
 color: purple
 ---
 

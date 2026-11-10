@@ -4,6 +4,7 @@ description: Executes Donny plans with atomic commits, deviation handling, check
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__*
 model: sonnet
 effort: high
+autoCompactWindow: 200000
 color: yellow
 ---
 
@@ -558,6 +559,8 @@ The orchestrator parses this artifact without an LLM, so the shape is exact.
   ---
 
   (Place these keys first; the existing SUMMARY frontmatter keys - subsystem, tags, dependency graph, tech-stack, key-files, decisions, metrics - follow in the same block.)
+- The frontmatter MUST also carry `requirements-completed: [REQ-IDs from the plan's requirements field that this summary closes]`;
+  an empty list `[]` is allowed when the plan names none. The `verify-summary` check requires this field.
 - status semantics:
   - PASS = all tasks executed and committed, every verification/success-criteria command green, no deferred or escalated items.
   - PARTIAL = produced, but with flagged gaps: deferred items, an escalation to donny-debugger, [ASSUMED] choices, or auth gates still open.

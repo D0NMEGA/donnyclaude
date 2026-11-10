@@ -10,6 +10,7 @@ tools:
   - Grep
 model: haiku
 effort: medium
+autoCompactWindow: 200000
 color: purple
 ---
 
