@@ -47,6 +47,8 @@ const M = "\u0000"; // prefix: this character was made literal by quotes or a ba
 const G = "\u0001"; // prefix: this character is a live wildcard
 const S = "\u0002"; // placeholder: the output of a command substitution (unknowable)
 const P = "\u0003"; // placeholder: the output of `$(pwd)` (the tracked cwd)
+const D = "\u0004"; // prefix: the ${...} that follows sat inside double quotes
+const GONE = Symbol("unset"); // value of a variable removed with `unset`
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 const SKIP_WORDS = new Set([
   "command", "builtin", "exec", "time", "nohup", "caffeinate", "stdbuf",
@@ -74,7 +76,7 @@ function baseCmd(tok) {
   return i >= 0 ? tok.slice(i + 1) : tok;
 }
 function plain(word) {
-  return word.split(M).join("");
+  return word.split(M).join("").split(D).join("");
 }
 
 // ─── Protected-path policy (absolute, normalized paths) ──────────────────────────────────────
@@ -125,19 +127,20 @@ function matchBrace(s, open) {
 // environment sets it (the shell expands it to nothing), or null when its value is unknowable.
 function lookupVar(name, env) {
   if (name === "HOME") return HOME_DIR;
-  if (env.vars.has(name)) {
-    const v = env.vars.get(name);
-    return v == null ? null : v;
+  const known = env.vars.get(name);
+  if (known !== GONE) {
+    if (env.vars.has(name)) return known == null ? null : known;
+    if (name === "PWD") return env.cwd;
+    if (env.loose || env.inFn || SHELL_SET.test(name)) return null;
+    if (typeof process.env[name] === "string") return process.env[name];
   }
-  if (name === "PWD") return env.cwd;
-  if (env.loose || env.inFn || SHELL_SET.test(name)) return null;
-  if (typeof process.env[name] === "string") return process.env[name];
   env.unset = name;
   return "";
 }
 // Set, possibly to the empty string: `${x-word}` and `${x:-word}` differ exactly here.
 function isSetVar(name, env) {
-  return name === "HOME" || name === "PWD" || env.vars.has(name) || typeof process.env[name] === "string";
+  if (name === "HOME" || name === "PWD") return true;
+  return env.vars.has(name) ? env.vars.get(name) !== GONE : typeof process.env[name] === "string";
 }
 
 // ${v%pat} ${v%%pat} ${v#pat} ${v##pat}; `pat` carries G-marked wildcards. null = not modelled.
@@ -168,27 +171,28 @@ function stripPattern(v, pat, op) {
   return v;
 }
 
-// The word after an operator inside ${...} keeps its own quoting: `${x:-'~'}` is a literal
-// tilde, `${x:-"$HOME"}` still expands. A nested ${...} is passed through whole.
-function unquoteArg(arg) {
+// The word after an operator inside ${...} keeps its quoting: `${x:-'~'}` and `"${x:-~}"` are a
+// literal tilde, `${x:-"$HOME"}` still expands. `dq` says the whole ${...} sat inside double
+// quotes, where a single quote is an ordinary character. A nested ${...} is passed through whole.
+function unquoteArg(arg, dq) {
   const lit = (c) => (/[~*?[${},]/.test(c) ? M + c : c);
   let out = "";
   let q = null;
   for (let i = 0; i < arg.length; i++) {
     const c = arg[i];
+    const quoted = dq || q === '"';
     if (c === M) out += c + (arg[++i] || "");
     else if (q === "'") {
       if (c === "'") q = null;
       else out += lit(c);
     } else if (c === "$" && arg[i + 1] === "{" && matchBrace(arg, i + 1) !== -1) {
       const e = matchBrace(arg, i + 1);
-      out += arg.slice(i, e + 1);
+      out += (quoted ? D : "") + arg.slice(i, e + 1);
       i = e;
     } else if (c === "\\" && i + 1 < arg.length) out += lit(arg[++i]);
-    else if (q === '"') {
-      if (c === '"') q = null;
-      else out += c === "$" ? c : lit(c);
-    } else if (c === "'" || c === '"') q = c;
+    else if (c === '"') q = q === '"' || dq ? null : '"';
+    else if (quoted) out += c === "$" ? c : lit(c);
+    else if (c === "'") q = c;
     else out += c;
   }
   return out;
@@ -197,8 +201,14 @@ function unquoteArg(arg) {
 function expandWord(word, env) {
   let out = "";
   let first = true;
+  let dqNext = false;
   for (let i = 0; i < word.length; ) {
     const ch = word[i];
+    if (ch === D) {
+      dqNext = true;
+      i++;
+      continue;
+    }
     if (ch === M) {
       out += word[i + 1] === undefined ? "" : word[i + 1];
       i += 2;
@@ -226,6 +236,8 @@ function expandWord(word, env) {
         i = j;
       }
     } else if (ch === "$") {
+      const inDq = dqNext;
+      dqNext = false;
       let name;
       let op = "";
       let arg = "";
@@ -239,7 +251,7 @@ function expandWord(word, env) {
         if (!m || (!m[2] && m[3])) return null; // ${#x}, ${x[1]}, ${x/a/b}, ${x:1:2}: not modelled
         name = m[1];
         op = m[2] || "";
-        arg = unquoteArg(m[3]);
+        arg = m[3];
         len = end - i + 1;
       } else {
         const m = /^\$([A-Za-z_][A-Za-z0-9_]*)/.exec(word.slice(i));
@@ -249,21 +261,23 @@ function expandWord(word, env) {
       }
       let v = lookupVar(name, env);
       if (v == null) return null;
+      // under `set -u` an unset variable stops the shell unless the expansion supplies a value
+      if (env.nounset && v === "" && !isSetVar(name, env) && !/[-=+]$/.test(op)) return null;
       if (op) {
         const kind = op[op.length - 1];
         // with a colon the test is "unset or empty"; without it, "unset" only
         const missing = op[0] === ":" ? v === "" : !isSetVar(name, env);
         if (op[0] === "%" || op[0] === "#") {
-          const pat = expandWord(arg, env);
+          const pat = expandWord(unquoteArg(arg, false), env); // a pattern even inside quotes
           v = pat == null ? null : stripPattern(v, pat, op);
         } else if (kind === "-" || kind === "=") {
           if (missing) {
             env.unset = null;
-            v = expandWord(arg, env);
+            v = expandWord(unquoteArg(arg, inDq), env);
             if (kind === "=") env.vars.set(name, v == null ? undefined : v.split(G).join(""));
           }
         } else if (kind === "+") {
-          v = missing ? "" : expandWord(arg, env);
+          v = missing ? "" : expandWord(unquoteArg(arg, inDq), env);
         } else if (missing) {
           return null; // ${x:?}: the shell stops with an error instead of running the command
         }
@@ -452,7 +466,7 @@ function lex(src) {
       const end = matchBrace(src, i + 1);
       // a substitution inside it still runs, so that case is lexed character by character
       if (end !== -1 && !/\$\(|`|[<>]\(/.test(src.slice(i, end + 1))) {
-        cur += src.slice(i, end + 1);
+        cur += (q === '"' ? D : "") + src.slice(i, end + 1);
         has = true;
         i = end;
         continue;
@@ -639,9 +653,43 @@ function recordAssignment(word, env) {
   const v = expandWord(word.slice(m[0].length), env);
   const val = v == null ? undefined : v.split(G).join("");
   if (m[2]) {
-    const old = env.vars.has(m[1]) ? env.vars.get(m[1]) : "";
+    const prev = env.vars.has(m[1]) ? env.vars.get(m[1]) : "";
+    const old = prev === GONE ? "" : prev;
     env.vars.set(m[1], val == null || old == null ? undefined : old + val);
   } else env.vars.set(m[1], val);
+}
+
+// `env -S` splits its string itself: blanks separate words, quotes and backslashes group, and
+// no shell reads the result, so `;`, `~` and wildcards in it are plain characters.
+function splitEnvString(text) {
+  const lit = (c) => (/[~*?[{},]/.test(c) ? M + c : c);
+  const out = [];
+  let cur = "";
+  let has = false;
+  let q = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === q) q = null;
+      else if (c === "\\" && q === '"' && i + 1 < text.length) cur += lit(text[++i]);
+      else cur += lit(c);
+    } else if (c === "'" || c === '"') {
+      q = c;
+      has = true;
+    } else if (c === "\\" && i + 1 < text.length) {
+      cur += lit(text[++i]);
+      has = true;
+    } else if (/\s/.test(c)) {
+      if (has) out.push(cur);
+      cur = "";
+      has = false;
+    } else {
+      cur += lit(c);
+      has = true;
+    }
+  }
+  if (has) out.push(cur);
+  return out;
 }
 
 // Skip assignments and wrappers to find the real command word.
@@ -681,10 +729,7 @@ function resolveCommand(words, env) {
           // `env -S "cmd args"` splits the string on blanks itself; no shell reads it, so
           // separators, `~` and wildcards inside it are plain characters
           const glued = f === "-S" || f === "--split-string" ? null : f.replace(/^(-S|--split-string=)/, "");
-          const parts = (glued == null ? plain(words[i + 1] || "") : glued)
-            .split(/\s+/)
-            .filter(Boolean)
-            .map((p) => p.replace(/[~*?[]/g, (ch) => M + ch));
+          const parts = splitEnvString(glued == null ? plain(words[i + 1] || "") : glued);
           words = [...words.slice(0, i), ...parts, ...words.slice(i + (glued == null ? 2 : 1))];
           continue;
         }
@@ -797,12 +842,23 @@ function analyzeCmds(cmds, env, depth) {
     let keep = 0;
     while (keep < open.length && keep < c.scopes.length && open[keep].id === c.scopes[keep]) keep++;
     if (keep < open.length) {
-      env.cwd = open[keep].cwd;
-      env.vars = open[keep].vars;
+      const o = open[keep];
+      env.cwd = o.cwd;
+      env.vars = o.vars;
+      env.loose = o.loose;
+      env.nounset = o.nounset;
+      env.cdUnset = o.cdUnset;
       open.length = keep;
     }
     for (let s = keep; s < c.scopes.length; s++) {
-      open.push({ id: c.scopes[s], cwd: env.cwd, vars: new Map(env.vars) });
+      open.push({
+        id: c.scopes[s],
+        cwd: env.cwd,
+        vars: new Map(env.vars),
+        loose: env.loose,
+        nounset: env.nounset,
+        cdUnset: env.cdUnset,
+      });
     }
 
     const lists = c.words.map((w) => braceExpand(w));
@@ -879,6 +935,17 @@ function analyzeCmds(cmds, env, depth) {
       }
     } else if (r.name === "popd") {
       env.cwd = null;
+    } else if (r.name === "set") {
+      // `set -u`: an unset variable stops the shell instead of expanding to nothing
+      for (let k = 0; k < pargs.length && pargs[k] !== "--"; k++) {
+        if (/^[-+][A-Za-z]*u/.test(pargs[k]) || (/^[-+]o$/.test(pargs[k]) && pargs[k + 1] === "nounset")) {
+          env.nounset = pargs[k][0] === "-";
+        }
+      }
+    } else if (r.name === "unset") {
+      if (!pargs.some((p) => /^-[a-z]*f/.test(p))) {
+        for (const p of pargs) if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) env.vars.set(p, GONE);
+      }
     } else if (["export", "local", "declare", "readonly", "typeset"].includes(r.name)) {
       for (const w of args) {
         if (IS_ASSIGNMENT.test(w)) recordAssignment(w, env);
@@ -982,8 +1049,11 @@ function analyzeCmds(cmds, env, depth) {
         for (let x = e + 1; x < j; x++) {
           if (baseCmd(expr[x]) === "rm" || /(^|[\s;&|])rm\s/.test(expr[x])) destructive = true;
         }
-        // the command find runs is judged like any other (`-exec sh -c '...' \;`); `{}` is unknown
-        const block = raw.slice(e + 1, j).map((w) => (plain(w).includes("{}") ? S : w));
+        // the command find runs is judged like any other (`-exec sh -c '...' \;`); each `{}`
+        // becomes an unknown path and the rest of the word is kept
+        const block = raw
+          .slice(e + 1, j)
+          .map((w) => w.split(M + "{" + M + "}").join(S).split("{}").join(S));
         const hit = block.length
           ? analyzeCmds([{ words: block, quoted: [], sep: "start", heredocs: [], scopes: [] }], sub(env.cwd, true), depth + 1)
           : null;
@@ -1045,8 +1115,8 @@ function legacySegments(norm) {
 // Returns a label string on a catastrophe match, else null. `cwd` is optional: the hook passes
 // the payload's cwd; cco-dream and the raw backstop call with the command only.
 function detect(cmd, cwd, loose) {
-  // the four marker characters are private to the lexer
-  const text = String(cmd).replace(/[\u0000-\u0003]/g, "");
+  // the marker characters are private to the lexer
+  const text = String(cmd).replace(/[\u0000-\u0004]/g, "");
   // Normalize for the intrinsic patterns: drop quotes/backslashes, collapse whitespace.
   const norm = text.replace(/['"\\]/g, "").replace(/\s+/g, " ").trim();
 
