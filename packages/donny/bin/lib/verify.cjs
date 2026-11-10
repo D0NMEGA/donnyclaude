@@ -1213,6 +1213,26 @@ function cmdVerifySummary(cwd, summaryPath, checkFileCount, raw) {
   output(result, raw, passed ? 'passed' : 'failed');
 }
 
+// workflow.plan_budget_kb: the size above which one PLAN.md draws a warning. Project config
+// first, then ~/.donny/defaults.json, then 30. Read directly because loadConfig() exposes a
+// fixed set of keys and this one is advisory.
+function planBudgetKb(cwd) {
+  const layers = [
+    path.join(cwd, '.planning', 'config.json'),
+    path.join(require('os').homedir(), '.donny', 'defaults.json'),
+  ];
+  for (const file of layers) {
+    try {
+      const parsed = JSON.parse(require('fs').readFileSync(file, 'utf-8'));
+      const kb = Number(parsed && parsed.workflow && parsed.workflow.plan_budget_kb);
+      if (Number.isFinite(kb) && kb > 0) return kb;
+    } catch (e) {
+      // absent or unreadable layer: fall through to the next one
+    }
+  }
+  return 30;
+}
+
 function cmdVerifyPlanStructure(cwd, filePath, raw) {
   if (!filePath) { error('file path required'); }
   const fullPath = path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath);
@@ -1222,6 +1242,13 @@ function cmdVerifyPlanStructure(cwd, filePath, raw) {
   const fm = extractFrontmatter(content);
   const errors = [];
   const warnings = [];
+
+  // Size budget, warning only: a long plan is paid for again by every executor that loads it.
+  const budgetKb = planBudgetKb(cwd);
+  const sizeKb = Math.round(Buffer.byteLength(content, 'utf-8') / 1024);
+  if (sizeKb > budgetKb) {
+    warnings.push(`Plan is ${sizeKb} KB, over the ${budgetKb} KB budget (workflow.plan_budget_kb): cut context restated from CONTEXT.md and code listings, or split the plan`);
+  }
 
   // Check required frontmatter fields
   const required = ['phase', 'plan', 'type', 'wave', 'depends_on', 'files_modified', 'autonomous', 'must_haves'];

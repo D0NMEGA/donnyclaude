@@ -35,8 +35,12 @@ append_transcript() {  # <heading> <file>
 run_codex() {
   local out="$1" promptf="$2" mode="${3:-new}" step events tid=""
   # find, not ls: a glob with no match must not trip set -e/pipefail
-  step=$(find "$dir" -maxdepth 1 -name 'events-*.jsonl' | wc -l | tr -d ' '); step=$((step + 1))
-  events="$dir/events-$step.jsonl"
+  # Raw Codex event streams are large (697 KB in one phase) and nothing reads them once the
+  # thread id is extracted, so they go to the cache instead of the project's .planning tree.
+  local evdir="${CC_COUNCIL_EVENTS_DIR:-$HOME/.cache/cc-council/$(cd "$dir" && pwd | shasum | cut -c1-12)}"
+  mkdir -p "$evdir"
+  step=$(find "$evdir" -maxdepth 1 -name 'events-*.jsonl' | wc -l | tr -d ' '); step=$((step + 1))
+  events="$evdir/events-$step.jsonl"
   local skipgit=""; git -C "$project" rev-parse --is-inside-work-tree >/dev/null 2>&1 || skipgit="--skip-git-repo-check "
   local base="cd $(printf %q "$project") && codex --search exec"
   if [ "$mode" = resume ]; then
