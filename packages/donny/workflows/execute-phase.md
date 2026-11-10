@@ -944,7 +944,8 @@ ${VERIFIER_SKILLS}",
 
 Read status:
 ```bash
-VERIFY_STATUS=$(grep -h "^verdict:" "$PHASE_DIR"/*-VERIFICATION.md | cut -d: -f2 | tr -d ' ')
+# The engine parses VERIFICATION.md: JSON { verified, verdict }, verdict is passed | gaps_found | human_needed.
+VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "$PHASE_DIR" --pick verdict 2>/dev/null || echo "")
 echo "$VERIFY_STATUS"
 node "$HOME/.claude/donny/bin/donny-tools.cjs" ledger append "${PHASE_NUMBER}" verification --status "$VERIFY_STATUS" >/dev/null 2>&1 || true
 ```

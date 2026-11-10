@@ -42,7 +42,7 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 
 ## 2. Parse and Normalize Arguments
 
-Extract from $ARGUMENTS: phase number (integer or decimal like `2.1`), flags (`--research`, `--skip-research`, `--gaps`, `--skip-verify`, `--prd <filepath>`, `--reviews`, `--text`).
+Extract from $ARGUMENTS: phase number (integer or decimal like `2.1`), flags (`--research`, `--skip-research`, `--gaps`, `--skip-verify`, `--prd <filepath>`, `--reviews`, `--text`, `--no-advance`).
 
 Set `TEXT_MODE=true` if `--text` is present in $ARGUMENTS OR `text_mode` from init JSON is `true`. When `TEXT_MODE` is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for Claude Code remote sessions (`/rc` mode) where TUI menus don't work through the Claude App.
 
@@ -931,11 +931,13 @@ This updates STATUS to "Ready to execute", sets the correct plan count, and time
 
 ## 14. Present Final Status
 
-Route to `<offer_next>` OR `auto_advance` depending on flags/config.
+Route to `<offer_next>` OR `auto_advance` depending on flags/config. With `--no-advance` always route to `<offer_next>`.
 
 ## 15. Auto-Advance Check
 
-Check for auto-advance trigger:
+**If `--no-advance` is in $ARGUMENTS:** skip this whole step and go to `<offer_next>`. Do not read or write `workflow._auto_chain_active` or `workflow.auto_advance`, and do not launch execute-phase. An outer orchestrator (manager, autonomous, a phase runner) that runs execution as its own step passes this flag so a `--auto` plan run cannot also start execution.
+
+Otherwise, check for auto-advance trigger:
 
 1. Parse `--auto` and `--chain` flags from $ARGUMENTS
 2. **Sync chain flag with intent** - if user invoked manually (no `--auto` and no `--chain`), clear the ephemeral chain flag from any previous interrupted `--auto` chain. This does NOT touch `workflow.auto_advance` (the user's persistent settings preference):

@@ -1204,7 +1204,7 @@ Present completion summary:
 ╚══════════════════════════════════════════╝
 ```
 
-Exit skill and invoke SlashCommand("/donny-discuss-phase 1 --auto")
+Exit skill and invoke Skill(skill="donny-discuss-phase", args="1 --auto")
 
 **If interactive mode:**
 

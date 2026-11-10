@@ -63,11 +63,11 @@ If the current phase is complete and the next phase exists in ROADMAP:
 
 **Route 7: All phases complete -> complete milestone**
 If all phases are complete:
--> Next action: `/donny-complete-milestone`
+-> Next action: `/donny-complete-milestone` (print it for the user and stop: it archives the milestone, is irreversible, and is a user-only skill that this workflow must not call)
 
 **Route 8: Paused -> resume**
 If STATE.md shows paused_at:
--> Next action: `/donny-resume-work`
+-> Next action: `/donny-resume-work` (print it for the user and stop: that skill is hidden from the model's skill list, so `Skill()` cannot load it)
 </step>
 
 <step name="show_and_execute">
@@ -83,7 +83,8 @@ Display the determination:
   [One-line explanation of why this is the next step]
 ```
 
-Then immediately invoke the determined command via SlashCommand.
+Then immediately invoke the determined command with the Skill tool, for example `Skill(skill="donny-plan-phase", args="3")`: the skill name is the command without the slash, and the remaining text is `args`.
+For Route 7 and Route 8, do not invoke anything: the line `Next step` above is the exact command for the user to type, so stop after printing it.
 Do not ask for confirmation - the whole point of `/donny-next` is zero-friction advancement.
 </step>
 
