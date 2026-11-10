@@ -143,7 +143,13 @@ for phase in $phases; do
   # run is on main and show nothing, so the start commit is recorded here and reused on --resume.
   start_file="$RUN_DIR/$phase-start.sha"
   if [ "$resume" = 1 ] && [ -s "$start_file" ]; then start=$(cat "$start_file")
-  else start=$(git rev-parse HEAD 2>/dev/null || echo ""); [ "$dry" = 1 ] || printf '%s\n' "$start" > "$start_file"; fi
+  else
+    # --merge squashes every commit the phase branch has, so the review has to cover them all:
+    # start from the merge-base with the base branch. On the base branch that is HEAD itself.
+    basebr0=$(git show-ref --verify -q refs/heads/main && echo main || echo master)
+    start=$(git merge-base HEAD "$basebr0" 2>/dev/null || git rev-parse HEAD 2>/dev/null || echo "")
+    [ "$dry" = 1 ] || printf '%s\n' "$start" > "$start_file"
+  fi
   if [ "$council" = 1 ]; then
     run_step "$phase" council "/donny-council $phase --auto" || exit 1
     [ "$dry" = 1 ] || [ -s "$(phase_dir "$phase")/council/DECISIONS.md" ] || gate_fail "phase $phase: council wrote no DECISIONS.md"

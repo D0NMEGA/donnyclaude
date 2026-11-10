@@ -613,6 +613,12 @@ function setConfigValue(cwd, keyPath, parsedValue) {
   const previousValue = current[keys[keys.length - 1]]; // Capture previous value before overwriting
   current[keys[keys.length - 1]] = parsedValue;
 
+  // A flat alias left in the same file would win over the nested key just written (the flat form
+  // wins within a layer), and config-get would keep returning the old value. Remove it.
+  for (const [flat, target] of Object.entries(FLAT_ALIASES)) {
+    if (target.join('.') === keyPath && Object.prototype.hasOwnProperty.call(config, flat)) delete config[flat];
+  }
+
   // Write back
   try {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');

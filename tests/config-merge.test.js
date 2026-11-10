@@ -2016,3 +2016,18 @@ describe('flat and nested aliases resolve by layer, project over global', () => 
     }
   });
 });
+
+describe('config-set over a conflicting flat alias', () => {
+  it('a nested write wins and removes the flat key that would have shadowed it', () => {
+    withConfigFixture({ research: false }, (root) => {
+      const set = runTools(root, ['config-set', 'workflow.research', 'true']);
+      assert.equal(set.status, 0, set.stderr);
+      const get = runTools(root, ['config-get', 'workflow.research']);
+      assert.equal(get.status, 0, get.stderr);
+      assert.match(get.stdout, /true/);
+      const cfg = readCfg(root);
+      assert.equal(cfg.workflow.research, true);
+      assert.equal(Object.prototype.hasOwnProperty.call(cfg, 'research'), false);
+    });
+  });
+});

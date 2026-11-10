@@ -212,6 +212,16 @@ describe('donny-run review', () => {
     assert.ok(readLog('crossreview.args'), 'the reviewer ran again for the commit made after its pass');
   });
 
+  it('on a phase branch the review starts at the fork from main, so earlier branch commits are covered', () => {
+    const fork = git('rev-parse', 'HEAD');
+    git('checkout', '-q', '-b', 'phase/01-foo');
+    write(join(repo, 'file.txt'), 'earlier work on the branch\n');
+    git('commit', '-q', '-am', 'earlier');
+    const r = run(['1'], { STUB_COMMIT_FILE: 'file.txt' });
+    assert.equal(r.status, 0, r.out);
+    assert.equal(readLog('crossreview.args'), fork);
+  });
+
   it('refuses to treat an empty diff as a pass', () => {
     const r = run(['1']);
     assert.equal(r.status, 1, r.out);
