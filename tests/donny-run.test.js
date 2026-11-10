@@ -199,6 +199,19 @@ describe('donny-run review', () => {
     assert.equal(readLog('crossreview.args'), first);
   });
 
+  it('--resume reviews again when commits were made after the review that passed', () => {
+    const r1 = run(['1'], { STUB_COMMIT_FILE: 'file.txt' });
+    assert.equal(r1.status, 0, r1.out);
+    const reviewed = fs.readFileSync(join(repo, '.planning/runner/1-review.done'), 'utf-8').trim();
+    write(join(repo, 'file.txt'), 'unreviewed change\n');
+    git('commit', '-q', '-am', 'after review');
+    assert.notEqual(git('rev-parse', 'HEAD'), reviewed);
+    fs.rmSync(join(env.STUB_LOG, 'crossreview.args'), { force: true });
+    const r2 = run(['1', '--resume']);
+    assert.equal(r2.status, 0, r2.out);
+    assert.ok(readLog('crossreview.args'), 'the reviewer ran again for the commit made after its pass');
+  });
+
   it('refuses to treat an empty diff as a pass', () => {
     const r = run(['1']);
     assert.equal(r.status, 1, r.out);

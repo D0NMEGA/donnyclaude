@@ -371,10 +371,12 @@ Skill(skill="donny-execute-phase", args="${PHASE_NUM} --no-transition")
 After execute-phase returns (or the execute agent completes), read the verification result:
 
 ```bash
-VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${PHASE_DIR}" --pick verdict 2>/dev/null || echo "")
+VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${PHASE_DIR}" --pick outcome 2>/dev/null || echo "")
 ```
 
-`verify phase-verified` reads the newest VERIFICATION.md and returns JSON with `verified` (boolean) and `verdict` (`passed`, `gaps_found`, or `human_needed`); `--pick verdict` prints just the verdict.
+`verify phase-verified` reads the newest VERIFICATION.md and returns JSON with `verified` (boolean) and `verdict` (`passed`, `gaps_found`, or `human_needed`); `--pick outcome` prints just the verdict.
+
+`outcome` is `passed` only when `verified` is true. Treat `unknown`, `missing` or an empty result as a blocker (go to handle_blocker): the verification record is absent or contradicts itself.
 
 Where `PHASE_DIR` comes from the `init phase-op` call already made in step 3a. If the variable is not in scope, re-fetch:
 
@@ -446,7 +448,7 @@ Skill(skill="donny-execute-phase", args="${PHASE_NUM} --no-transition")
 
 Re-read verification status:
 ```bash
-VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${PHASE_DIR}" --pick verdict 2>/dev/null || echo "")
+VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${PHASE_DIR}" --pick outcome 2>/dev/null || echo "")
 ```
 
 If `passed` or `human_needed`: Route normally (continue or ask user as above).

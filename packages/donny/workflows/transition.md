@@ -84,8 +84,8 @@ for f in .planning/phases/XX-current/*-UAT.md; do
   grep -q "result: pending\|result: blocked\|status: partial\|status: human_needed\|status: diagnosed" "$f" && OUTSTANDING="$OUTSTANDING\n$(basename $f)"
 done
 # VERIFICATION.md verdict comes from the engine, not a grep: human_needed and gaps_found are debt.
-VERDICT=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified .planning/phases/XX-current --pick verdict 2>/dev/null || echo "")
-case "$VERDICT" in human_needed|gaps_found) OUTSTANDING="$OUTSTANDING\nVERIFICATION.md ($VERDICT)";; esac
+VERDICT=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified .planning/phases/XX-current --pick outcome 2>/dev/null || echo "")
+case "$VERDICT" in human_needed|gaps_found|unknown) OUTSTANDING="$OUTSTANDING\nVERIFICATION.md ($VERDICT)";; esac
 ```
 
 **If OUTSTANDING is not empty:**

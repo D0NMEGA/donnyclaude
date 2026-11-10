@@ -148,8 +148,14 @@ function verificationVerdict(fm) {
   const f = fm && typeof fm === 'object' ? fm : {};
   const status = scalarField(f.status);
   let verdict;
-  // A blank `verdict:` key carries nothing, so it falls back to status like an absent one.
-  if (!isEmptyValue(f.verdict)) {
+  // A list (even an empty one) or a non-empty mapping under `verdict:` is malformed and must
+  // never fall back to a passing status. A blank `verdict:` key parses as an empty mapping,
+  // carries nothing, and falls back like an absent one.
+  const malformed = Array.isArray(f.verdict) ||
+    (f.verdict !== null && typeof f.verdict === 'object' && Object.keys(f.verdict).length > 0);
+  if (malformed) {
+    verdict = 'unknown';
+  } else if (!isEmptyValue(f.verdict)) {
     const v = scalarField(f.verdict).toLowerCase();
     verdict = VERDICTS.has(v) ? v : 'unknown';
   } else {

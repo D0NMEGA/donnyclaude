@@ -1414,17 +1414,20 @@ function cmdVerifyPhaseVerified(cwd, phaseArg, raw) {
     if (match) dir = path.join(phasesRoot, match);
   }
   if (!(fs.existsSync(dir) && fs.statSync(dir).isDirectory())) {
-    output({ verified: false, verdict: 'missing', status: 'missing', error: 'Phase directory not found', phase: phaseArg }, raw, 'missing');
+    output({ verified: false, verdict: 'missing', outcome: 'missing', status: 'missing', error: 'Phase directory not found', phase: phaseArg }, raw, 'missing');
     return;
   }
   const vfiles = fs.readdirSync(dir).filter(f => /-VERIFICATION\.md$/i.test(f)).sort();
   if (vfiles.length === 0) {
-    output({ verified: false, verdict: 'missing', status: 'missing', phase: path.basename(dir) }, raw, 'missing');
+    output({ verified: false, verdict: 'missing', outcome: 'missing', status: 'missing', phase: path.basename(dir) }, raw, 'missing');
     return;
   }
   const fm = extractFrontmatter(safeReadFile(path.join(dir, vfiles[vfiles.length - 1])) || '');
   const v = phaseVerificationVerdict(fm);
-  output({ verified: v.verified, verdict: v.verdict, status: v.status, score: fm.score ?? null, phase: path.basename(dir) }, raw, v.verified ? 'verified' : 'unverified');
+  // `outcome` is the one value a caller may branch on: `passed` only when the phase is verified.
+  // A `verdict: passed` that the status contradicts is `unknown`, so no route can read it as success.
+  const outcome = v.verified ? 'passed' : (v.verdict === 'passed' ? 'unknown' : v.verdict);
+  output({ verified: v.verified, verdict: v.verdict, outcome, status: v.status, score: fm.score ?? null, phase: path.basename(dir) }, raw, v.verified ? 'verified' : 'unverified');
 }
 
 // donny-ui-auditor writes an exact UI-REVIEW.md frontmatter contract and states the

@@ -77,6 +77,13 @@ marker_ok() {
   [ -n "$sha" ] && git merge-base --is-ancestor "$sha" HEAD 2>/dev/null
 }
 
+# marker_is_head <file>: the marker's commit is exactly HEAD. The review uses this one, because a
+# review of an ancestor says nothing about commits made after it.
+marker_is_head() {
+  local sha; sha=$(cat "$1" 2>/dev/null) || return 1
+  [ -n "$sha" ] && [ "$sha" = "$(git rev-parse HEAD 2>/dev/null)" ]
+}
+
 # mark_done <phase> <step>: call only after the step's gate validated.
 mark_done() {
   [ "$dry" = 1 ] && return 0
@@ -150,7 +157,7 @@ for phase in $phases; do
   if [ "$review" = 1 ]; then
     say "phase $phase review: cc-crossreview ${start:-<no start commit>}"
     if [ "$dry" = 0 ]; then
-      if [ "$resume" = 1 ] && marker_ok "$RUN_DIR/$phase-review.done"; then
+      if [ "$resume" = 1 ] && marker_is_head "$RUN_DIR/$phase-review.done"; then
         say "phase $phase review: passed earlier, skipping"
       else
         out="$RUN_DIR/$phase-review.md"

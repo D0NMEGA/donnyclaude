@@ -728,7 +728,7 @@ Check must_haves against actual codebase. Create VERIFICATION.md at ${QUICK_DIR}
 
 Read verification status:
 ```bash
-node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${QUICK_DIR}" --pick verdict 2>/dev/null || echo ""
+node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${QUICK_DIR}" --pick outcome 2>/dev/null || echo ""
 ```
 
 The command takes any directory that holds a `*-VERIFICATION.md`, so the quick-task directory works; it prints `passed`, `gaps_found`, or `human_needed` (empty if the file is missing).
@@ -740,6 +740,7 @@ Store as `$VERIFICATION_STATUS`.
 | `passed` | Store `$VERIFICATION_STATUS = "Verified"`, continue to step 7 |
 | `human_needed` | Display items needing manual check, store `$VERIFICATION_STATUS = "Needs Review"`, continue |
 | `gaps_found` | Display gap summary, offer: 1) Re-run executor to fix gaps, 2) Accept as-is. Store `$VERIFICATION_STATUS = "Gaps"` |
+| anything else (`unknown`, `missing`, empty) | Display the verification file's frontmatter, store `$VERIFICATION_STATUS = "Needs Review"`, and say the record is absent or contradicts itself |
 
 ---
 

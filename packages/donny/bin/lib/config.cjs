@@ -372,7 +372,6 @@ function hardcodedProjectDefaults() {
       security_asvs_level: 1,
       security_block_on: 'high',
       record_gate: true,
-      plan_budget_kb: 30,
       text_mode: false,
       research_before_questions: false,
       discuss_mode: 'discuss',
@@ -442,6 +441,8 @@ function configGetDefaults() {
       // HTTPS transport`), which took about 15 s to reach a terminal failure in the
       // recorded auth probe. A tight bound would report `timeout` for runs the CLI was
       // still legitimately retrying.
+      // Warning threshold for one PLAN.md, read by verify plan-structure.
+      plan_budget_kb: 30,
       codex_timeout: 300000,
       // D-08: pin the model explicitly rather than inheriting ~/.codex/config.toml, which
       // the Codex desktop app rewrites. --ignore-user-config (D-10) blanks that file's

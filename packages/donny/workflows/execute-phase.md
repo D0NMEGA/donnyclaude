@@ -944,8 +944,9 @@ ${VERIFIER_SKILLS}",
 
 Read status:
 ```bash
-# The engine parses VERIFICATION.md: JSON { verified, verdict }, verdict is passed | gaps_found | human_needed.
-VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "$PHASE_DIR" --pick verdict 2>/dev/null || echo "")
+# The engine parses VERIFICATION.md. `outcome` is passed only when the phase is verified (verdict passed
+# and no contradicting status); otherwise gaps_found, human_needed, unknown or missing.
+VERIFY_STATUS=$(node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "$PHASE_DIR" --pick outcome 2>/dev/null || echo "")
 echo "$VERIFY_STATUS"
 node "$HOME/.claude/donny/bin/donny-tools.cjs" ledger append "${PHASE_NUMBER}" verification --status "$VERIFY_STATUS" >/dev/null 2>&1 || true
 ```
@@ -955,6 +956,7 @@ node "$HOME/.claude/donny/bin/donny-tools.cjs" ledger append "${PHASE_NUMBER}" v
 | `passed` | -> update_roadmap |
 | `human_needed` | Present items for human testing, get approval or feedback |
 | `gaps_found` | Present gap summary, offer `/donny-plan-phase {phase} --gaps ${DONNY_WS}` |
+| anything else (`unknown`, `missing`, empty) | Stop. The verification record is absent or contradicts itself: show the file's frontmatter and ask how to proceed. Do not update the roadmap. |
 
 **If human_needed:**
 
