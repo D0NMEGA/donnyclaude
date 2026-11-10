@@ -130,7 +130,7 @@ function lookupVar(name, env) {
     return v == null ? null : v;
   }
   if (name === "PWD") return env.cwd;
-  if (env.loose || SHELL_SET.test(name)) return null;
+  if (env.loose || env.inFn || SHELL_SET.test(name)) return null;
   if (typeof process.env[name] === "string") return process.env[name];
   env.unset = name;
   return "";
@@ -166,6 +166,32 @@ function stripPattern(v, pat, op) {
     }
   }
   return v;
+}
+
+// The word after an operator inside ${...} keeps its own quoting: `${x:-'~'}` is a literal
+// tilde, `${x:-"$HOME"}` still expands. A nested ${...} is passed through whole.
+function unquoteArg(arg) {
+  const lit = (c) => (/[~*?[${},]/.test(c) ? M + c : c);
+  let out = "";
+  let q = null;
+  for (let i = 0; i < arg.length; i++) {
+    const c = arg[i];
+    if (c === M) out += c + (arg[++i] || "");
+    else if (q === "'") {
+      if (c === "'") q = null;
+      else out += lit(c);
+    } else if (c === "$" && arg[i + 1] === "{" && matchBrace(arg, i + 1) !== -1) {
+      const e = matchBrace(arg, i + 1);
+      out += arg.slice(i, e + 1);
+      i = e;
+    } else if (c === "\\" && i + 1 < arg.length) out += lit(arg[++i]);
+    else if (q === '"') {
+      if (c === '"') q = null;
+      else out += c === "$" ? c : lit(c);
+    } else if (c === "'" || c === '"') q = c;
+    else out += c;
+  }
+  return out;
 }
 
 function expandWord(word, env) {
@@ -213,7 +239,7 @@ function expandWord(word, env) {
         if (!m || (!m[2] && m[3])) return null; // ${#x}, ${x[1]}, ${x/a/b}, ${x:1:2}: not modelled
         name = m[1];
         op = m[2] || "";
-        arg = m[3].replace(/["']/g, "");
+        arg = unquoteArg(m[3]);
         len = end - i + 1;
       } else {
         const m = /^\$([A-Za-z_][A-Za-z0-9_]*)/.exec(word.slice(i));
@@ -348,13 +374,15 @@ function lex(src) {
   const stack = []; // open scopes: {kind: "(" subshell | ")" $(...) | "`", id, q, saved, start}
   let ids = 0;
   let waiting = []; // heredocs whose body starts at the next newline
-  const newCmd = (sep) => ({ words: [], sep, heredocs: [], scopes: stack.map((e) => e.id) });
+  // `quoted[k]` records that word k had quotes: an empty quoted word is still an argument
+  const newCmd = (sep) => ({ words: [], quoted: [], sep, heredocs: [], scopes: stack.map((e) => e.id) });
   let current = newCmd("start");
   let cur = "";
   let has = false;
   let q = null;
   let redirNext = false;
   let hereNext = false;
+  let wq = false;
   const literal = (c) => (/[~*?[${},]/.test(c) ? M + c : c);
   const pushWord = () => {
     if (has) {
@@ -362,10 +390,14 @@ function lex(src) {
         current.heredocs.push(plain(cur)); // a here-string is stdin, like a heredoc body
         hereNext = false;
       } else if (redirNext) redirNext = false;
-      else current.words.push(cur);
+      else {
+        current.words.push(cur);
+        current.quoted.push(wq);
+      }
     }
     cur = "";
     has = false;
+    wq = false;
   };
   const endCmd = (sep) => {
     pushWord();
@@ -377,10 +409,11 @@ function lex(src) {
   // A command substitution runs first and its output lands inside the word being built, so the
   // outer command is parked, the inner commands are lexed, and a placeholder joins the word.
   const openSubst = (kind) => {
-    stack.push({ kind, id: ++ids, q, saved: { current, cur, has, redirNext, hereNext }, start: cmds.length });
+    stack.push({ kind, id: ++ids, q, saved: { current, cur, has, redirNext, hereNext, wq }, start: cmds.length });
     current = newCmd("subst");
     cur = "";
     has = false;
+    wq = false;
     redirNext = false;
     hereNext = false;
     q = null;
@@ -390,7 +423,7 @@ function lex(src) {
     if (current.words.length) cmds.push(current);
     const inner = cmds.slice(top.start);
     const pwd = inner.length === 1 && inner[0].words.length === 1 && plain(inner[0].words[0]) === "pwd";
-    ({ current, cur, has, redirNext, hereNext } = top.saved);
+    ({ current, cur, has, redirNext, hereNext, wq } = top.saved);
     cur += pwd ? P : S;
     has = true;
     q = top.q;
@@ -453,6 +486,7 @@ function lex(src) {
         i++;
       }
       has = true;
+      wq = true;
       continue;
     }
     if (ch === "$" && src[i + 1] === '"') continue; // $"...": the quotes that follow do the work
@@ -469,6 +503,7 @@ function lex(src) {
     if (ch === "'" || ch === '"') {
       q = ch;
       has = true;
+      wq = true;
       continue;
     }
     if (ch === "\n") {
@@ -589,7 +624,7 @@ function lex(src) {
   while (stack.length) {
     const top = stack.pop();
     if (!top.saved) continue;
-    ({ current, cur, has, redirNext, hereNext } = top.saved);
+    ({ current, cur, has, redirNext, hereNext, wq } = top.saved);
     cur += S;
     has = true;
     endCmd("end");
@@ -642,14 +677,15 @@ function resolveCommand(words, env) {
       i++;
       while (i < words.length) {
         const f = plain(words[i]);
-        if (f === "-S" || f === "--split-string") {
+        if (/^-S/.test(f) || /^--split-string(=|$)/.test(f)) {
           // `env -S "cmd args"` splits the string on blanks itself; no shell reads it, so
           // separators, `~` and wildcards inside it are plain characters
-          const parts = plain(words[i + 1] || "")
+          const glued = f === "-S" || f === "--split-string" ? null : f.replace(/^(-S|--split-string=)/, "");
+          const parts = (glued == null ? plain(words[i + 1] || "") : glued)
             .split(/\s+/)
             .filter(Boolean)
             .map((p) => p.replace(/[~*?[]/g, (ch) => M + ch));
-          words = [...words.slice(0, i), ...parts, ...words.slice(i + 2)];
+          words = [...words.slice(0, i), ...parts, ...words.slice(i + (glued == null ? 2 : 1))];
           continue;
         }
         if (f.startsWith("-")) {
@@ -711,6 +747,36 @@ function sourceIsSafe(pipe, env) {
 }
 
 // ─── Analyzer ────────────────────────────────────────────────────────────────────────────────
+// The variable names a builtin assigns, and only those: `read a b`, `read -a arr`,
+// `printf -v name`, `getopts spec name`, `mapfile arr`, `for name`, `select name`.
+function assignedNames(cmd, pargs) {
+  const ident = (s) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(s || "");
+  const out = [];
+  if (cmd === "for" || cmd === "select") {
+    if (ident(pargs[0])) out.push(pargs[0]);
+  } else if (cmd === "printf") {
+    if (pargs[0] === "-v" && ident(pargs[1])) out.push(pargs[1]);
+  } else {
+    // option letters that take a value; `read -a NAME` names an array to fill
+    const takes = cmd === "read" ? "adinNptu" : cmd === "getopts" ? "" : "dnOsuCc";
+    const rest = [];
+    for (let k = 0; k < pargs.length; k++) {
+      const p = pargs[k];
+      if (p.length > 1 && p.startsWith("-")) {
+        const last = p[p.length - 1];
+        if (takes.includes(last)) {
+          k++;
+          if (cmd === "read" && last === "a" && ident(pargs[k])) out.push(pargs[k]);
+        }
+      } else rest.push(p.replace(/\?.*$/, "")); // zsh `read name?prompt`
+    }
+    if (cmd === "getopts") rest.shift(); // the option spec
+    if (cmd !== "read") rest.splice(1);
+    for (const p of rest) if (ident(p)) out.push(p);
+  }
+  return out;
+}
+
 function analyze(src, env, depth) {
   return analyzeCmds(lex(src), env, depth);
 }
@@ -718,8 +784,15 @@ function analyze(src, env, depth) {
 function analyzeCmds(cmds, env, depth) {
   if (depth > 4) return null;
   const open = []; // subshell and substitution scopes we are inside: {id, cwd, vars}
+  let fnPending = false; // the previous command was `name()`
+  let fnDepth = 0; // brace depth inside a function body
+  let fnEnds = false; // the body closed on the previous command
   for (let ci = 0; ci < cmds.length; ci++) {
     const c = cmds[ci];
+    if (fnEnds) {
+      env.inFn = false;
+      fnEnds = false;
+    }
     // What a subshell or a command substitution does to the cwd and to variables ends with it.
     let keep = 0;
     while (keep < open.length && keep < c.scopes.length && open[keep].id === c.scopes[keep]) keep++;
@@ -732,17 +805,29 @@ function analyzeCmds(cmds, env, depth) {
       open.push({ id: c.scopes[s], cwd: env.cwd, vars: new Map(env.vars) });
     }
 
-    c.words = c.words.flatMap((w) => braceExpand(w));
+    const lists = c.words.map((w) => braceExpand(w));
+    c.quoted = lists.flatMap((l, k) => l.map(() => !!(c.quoted && c.quoted[k])));
+    c.words = lists.flat();
     const r = (c.r = resolveCommand(c.words, env));
-    // `: "${VAR:=default}"` assigns as a side effect of being expanded, on any command
-    for (const w of c.words) if (/\$\{[A-Za-z_][A-Za-z0-9_]*:?=/.test(w)) expandWord(w, env);
     const lastWord = c.words[c.words.length - 1];
     const arr = lastWord ? IS_ASSIGNMENT.exec(lastWord) : null;
     if (arr && arr[0].length === lastWord.length && cmds[ci + 1] && cmds[ci + 1].sep === "(") {
       env.vars.set(arr[1], undefined); // NAME=( ... ): an array, not modelled
     }
-    // Inside a function body or a C-style loop the variables are whatever the caller made them.
-    if (c.fn || (r && (r.name === "function" || (r.name === "for" && !r.args.length)))) env.loose = true;
+    // A function body runs later, with the caller's variables: inside it an unknown variable
+    // stays unknown instead of counting as unset. The body is the brace group that follows.
+    const opens = c.words.filter((w) => w === "{").length;
+    const closes = c.words.filter((w) => w === "}").length;
+    if (!env.inFn && opens && (fnPending || (r && r.name === "function"))) {
+      env.inFn = true;
+      fnDepth = 0;
+    }
+    fnPending = !!c.fn;
+    if (env.inFn) {
+      fnDepth += opens - closes;
+      if (fnDepth <= 0) fnEnds = true;
+    }
+    if (r && r.name === "for" && !r.args.length) env.loose = true; // `for ((...))`: not modelled
     if (!r) continue;
     const args = r.args;
     const pargs = args.map(plain);
@@ -753,7 +838,7 @@ function analyzeCmds(cmds, env, depth) {
       pipe.unshift(cmds[j]);
       link = cmds[j];
     }
-    const sub = (cwd, loose) => ({ cwd, vars: new Map(env.vars), loose: loose || env.loose });
+    const sub = (cwd, loose) => ({ cwd, vars: new Map(env.vars), loose: loose || env.loose || !!env.inFn });
     const inner = (text, cwd, loose) => analyze(text, sub(cwd, loose), depth + 1);
     // Text a shell reading stdin on this command would run: heredocs, here-strings, piped echo.
     const fed = () => {
@@ -779,8 +864,13 @@ function analyzeCmds(cmds, env, depth) {
       else {
         env.unset = null;
         if (expandWord(a[0], env) === "") {
-          env.cwd = HOME_DIR; // `cd $UNSET` is `cd`: it goes to the home folder
-          env.cdUnset = env.unset;
+          // Quoted, an empty argument leaves the shell where it is. Unquoted, the word
+          // vanishes and `cd` goes to the home folder.
+          const at = c.words.indexOf(a[0]);
+          if (at === -1 || !(c.quoted || [])[at]) {
+            env.cwd = HOME_DIR;
+            env.cdUnset = env.unset;
+          }
         } else {
           const t = resolveOperand(a[0], env);
           env.cwd = t && !t.glob ? t.path : null;
@@ -799,12 +889,9 @@ function analyzeCmds(cmds, env, depth) {
       const cands = args.slice(2).map((w) => resolveOperand(w, env)).filter(Boolean);
       const hit = cands.find((t) => isProtectedPath(t.path)) || cands[0];
       env.vars.set(pargs[0], hit ? hit.path : undefined);
-    } else if (
-      ["for", "select", "read", "mapfile", "readarray", "getopts"].includes(r.name) ||
-      (r.name === "printf" && pargs[0] === "-v")
-    ) {
-      // these set variables to values we cannot know
-      for (const p of pargs) if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) env.vars.set(p, undefined);
+    } else if (["for", "select", "read", "mapfile", "readarray", "getopts", "printf"].includes(r.name)) {
+      // these set variables to values we cannot know; only their destinations are forgotten
+      for (const name of assignedNames(r.name, pargs)) env.vars.set(name, undefined);
     } else if (SHELLS.has(r.name)) {
       let f = 0;
       let cmdString = null;
@@ -898,7 +985,7 @@ function analyzeCmds(cmds, env, depth) {
         // the command find runs is judged like any other (`-exec sh -c '...' \;`); `{}` is unknown
         const block = raw.slice(e + 1, j).map((w) => (plain(w).includes("{}") ? S : w));
         const hit = block.length
-          ? analyzeCmds([{ words: block, sep: "start", heredocs: [], scopes: [] }], sub(env.cwd, true), depth + 1)
+          ? analyzeCmds([{ words: block, quoted: [], sep: "start", heredocs: [], scopes: [] }], sub(env.cwd, true), depth + 1)
           : null;
         if (hit) return hit;
         e = j;
@@ -914,6 +1001,9 @@ function analyzeCmds(cmds, env, depth) {
         }
       }
     }
+    // `: "${VAR:=default}"` assigns as a side effect of being expanded. This runs after the
+    // command's own operands were judged, so expansion within one command stays left to right.
+    for (const w of c.words) if (/\$\{[A-Za-z_][A-Za-z0-9_]*:?=/.test(w)) expandWord(w, env);
   }
   return null;
 }
