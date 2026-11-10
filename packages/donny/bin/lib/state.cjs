@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { escapeRegex, loadConfig, getMilestoneInfo, getMilestonePhaseFilter, normalizeMd, planningDir, planningPaths, output, error } = require('./core.cjs');
-const { extractFrontmatter, reconstructFrontmatter } = require('./frontmatter.cjs');
+const { extractFrontmatter, reconstructFrontmatter, verificationVerdict } = require('./frontmatter.cjs');
 
 /** Shorthand — every state command needs this path */
 function getStatePath(cwd) {
@@ -1197,7 +1197,7 @@ function cmdStateValidate(cwd, raw) {
         for (const vf of verificationFiles) {
           try {
             const vContent = fs.readFileSync(path.join(phaseDirPath, vf), 'utf-8');
-            if (/status:\s*passed/i.test(vContent) && /executing/i.test(status)) {
+            if (verificationVerdict(extractFrontmatter(vContent)).verified && /executing/i.test(status)) {
               warnings.push(`Status drift: STATE.md says "${status}" but ${vf} shows verification passed — phase may be complete`);
               drift.verification_status = { state_status: status, verification: 'passed' };
             }

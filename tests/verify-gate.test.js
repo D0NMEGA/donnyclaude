@@ -231,8 +231,9 @@ describe('planning fixture helper', () => {
     assert.equal(parse(null)['requirements-completed'], undefined);
     // The trailing inline comment defeats the endsWith(']') test, so this parses as a STRING.
     assert.equal(typeof parse('inline-comment')['requirements-completed'], 'string');
-    // A body `---` pair shadows the real block, so the whole file parses to zero keys.
-    assert.deepEqual(Object.keys(parse('shadowed')), []);
+    // A body `---` pair used to shadow the real block (the file parsed to zero keys).
+    // extractFrontmatter now reads the leading block only, so the real value comes through.
+    assert.deepEqual(parse('shadowed')['requirements-completed'], ['FIX-01']);
   });
 });
 
@@ -260,16 +261,25 @@ describe('pre-repair v5 fixture', () => {
     assert.ok(fs.existsSync(join(PRE_PLANNING, 'ROADMAP.md')));
   });
 
-  it('J1: 19-VERIFICATION.md reads `status: PASS`, which the engine does not accept', () => {
+  it('J1: 19-VERIFICATION.md reads `status: PASS` + `verdict: passed`, which now verifies', () => {
     const fm = extractFrontmatter(readFixture(PRE_19, '19-VERIFICATION.md'));
     assert.equal(fm.status, 'PASS');
-    // The engine compares against the literal lowercase 'passed', so the phase reads unverified.
-    assert.equal(verify.phaseVerificationVerdict(fm).verified, false);
+    assert.equal(fm.verdict, 'passed');
+    // The engine used to compare status against the literal lowercase 'passed', so this
+    // verifier-written record read unverified. The shared verdict rule closes J1.
+    const v = verify.phaseVerificationVerdict(fm);
+    assert.equal(v.verified, true);
+    assert.equal(v.verdict, 'passed');
+    assert.equal(v.status, 'PASS', 'the raw status is still reported as written');
   });
 
-  it('J2: 19-01-SUMMARY.md frontmatter is shadowed by a body block and parses to zero keys', () => {
-    const fm = extractFrontmatter(readFixture(PRE_19, '19-01-SUMMARY.md'));
-    assert.equal(Object.keys(fm).length, 0);
+  it('J2: 19-01-SUMMARY.md keeps its body --- pair, which no longer shadows the frontmatter', () => {
+    const text = readFixture(PRE_19, '19-01-SUMMARY.md');
+    assert.equal(fenceCount(text), 4, 'the drift is still in the fixture');
+    // It parsed to zero keys while extractFrontmatter took the LAST --- pair in the file.
+    const fm = extractFrontmatter(text);
+    assert.equal(Object.keys(fm).length, 14);
+    assert.deepEqual(fm['requirements-completed'], ['PILOT-04']);
   });
 
   it('J3: 19-03-SUMMARY.md parses cleanly but has no requirements-completed key', () => {
@@ -307,10 +317,10 @@ describe('pre-repair v5 fixture', () => {
 // The phase's headline check. Before this plan cmdVerifySummary imported extractFrontmatter
 // and never called it, so the one field the milestone turns on went unchecked. There are
 // three failing states, not two: besides missing and empty, the key can parse as a STRING (a
-// trailing inline comment defeats the endsWith(']') test at frontmatter.cjs:55) or the whole
-// block can be shadowed by a body `---` pair (extractFrontmatter keeps the LAST block). Both
-// look correct to a human reader, and both are the July J2 defect the pre-repair fixture
-// above carries. The predicate is the same Array.isArray gate cmdVerifyMilestoneCoverage:586
+// trailing inline comment defeats the endsWith(']') test at frontmatter.cjs:55) or, before
+// extractFrontmatter moved to the leading block only, the whole block could be shadowed by a
+// body `---` pair (the July J2 defect the pre-repair fixture above carries). Both look
+// correct to a human reader. The predicate is the same Array.isArray gate cmdVerifyMilestoneCoverage:586
 // uses, so a SUMMARY this check accepts is one the coverage engine can read.
 
 const SUMMARY_PHASE = '23-fixture';
@@ -363,15 +373,13 @@ describe('cmdVerifySummary requirements-completed (D-16)', () => {
       `expected a not-a-list error, got ${JSON.stringify(j.errors)}`);
   });
 
-  it('fails when a body `---` pair shadows otherwise valid frontmatter', () => {
+  it('reads valid frontmatter even when a body `---` pair follows it', () => {
+    // This used to fail on the missing branch: extractFrontmatter took the LAST --- pair, so
+    // the body pair shadowed the real block. It now reads the leading block only.
     const j = runVerifySummary(summaryContent({ requirementsCompleted: 'shadowed' }));
-    assert.equal(j.passed, false);
-    assert.equal(j.checks.requirements_completed, null);
-    // Shadowing is indistinguishable from absence at the parse layer, so it lands on the
-    // missing branch. The error string names the shadowing case so the reader is not sent
-    // hunting for a key that is right there in the file.
-    assert.ok(j.errors.some(e => /requirements-completed missing/.test(e)),
-      `expected a missing error, got ${JSON.stringify(j.errors)}`);
+    assert.deepEqual(j.checks.requirements_completed, ['FIX-01']);
+    assert.ok(!j.errors.some(e => /requirements-completed/.test(e)),
+      `expected no requirements-completed error, got ${JSON.stringify(j.errors)}`);
   });
 
   it('carries requirements_completed: null on the missing-file early return', () => {
@@ -766,12 +774,12 @@ describe('classifyVerbResult: boundary cases', () => {
     assert.equal(got.severity, 'not_yet');
   });
 
-  it('names the literal the engine matches when VERIFICATION.md says PASS (the J1 finding)', () => {
+  it('names both verdict and status when a passed verdict is contradicted by its status', () => {
     const got = verify.classifyVerbResult('phase-verified',
-      { ok: true, json: { verified: false, status: 'PASS' } });
+      { ok: true, json: { verified: false, verdict: 'passed', status: 'PARTIAL' } });
     assert.equal(got.severity, 'error');
-    assert.match(got.detail, /PASS/);
-    assert.match(got.detail, /passed/, 'the detail must name the lowercase literal the engine matches');
+    assert.match(got.detail, /verdict is "passed"/);
+    assert.match(got.detail, /PARTIAL/, 'the detail must name the status that held the phase back');
   });
 
   it('scores unresolved references as a warning, not an error (A-03 half 2)', () => {
@@ -1194,13 +1202,24 @@ describe('runGate', () => {
 
   it('fails when a verb reports an error, and the verdict follows counts.error', () => {
     withGateFixture({
-      verification: verificationContent({ phase: GATE_PHASE, status: 'PASS' }),
+      verification: verificationContent({ phase: GATE_PHASE, status: 'PARTIAL', verdict: 'gaps_found' }),
     }, (root) => {
       const r = verify.runGate(root, '23');
       const pv = r.verbs.find((x) => x.verb === 'phase-verified');
-      assert.equal(pv.severity, 'error', 'status PASS is the J1 defect, not a pass');
+      assert.equal(pv.severity, 'error', 'a gaps_found verdict is not a pass');
       assert.ok(r.counts.error > 0);
       assert.equal(r.verdict, 'fail');
+    });
+  });
+
+  it('passes phase-verified on the verifier vocabulary, status PASS + verdict passed', () => {
+    withGateFixture({
+      verification: verificationContent({ phase: GATE_PHASE, status: 'PASS', verdict: 'passed' }),
+    }, (root) => {
+      const r = verify.runGate(root, '23');
+      const pv = r.verbs.find((x) => x.verb === 'phase-verified');
+      assert.equal(pv.severity, 'pass', 'the J1 vocabulary is what donny-verifier writes');
+      assert.equal(r.verdict, 'pass');
     });
   });
 
@@ -1501,7 +1520,14 @@ describe('verify gate CLI', () => {
 // So the ceiling is NOT raised to absorb these. They are the drift the milestone exists to
 // catch, the gate reproduces them deterministically, and the two phases nobody disputes are
 // healthy (19 and 22) come back with exactly zero errors.
-const CEILING = { 19: 0, 20: 3, 21: 5, 22: 0 };
+//
+// RE-MEASURED 2026-11-10 after extractFrontmatter moved to the leading block only. The
+// shadowing is gone, so the real top blocks are read, and seven of the eight errors remain
+// as a DIFFERENT real defect: 20-01/02/03 and 21-01/02/03 carry the
+// `requirements-completed: []  # REQUIRED ...` inline-comment form, which parses as a string.
+// 21-04 still has no key at all. 21-05's real block carries a valid list, so phase 21 drops
+// from 5 errors to 4.
+const CEILING = { 19: 0, 20: 3, 21: 4, 22: 0 };
 
 const CCO_ARCHIVE = resolve(CCO_ROOT, '.planning/milestones/v5.0-phases');
 const hasArchive = fs.existsSync(CCO_ARCHIVE);
@@ -1550,7 +1576,7 @@ describe('real-artifact calibration', { skip: !hasArchive }, () => {
     }
   });
 
-  it('attributes every archived-phase error to the shadowed-frontmatter defect', () => {
+  it('attributes every archived-phase error to a requirements-completed record defect', () => {
     // Pins the CAUSE, not only the count. A new class of error appearing on a frozen archive
     // could otherwise slip in under the ceiling while the counts still looked familiar, which
     // is what Plan 09's replay has to be able to rule out.
@@ -1559,7 +1585,8 @@ describe('real-artifact calibration', { skip: !hasArchive }, () => {
       assert.equal(errs.length, CEILING[phase]);
       for (const e of errs) {
         assert.equal(e.verb, 'verify-summary');
-        assert.match(e.detail, /requirements-completed missing from SUMMARY frontmatter/);
+        assert.match(e.detail,
+          /requirements-completed (is not a YAML list|missing from SUMMARY frontmatter)/);
       }
     }
   });
@@ -1574,11 +1601,12 @@ describe('real-artifact calibration', { skip: !hasArchive }, () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // RECORD-04: the NN-RECORDS.md artifact the gate writes.
 //
-// The regression this block exists for is C-12. extractFrontmatter collects every '---'
-// pair in a document and keeps the LAST one (frontmatter.cjs:16-17), so a body using '---'
-// as a decorative section rule makes the file's own frontmatter unreadable. The shipped
-// templates/SECURITY.md has exactly that defect and parses to zero keys, and eight archived
-// v5.0 SUMMARYs carry it too. An artifact that carried the bug it exists to catch would be
+// The regression this block exists for is C-12. extractFrontmatter used to collect every
+// '---' pair in a document and keep the LAST one, so a body using '---' as a decorative
+// section rule made the file's own frontmatter unreadable. The shipped
+// templates/SECURITY.md had exactly that defect and parsed to zero keys, and eight archived
+// v5.0 SUMMARYs carry the body rules too. The parser now reads the leading block only, but
+// the two-fence rule stays as defence in depth for any other reader of the file. An artifact that carried the bug it exists to catch would be
 // worthless, so "exactly two '---' lines" is asserted on the template, on rendered output,
 // and on rendered output whose every dynamic string deliberately contains '---'.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1630,9 +1658,12 @@ describe('RECORDS.md rendering (RECORD-04)', () => {
     const fm = extractFrontmatter(md);
     for (const k of RECORDS_FM_KEYS) assert.ok(k in fm, `template frontmatter is missing ${k}`);
     assert.equal(fm.status, 'pass');
-    // The counter-example, asserted so the difference is recorded rather than assumed.
+    // The former counter-example: SECURITY.md parsed to zero keys while extractFrontmatter
+    // took the LAST --- pair. With the leading-block rule its own frontmatter comes through.
     const sec = fs.readFileSync(resolve(ROOT, 'packages/donny/templates/SECURITY.md'), 'utf-8');
-    assert.equal(Object.keys(extractFrontmatter(sec)).length, 0, 'C-12: SECURITY.md still parses to zero keys');
+    const secFm = extractFrontmatter(sec);
+    assert.equal(secFm.status, 'draft', 'C-12 closed: SECURITY.md parses its own frontmatter');
+    assert.equal(secFm.threats_open, '0');
   });
 
   it('exports renderRecordsMd and writeRecordsFile', () => {
@@ -2338,24 +2369,20 @@ describe('v5.0 replay (criterion 5)', () => {
     assert.equal(gate20.phase_dir, '.planning/phases/20-auto-compact-at-60-keystone');
   });
 
-  it('J1 (22-01-SUMMARY.md): phase-verified fails Phase 19 on the PASS/passed vocabulary', () => {
+  it('J1 (22-01-SUMMARY.md): phase-verified now passes Phase 19 on the PASS/passed vocabulary', () => {
     const row = rowFor(gate19, 'phase-verified');
-    assert.equal(row.severity, 'error',
-      'J1: 19-VERIFICATION.md carried status: PASS; the engine lowercases-and-compares to the ' +
-      'literal "passed", so the phase had been silently reading as unverified');
-    assert.match(row.detail, /PASS/,
-      'the finding must name the offending status value, not just report a failure');
+    assert.equal(row.severity, 'pass',
+      'J1: 19-VERIFICATION.md carries status: PASS and verdict: passed, which is exactly what ' +
+      'donny-verifier writes; the engine used to compare status to the literal "passed"');
   });
 
-  it('J2 (22-01-SUMMARY.md): verify-summary fails 19-01 and 19-02, whose frontmatter is shadowed', () => {
+  it('J2 (22-01-SUMMARY.md): verify-summary reads 19-01 and 19-02 past their body --- pair', () => {
     for (const target of ['19-01-SUMMARY.md', '19-02-SUMMARY.md']) {
       const row = rowFor(gate19, 'verify-summary', target);
       assert.ok(row, 'no verify-summary row for ' + target);
-      assert.equal(row.severity, 'error',
-        'J2: ' + target + ' already carried requirements-completed in its real top frontmatter, ' +
-        'but a later body pair of --- lines shadowed it (extractFrontmatter reads the LAST block)');
-      assert.ok(row.findings.some((f) => /requirements-completed missing/.test(f)),
-        'J2: ' + target + ' must report the missing-or-shadowed branch');
+      assert.ok(!row.findings.some((f) => /requirements-completed/.test(f)),
+        'J2: ' + target + ' carries requirements-completed in its real top frontmatter; a later ' +
+        'body pair of --- lines used to shadow it when extractFrontmatter read the LAST block');
     }
   });
 
@@ -2371,15 +2398,15 @@ describe('v5.0 replay (criterion 5)', () => {
     }
   });
 
-  it('J4 (22-02-SUMMARY.md): phase-verified fails Phase 20, whose status never parses', () => {
+  it('J4 (22-02-SUMMARY.md): phase-verified reads Phase 20 past its body rules, as human_needed', () => {
     const row = rowFor(gate20, 'phase-verified');
-    assert.equal(row.severity, 'error',
-      'J4: 20-VERIFICATION.md had 12 --- lines (10 body horizontal rules shadowing the ' +
-      'frontmatter), so extractFrontmatter read a body block and status parsed to {}');
-    // A different mechanism from J1, and the detail says so: J1 reads a wrong value, J4 reads
-    // no value at all. Asserting the distinction stops the two collapsing into one finding.
-    assert.match(row.detail, /unknown/, 'J4 is the no-value case; J1 is the wrong-value case');
-    assert.doesNotMatch(row.detail, /"PASS"/);
+    // 20-VERIFICATION.md has 12 --- lines; the 10 body rules used to shadow the frontmatter,
+    // so status parsed to {} and the detail said "unknown". The real frontmatter now comes
+    // through: status PARTIAL, verdict human_needed, which stays unverified (owner decision).
+    assert.equal(row.severity, 'error');
+    assert.match(row.detail, /human_needed/);
+    assert.match(row.detail, /PARTIAL/);
+    assert.doesNotMatch(row.detail, /unknown/, 'the frontmatter is read, not shadowed');
   });
 
   it('J5 (22-02-SUMMARY.md): verify-summary fails 20-04 on the empty-list branch', () => {

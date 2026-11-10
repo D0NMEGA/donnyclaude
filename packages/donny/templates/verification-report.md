@@ -8,9 +8,10 @@ Template for `.planning/phases/XX-name/{phase_num}-VERIFICATION.md` - phase goal
 
 ```markdown
 ---
+status: PASS | FAIL | PARTIAL
 phase: XX-name
 verified: YYYY-MM-DDTHH:MM:SSZ
-status: passed | gaps_found | human_needed
+verdict: passed | gaps_found | human_needed
 score: N/M must-haves verified
 ---
 
@@ -18,7 +19,7 @@ score: N/M must-haves verified
 
 **Phase Goal:** {goal from ROADMAP.md}
 **Verified:** {timestamp}
-**Status:** {passed | gaps_found | human_needed}
+**Status:** {PASS | FAIL | PARTIAL}  **Verdict:** {passed | gaps_found | human_needed}
 
 ## Goal Achievement
 
@@ -161,10 +162,17 @@ None - all verifiable items checked programmatically.
 
 ## Guidelines
 
-**Status values:**
-- `passed` - All must-haves verified, no blockers
-- `gaps_found` - One or more critical gaps found
-- `human_needed` - Automated checks pass but human verification required
+**Status and verdict values:**
+
+The frontmatter carries both fields, set as a pair:
+- `status: PASS`, `verdict: passed` - All must-haves verified, no blockers, no human items
+- `status: PARTIAL`, `verdict: gaps_found` - One or more critical gaps found
+- `status: PARTIAL`, `verdict: human_needed` - Automated checks pass but human verification required
+- `status: FAIL`, `verdict: gaps_found` - Goal not delivered, or verification could not run
+
+The engine (`verify phase-verified`, ship, the records gate, milestone coverage) treats a
+phase as verified only when `verdict` is `passed` and `status` is `PASS`. A `human_needed`
+phase stays unverified until the human items are closed and the file is re-verified.
 
 **Evidence types:**
 - For EXISTS: "File at path, exports X"
@@ -189,9 +197,10 @@ None - all verifiable items checked programmatically.
 
 ```markdown
 ---
+status: PARTIAL
 phase: 03-chat
 verified: 2025-01-15T14:30:00Z
-status: gaps_found
+verdict: gaps_found
 score: 2/5 must-haves verified
 ---
 
@@ -199,7 +208,7 @@ score: 2/5 must-haves verified
 
 **Phase Goal:** Working chat interface where users can send and receive messages
 **Verified:** 2025-01-15T14:30:00Z
-**Status:** gaps_found
+**Status:** PARTIAL  **Verdict:** gaps_found
 
 ## Goal Achievement
 

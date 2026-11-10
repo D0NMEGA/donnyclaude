@@ -144,9 +144,9 @@ export function validPlanContent({
  *   'inline-comment'  -> the defective `[]  # REQUIRED - ...` form. The trailing comment
  *                        defeats the endsWith(']') test at frontmatter.cjs:55, so it parses
  *                        as a STRING and milestone-coverage's Array.isArray check drops it.
- *   'shadowed'        -> valid top frontmatter PLUS a body `---` pair. extractFrontmatter
- *                        keeps the LAST block (frontmatter.cjs:17), so the real block is
- *                        shadowed and the file parses to zero keys.
+ *   'shadowed'        -> valid top frontmatter PLUS a body `---` pair. This parsed to zero
+ *                        keys while extractFrontmatter kept the LAST block; it now reads the
+ *                        leading block, so the body pair is a regression case.
  */
 export function summaryContent({
   phase = '23-fixture',
@@ -179,15 +179,20 @@ export function summaryContent({
   return lines.join('\n');
 }
 
-/** A VERIFICATION.md whose frontmatter `status` drives phaseVerificationVerdict. */
+/**
+ * A VERIFICATION.md whose frontmatter `status` and optional `verdict` drive
+ * verificationVerdict. verdict null omits the key, which is the legacy status-only shape.
+ */
 export function verificationContent({
   status = 'passed',
+  verdict = null,
   score = '5/5',
   phase = '23-fixture',
 } = {}) {
   return [
     '---',
     `status: ${status}`,
+    ...(verdict === null ? [] : [`verdict: ${verdict}`]),
     `score: ${score}`,
     `phase: ${phase}`,
     '---',

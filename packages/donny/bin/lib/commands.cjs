@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const { safeReadFile, loadConfig, isGitIgnored, execGit, normalizePhaseName, comparePhaseNum, getArchivedPhaseDirs, generateSlugInternal, getMilestoneInfo, getMilestonePhaseFilter, resolveModelInternal, stripShippedMilestones, extractCurrentMilestone, planningDir, planningPaths, toPosixPath, output, error, findPhaseInternal, extractOneLinerFromBody, getRoadmapPhaseInternal } = require('./core.cjs');
-const { extractFrontmatter } = require('./frontmatter.cjs');
+const { extractFrontmatter, verificationVerdict } = require('./frontmatter.cjs');
 const { MODEL_PROFILES } = require('./model-profiles.cjs');
 
 /**
@@ -23,10 +23,10 @@ function determinePhaseStatus(plans, summaries, phaseDir, defaultPending) {
     const verificationFile = files.find(f => f === 'VERIFICATION.md' || f.endsWith('-VERIFICATION.md'));
     if (verificationFile) {
       const content = fs.readFileSync(path.join(phaseDir, verificationFile), 'utf-8');
-      if (/status:\s*passed/i.test(content)) return 'Complete';
-      if (/status:\s*human_needed/i.test(content)) return 'Needs Review';
-      if (/status:\s*gaps_found/i.test(content)) return 'Executed';
-      // Verification exists but unrecognized status — treat as executed
+      const v = verificationVerdict(extractFrontmatter(content));
+      if (v.verified) return 'Complete';
+      if (v.verdict === 'human_needed') return 'Needs Review';
+      // gaps_found, or a verdict that is unknown or contradicted by its status
       return 'Executed';
     }
   } catch { /* directory read failed — fall through */ }
@@ -775,7 +775,7 @@ function cmdScaffold(cwd, type, options, raw) {
     }
     case 'verification': {
       filePath = path.join(phaseDir, `${padded}-VERIFICATION.md`);
-      content = `---\nphase: "${padded}"\nname: "${name || phaseInfo?.phase_name || 'Unnamed'}"\ncreated: ${today}\nstatus: pending\n---\n\n# Phase ${phase}: ${name || phaseInfo?.phase_name || 'Unnamed'} — Verification\n\n## Goal-Backward Verification\n\n**Phase Goal:** [From ROADMAP.md]\n\n## Checks\n\n| # | Requirement | Status | Evidence |\n|---|------------|--------|----------|\n\n## Result\n\n_Pending verification_\n`;
+      content = `---\nphase: "${padded}"\nname: "${name || phaseInfo?.phase_name || 'Unnamed'}"\ncreated: ${today}\nstatus: pending\nverdict: pending\n---\n\n# Phase ${phase}: ${name || phaseInfo?.phase_name || 'Unnamed'} — Verification\n\n## Goal-Backward Verification\n\n**Phase Goal:** [From ROADMAP.md]\n\n## Checks\n\n| # | Requirement | Status | Evidence |\n|---|------------|--------|----------|\n\n## Result\n\n_Pending verification_\n`;
       break;
     }
     case 'phase-dir': {
@@ -994,6 +994,7 @@ function cmdCheckCommit(cwd, raw) {
 }
 
 module.exports = {
+  determinePhaseStatus,
   cmdGenerateSlug,
   cmdCurrentTimestamp,
   cmdListTodos,
