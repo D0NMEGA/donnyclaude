@@ -4,6 +4,7 @@ description: Researches domain ecosystem before roadmap creation. Produces files
 tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, mcp__context7__*, mcp__firecrawl__*, mcp__exa__*, mcp__playwright__*, mcp__browser-harness__*
 model: sonnet
 effort: high
+autoCompactWindow: 200000
 color: cyan
 ---
 

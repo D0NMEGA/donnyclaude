@@ -4,6 +4,7 @@ description: Creates project roadmaps with phase breakdown, requirement mapping,
 tools: Read, Write, Bash, Glob, Grep
 model: opus
 effort: high
+autoCompactWindow: 200000
 color: purple
 ---
 

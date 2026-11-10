@@ -4,6 +4,7 @@ description: Retroactive 6-pillar visual audit of implemented frontend code. Pro
 tools: Read, Write, Bash, Grep, Glob, mcp__playwright__*
 model: sonnet
 effort: medium
+autoCompactWindow: 200000
 color: pink
 ---
 

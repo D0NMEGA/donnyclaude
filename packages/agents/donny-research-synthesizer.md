@@ -4,6 +4,7 @@ description: Synthesizes research outputs from parallel researcher agents into S
 tools: Read, Write, Bash
 model: sonnet
 effort: high
+autoCompactWindow: 200000
 color: purple
 ---
 

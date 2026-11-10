@@ -4,6 +4,7 @@ description: Explores codebase and writes structured analysis documents. Spawned
 tools: Read, Bash, Grep, Glob, Write
 model: sonnet
 effort: medium
+autoCompactWindow: 200000
 color: cyan
 ---
 
