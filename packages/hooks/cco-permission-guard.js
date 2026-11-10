@@ -135,6 +135,10 @@ function lookupVar(name, env) {
   env.unset = name;
   return "";
 }
+// Set, possibly to the empty string: `${x-word}` and `${x:-word}` differ exactly here.
+function isSetVar(name, env) {
+  return name === "HOME" || name === "PWD" || env.vars.has(name) || typeof process.env[name] === "string";
+}
 
 // ${v%pat} ${v%%pat} ${v#pat} ${v##pat}; `pat` carries G-marked wildcards. null = not modelled.
 function stripPattern(v, pat, op) {
@@ -221,18 +225,20 @@ function expandWord(word, env) {
       if (v == null) return null;
       if (op) {
         const kind = op[op.length - 1];
+        // with a colon the test is "unset or empty"; without it, "unset" only
+        const missing = op[0] === ":" ? v === "" : !isSetVar(name, env);
         if (op[0] === "%" || op[0] === "#") {
           const pat = expandWord(arg, env);
           v = pat == null ? null : stripPattern(v, pat, op);
         } else if (kind === "-" || kind === "=") {
-          if (v === "") {
+          if (missing) {
             env.unset = null;
             v = expandWord(arg, env);
             if (kind === "=") env.vars.set(name, v == null ? undefined : v.split(G).join(""));
           }
         } else if (kind === "+") {
-          if (v !== "") v = expandWord(arg, env);
-        } else if (v === "") {
+          v = missing ? "" : expandWord(arg, env);
+        } else if (missing) {
           return null; // ${x:?}: the shell stops with an error instead of running the command
         }
         if (v == null) return null;
@@ -411,7 +417,8 @@ function lex(src) {
     if (ch === "$" && src[i + 1] === "{") {
       // parameter expansion: keep it whole, expandWord interprets it
       const end = matchBrace(src, i + 1);
-      if (end !== -1) {
+      // a substitution inside it still runs, so that case is lexed character by character
+      if (end !== -1 && !/\$\(|`|[<>]\(/.test(src.slice(i, end + 1))) {
         cur += src.slice(i, end + 1);
         has = true;
         i = end;
@@ -636,8 +643,14 @@ function resolveCommand(words, env) {
       while (i < words.length) {
         const f = plain(words[i]);
         if (f === "-S" || f === "--split-string") {
-          // `env -S "cmd args"` runs the string as a command line
-          return { name: "eval", args: words.slice(i + 1), isSudo, viaXargs };
+          // `env -S "cmd args"` splits the string on blanks itself; no shell reads it, so
+          // separators, `~` and wildcards inside it are plain characters
+          const parts = plain(words[i + 1] || "")
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((p) => p.replace(/[~*?[]/g, (ch) => M + ch));
+          words = [...words.slice(0, i), ...parts, ...words.slice(i + 2)];
+          continue;
         }
         if (f.startsWith("-")) {
           i++;
@@ -852,7 +865,7 @@ function analyzeCmds(cmds, env, depth) {
         const why = env.unset
           ? `rm target built from the unset variable $${env.unset}, which expands to nothing here`
           : env.cdUnset
-            ? `rm after cd to the unset variable $${env.cdUnset}; an empty cd goes to the home folder`
+            ? `rm after cd to the unset variable $${env.cdUnset}, which is empty here (an unquoted empty cd goes to the home folder)`
             : null;
         if (t.glob) {
           if (globParentBlocks(t.path, rec)) return why || (rec ? LABEL_RM : LABEL_GLOB);
