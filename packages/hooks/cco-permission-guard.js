@@ -27,12 +27,15 @@
 // `find -exec <command>`, `env -S`, `arch`, `noglob`, `nocorrect` and `=cmd` are followed to the
 // command they run.
 //
-// Deliberately kept as in v3, after a review loop showed that modelling them precisely kept
-// producing new mistakes: a function body is read in line where it is defined (calls are not
-// followed, `local` is an ordinary assignment), and `eval` text is judged on a copy of the state.
+// Deliberately kept as in v3, after a review loop and an oracle test against real shells showed
+// that modelling them precisely kept producing new mistakes: a function body is read in line
+// where it is defined (calls are not followed, `local` is an ordinary assignment); `eval` text
+// is judged on a copy of the state; and a value given by a plain assignment changes only
+// through another plain assignment, because the guard cannot tell whether `false && unset x`
+// ran. Conditions are not evaluated: a `cd` after `&&` or inside `if` counts as run.
 // Also not followed: process substitution (`bash <(...)`), other interpreters, trap handlers,
-// and the subshell a pipeline element or a background job runs in. The probe table records
-// these as limits (rows marked L).
+// and a brace group or loop used as a pipeline element. The probe table records these as
+// limits (rows marked L), and .fixtures/guard-oracle.cjs measures them against real shells.
 //
 // SINGLE SOURCE OF TRUTH: detectCatastrophe(cmd[, cwd]) holds the catastrophe set. The parsed path,
 // rawCatastrophe() and ~/.claude/bin/cco-dream (one-argument call, string-or-null result) all use it.
@@ -301,7 +304,10 @@ function expandWord(word, env) {
             v = expandWord(unquoteArg(arg, inDq), env);
             if (kind === "=") {
               if (env.ro && env.ro.has(name)) return null; // assigning to a readonly variable fails
-              setVar(env, name, v == null ? undefined : v.split(G).join(""), false);
+              // a value from a plain assignment stays (the command holding this may be skipped)
+              if (!(env.strong && env.strong.has(name))) {
+                setVar(env, name, v == null ? undefined : v.split(G).join(""), false);
+              }
             }
           }
         } else if (kind === "+") {
@@ -429,7 +435,8 @@ function lex(src) {
   const pushWord = () => {
     if (has) {
       if (hereNext) {
-        current.heredocs.push(plain(cur)); // a here-string is stdin, like a heredoc body
+        // a here-string is stdin, like a heredoc body; kept as a word so it can be expanded
+        (current.herestrings = current.herestrings || []).push(cur);
         hereNext = false;
       } else if (redirNext) redirNext = false;
       else {
@@ -919,10 +926,18 @@ function analyzeCmds(cmds, env, depth) {
   // A builtin that sets a variable to something we cannot know makes an unknown variable
   // unknowable. It never discards a value the command assigned: v3 kept that value, and a
   // `read` that fails or only tests for input (`read -t 0`) leaves it in place.
+  // A value given by a plain assignment changes only through another plain assignment, as in
+  // v3. The guard cannot tell whether `false && unset x` ran, so nothing else may discard it.
+  const isStrong = (name) => !!(env.strong && env.strong.has(name) && typeof env.vars.get(name) === "string");
   const forget = (name) => {
     if (env.ro && env.ro.has(name)) return;
-    if (env.strong && env.strong.has(name) && typeof env.vars.get(name) === "string") return;
+    if (isStrong(name)) return;
     setVar(env, name, undefined, false);
+  };
+  // a word the shell expands before another shell reads it (a -c string, a here-string)
+  const expandText = (w) => {
+    const v = expandWord(w, env);
+    return v == null ? plain(w) : v.split(G).join("");
   };
   // the state a subshell cannot change for its parent
   const snap = () => ({
@@ -990,7 +1005,6 @@ function analyzeCmds(cmds, env, depth) {
     const closes = c.words.filter((w) => w === "}").length;
     if (!env.inFn && opens && (fnPending || plain(c.words[0]) === "function")) {
       env.inFn = true;
-      env.sawFn = true;
       fnDepth = 0;
     }
     fnPending = !!c.fn;
@@ -1038,7 +1052,7 @@ function analyzeCmds(cmds, env, depth) {
       analyze(text, sub(cwd, loose, nounset, lastpipe), depth + 1);
     // Text a shell reading stdin on this command would run: heredocs, here-strings, piped echo.
     const fed = () => {
-      const texts = [...c.heredocs];
+      const texts = [...c.heredocs, ...(c.herestrings || []).map(expandText)];
       for (const p of pipeOf()) {
         texts.push(...p.heredocs);
         if (p.r && (p.r.name === "echo" || p.r.name === "printf")) texts.push(p.r.args.map(plain).join(" "));
@@ -1078,21 +1092,28 @@ function analyzeCmds(cmds, env, depth) {
     } else if (r.name === "let") {
       for (const t of top ? arithTargets(pargs.join(" ")) : []) {
         // v3 saw the assignment inside `((x=2))`, not the one in `let x=2`
-        if (t.value != null && !(env.ro && env.ro.has(t.name))) setVar(env, t.name, t.value, !!c.arith);
+        const may = c.arith || !isStrong(t.name);
+        if (t.value != null && may && !(env.ro && env.ro.has(t.name))) setVar(env, t.name, t.value, !!c.arith);
         else forget(t.name);
       }
     } else if (r.name === "set") {
       // `set -u`: an unset variable stops the shell instead of expanding to nothing
-      for (let k = 0; top && k < pargs.length && pargs[k] !== "--"; k++) {
-        if (/^[-+][A-Za-z]*u/.test(pargs[k]) || (/^[-+]o$/.test(pargs[k]) && pargs[k + 1] === "nounset")) {
-          env.nounset = pargs[k][0] === "-";
+      // options end at the first word that is not one: `set foo -u` sets two positional arguments
+      for (let k = 0; top && k < pargs.length && /^[-+]/.test(pargs[k]) && pargs[k] !== "--"; k++) {
+        const p = pargs[k];
+        if (/^[-+][A-Za-z]*u/.test(p)) env.nounset = p[0] === "-";
+        if (/^[-+][A-Za-z]*o$/.test(p)) {
+          if (pargs[k + 1] === "nounset") env.nounset = p[0] === "-";
+          k++; // the option name
         }
       }
     } else if (r.name === "unset") {
-      if (top && !pargs.some((p) => /^-[a-z]*f/.test(p))) {
+      // plain `unset NAME` (or -v) only; a readonly variable and an assigned value stay
+      if (top && !pargs.some((p) => p.startsWith("-") && p !== "-v")) {
         for (const p of pargs) {
-          // `unset` of a readonly variable fails and the value stays
-          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p) && !(env.ro && env.ro.has(p))) setVar(env, p, GONE, false);
+          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p) && !(env.ro && env.ro.has(p)) && !isStrong(p)) {
+            setVar(env, p, GONE, false);
+          }
         }
       }
     } else if (["export", "local", "declare", "readonly", "typeset"].includes(r.name)) {
@@ -1120,9 +1141,10 @@ function analyzeCmds(cmds, env, depth) {
       while (f < args.length && /^[-+]/.test(pargs[f])) {
         const p = pargs[f];
         const cluster = !p.startsWith("--");
-        if (cluster && p[0] === "-" && p.includes("u")) strict = true;
+        // options apply in order: `-u +u` ends with nounset off
+        if (cluster && p.includes("u")) strict = p[0] === "-";
         if (cluster && p.endsWith("o")) {
-          if (p[0] === "-" && pargs[f + 1] === "nounset") strict = true;
+          if (pargs[f + 1] === "nounset") strict = p[0] === "-";
           f++; // the option name that follows -o
         }
         if (cluster && p[0] === "-" && p.includes("c")) {
@@ -1135,24 +1157,21 @@ function analyzeCmds(cmds, env, depth) {
       const own = /^(zsh|ksh)$/.test(r.name);
       const hit =
         cmdString != null
-          ? inner(plain(cmdString), env.cwd, false, strict, own)
+          ? inner(expandText(cmdString), env.cwd, false, strict, own)
           : f >= args.length
             ? anyHit(fed(), env.cwd, false, strict, own)
             : null;
       if (hit) return hit;
     } else if (r.name === "eval") {
       // eval expands its arguments once and runs the result in this shell. The text is judged
-      // on a copy of the state. When all of it is known and it runs in this shell (not as a
-      // pipeline element or in the background), its cd and its assignments are kept. Otherwise
-      // what it changed is unknown, so afterwards an unknown variable is unknowable, not unset.
+      // on a copy of the state, as in v3, and what it changes here is not kept: keeping it was
+      // tried and made the guard see less than v3 when a later, unfollowed function call undid
+      // it. Afterwards an unknown variable is unknowable, not unset.
       const parts = args.map((w) => expandWord(w, env));
       const text = parts.map((p, k) => (p == null ? pargs[k] : p.split(G).join(""))).join(" ");
-      const box = sub(env.cwd, false, env.nounset, env.lastpipe);
-      const hit = analyze(text, box, depth + 1);
+      const hit = inner(text, env.cwd, false, env.nounset, env.lastpipe);
       if (hit) return hit;
-      // a function defined in the text is read in line, which is only a guess: not kept
-      if (top && !apart && !box.loose && !box.sawFn && parts.every((p) => p != null)) restore(box);
-      else if (top) env.loose = true;
+      if (top) env.loose = true;
     } else if (r.name === "." || r.name === "source") {
       if (/^\/dev\/(stdin|fd\/0)$/.test(pargs[0] || "")) {
         const hit = anyHit(fed(), env.cwd, false, env.nounset, env.lastpipe);

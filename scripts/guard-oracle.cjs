@@ -34,6 +34,8 @@ const POOL = [
   "f() { read x </dev/null; }", "f() { unset x; }", "f", "unset -f f",
   "set -u", "set +u", "true", "for x in /tmp/j /tmp/k; do :; done", "for x in ~ /tmp/l; do :; done",
   "if true; then cd /tmp; fi", "if false; then cd ~; fi", "x=/tmp/m true", "y=$x", "x=$y",
+  "false && cd /tmp", "true || cd /tmp", "true && cd ~", "false && unset x", "false && read x </dev/null",
+  "false && let x=3", "false && x=/tmp/n", 'false && : "${x:=/tmp/p}"', 'eval "false && cd /tmp"', "eval 'true || x=/tmp/o'",
 ];
 const FINALS = ['rm -rf *', 'rm -rf "$x"', 'rm -rf "$x"/*', "rm -rf ./*"];
 // the home folder and the directory this is run from (run it from a project two levels below home)
@@ -102,3 +104,8 @@ show("REGRESSION (a shell would destroy, v3 blocked, new allows)", out.regress, 
 show("miss in both v3 and new (a shell would destroy)", out.miss, 12);
 show("new false block (both shells safe, v3 allowed, new blocks)", out.fp, 12);
 console.log(`false block in both v3 and new: ${out.fpBoth}`);
+// optional 7th argument: the number of regressions allowed; more than that fails the run
+if (process.argv[7] != null && out.regress.length > Number(process.argv[7])) {
+  console.log(`FAIL: ${out.regress.length} regressions, ${process.argv[7]} allowed`);
+  process.exit(1);
+}
