@@ -37,35 +37,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.claude/hooks/donny-check-update.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/cco-cerebrum-recall.js\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/cco-vault-audit-nudge.js\"",
             "timeout": 15
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/cco-model-currency-nudge.js\"",
-            "timeout": 5
           }
         ]
       },
@@ -123,33 +96,11 @@
         ]
       },
       {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/cco-instinct-observe.js\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "hooks": [
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/cc-session-cleanup.sh\"",
             "timeout": 30
-          }
-        ]
-      }
-    ],
-    "PostCompact": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/cco-postcompact.js\"",
-            "timeout": 10
           }
         ]
       }
@@ -171,17 +122,8 @@
           {
             "type": "command",
             "command": "node \"$HOME/.claude/hooks/cco-permission-guard.js\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/cco-cerebrum-check.js\"",
-            "timeout": 5
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       }
@@ -207,7 +149,7 @@
     "github@claude-plugins-official": false,
     "swift-lsp@claude-plugins-official": true
   },
-  "effortLevel": "xhigh",
+  "effortLevel": "high",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
@@ -233,5 +175,17 @@
     "anthropic-skills:skill-creator": "off",
     "anthropic-skills:theme-factory": "off",
     "anthropic-skills:xlsx": "off"
-  }
+  },
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "high"
+    },
+    "claude-mythos-5-2": {
+      "effortLevel": "high"
+    },
+    "claude-fable-5-2": {
+      "effortLevel": "high"
+    }
+  },
+  "autoCompactWindow": 400000
 }
