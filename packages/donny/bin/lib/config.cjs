@@ -220,6 +220,55 @@ function stripGlobalExempt(globalDefaults) {
 const MERGE_SECTIONS = ['git', 'workflow', 'hooks', 'agent_skills', 'planning', 'manager'];
 
 /**
+ * Flat alias -> nested location. A setting can be written flat (branching_strategy) or
+ * nested (git.branching_strategy); loadConfig has always read both. Kept as data so the
+ * two read paths (loadConfig and config-get) cannot disagree about which names are
+ * aliases.
+ */
+const FLAT_ALIASES = {
+  commit_docs: ['planning', 'commit_docs'],
+  search_gitignored: ['planning', 'search_gitignored'],
+  sub_repos: ['planning', 'sub_repos'],
+  branching_strategy: ['git', 'branching_strategy'],
+  phase_branch_template: ['git', 'phase_branch_template'],
+  milestone_branch_template: ['git', 'milestone_branch_template'],
+  quick_branch_template: ['git', 'quick_branch_template'],
+  research: ['workflow', 'research'],
+  browser_research: ['workflow', 'browser_research'],
+  plan_checker: ['workflow', 'plan_check'],
+  verifier: ['workflow', 'verifier'],
+  nyquist_validation: ['workflow', 'nyquist_validation'],
+  max_replan_iterations: ['workflow', 'max_replan_iterations'],
+  text_mode: ['workflow', 'text_mode'],
+  subagent_timeout: ['workflow', 'subagent_timeout'],
+};
+
+/**
+ * Rewrite one layer so every flat alias lives at its nested path. Done per layer, before
+ * layers are merged: merging first and reading the flat key second let a global flat value
+ * beat a project nested one. Within a single layer the flat form wins, which is what
+ * loadConfig has always done. Returns a new object; the input is never mutated.
+ */
+function normalizeConfigLayer(layer) {
+  if (!layer || typeof layer !== 'object' || Array.isArray(layer)) return layer || {};
+  const out = { ...layer };
+  for (const [flat, [section, field]] of Object.entries(FLAT_ALIASES)) {
+    if (!Object.prototype.hasOwnProperty.call(layer, flat)) continue;
+    // Read from out, not layer: an earlier alias in the same section already rewrote it.
+    const sec = out[section] && typeof out[section] === 'object' && !Array.isArray(out[section]) ? out[section] : {};
+    out[section] = { ...sec, [field]: layer[flat] };
+    delete out[flat];
+  }
+  return out;
+}
+
+/** Canonical dotted path for a typed key: a flat alias maps to its nested form. */
+function canonicalKeyPath(keyPath) {
+  const alias = FLAT_ALIASES[keyPath];
+  return alias ? alias.join('.') : keyPath;
+}
+
+/**
  * Merge three config layers, increasing priority: base <- global <- project.
  *
  * Per-key within the known sections, exactly the spread buildNewProjectConfig has
@@ -685,12 +734,17 @@ function cmdConfigGet(cwd, keyPath, raw, showSource) {
   // Named locals so the merge and resolveKeySource read the SAME layer objects rather
   // than loading the global file twice. A non-resolvable key consults no layer but the
   // project, so its other two are empty and its provenance can only be 'project'.
-  const hardcoded = resolvable ? configGetDefaults() : {};
-  const globalLayer = resolvable ? loadGlobalDefaults() : {};
-  const source = resolvable ? mergeConfigLayers(hardcoded, globalLayer, project) : project;
+  // Aliases are normalized inside each layer first, and the typed key is mapped to its
+  // nested form, so a flat key in one layer cannot shadow a nested key in a higher one.
+  // A non-resolvable key reads the project layer exactly as written.
+  const hardcoded = resolvable ? normalizeConfigLayer(configGetDefaults()) : {};
+  const globalLayer = resolvable ? normalizeConfigLayer(loadGlobalDefaults()) : {};
+  const projectLayer = resolvable ? normalizeConfigLayer(project) : project;
+  const source = resolvable ? mergeConfigLayers(hardcoded, globalLayer, projectLayer) : project;
+  const lookupPath = resolvable ? canonicalKeyPath(keyPath) : keyPath;
 
   // Traverse dot-notation path (e.g., "workflow.auto_advance")
-  const keys = keyPath.split('.');
+  const keys = lookupPath.split('.');
   let current = source;
   for (const key of keys) {
     if (current === undefined || current === null || typeof current !== 'object') {
@@ -711,7 +765,7 @@ function cmdConfigGet(cwd, keyPath, raw, showSource) {
   // Tab-separated in raw mode so a shell caller can cut -f1 for the value and cut -f2
   // for the layer without a JSON parser. Not a space: git.quick_branch_template and
   // manager.flags.* can hold values containing spaces (T-24-44).
-  const provenance = resolveKeySource(keyPath, hardcoded, globalLayer, project);
+  const provenance = resolveKeySource(lookupPath, hardcoded, globalLayer, projectLayer);
   output(
     {
       key: keyPath,
@@ -797,6 +851,7 @@ module.exports = {
   configGetDefaults,
   loadGlobalDefaults,
   mergeConfigLayers,
+  normalizeConfigLayer,
   buildNewProjectConfig,
   cmdConfigEnsureSection,
   cmdConfigSet,

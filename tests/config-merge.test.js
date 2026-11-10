@@ -1933,3 +1933,85 @@ describe('Phase 25 codex config keys (CONFIG-03, D-05, D-08, D-25)', () => {
     assert.equal(defaults.workflow.codex_reasoning_effort, 'high');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Alias handling: a setting has a flat form (branching_strategy) and a nested form
+// (git.branching_strategy). The project layer must win over the global layer whichever
+// form each layer uses. The bug was reading the flat key from the merged object first,
+// so a global flat value beat a project nested one.
+// ---------------------------------------------------------------------------
+describe('flat and nested aliases resolve by layer, project over global', () => {
+  const cases = [
+    { name: 'global flat, project nested', global: { branching_strategy: 'phase' }, project: { git: { branching_strategy: 'none' } } },
+    { name: 'global nested, project flat', global: { git: { branching_strategy: 'phase' } }, project: { branching_strategy: 'none' } },
+  ];
+
+  for (const c of cases) {
+    it(`loadConfig: ${c.name} -> project wins`, () => {
+      const home = buildGlobalDefaults(c.global);
+      const saved = process.env.DONNY_HOME;
+      process.env.DONNY_HOME = home;
+      try {
+        withConfigFixture(c.project, (root) => {
+          assert.equal(CORE.loadConfig(root).branching_strategy, 'none');
+        });
+      } finally {
+        process.env.DONNY_HOME = saved;
+        cleanupFixture(home);
+      }
+    });
+
+    it(`config-get: ${c.name} -> project wins`, () => {
+      const home = buildGlobalDefaults(c.global);
+      try {
+        withConfigFixture(c.project, (root) => {
+          const r = runTools(root, ['config-get', 'git.branching_strategy', '--raw'], { DONNY_HOME: home });
+          assert.equal(r.status, 0, r.stderr);
+          assert.equal(r.stdout, 'none');
+        });
+      } finally {
+        cleanupFixture(home);
+      }
+    });
+  }
+
+  it('a global flat value still applies when the project sets neither form', () => {
+    const home = buildGlobalDefaults({ branching_strategy: 'phase' });
+    try {
+      withConfigFixture({}, (root) => {
+        const r = runTools(root, ['config-get', 'git.branching_strategy', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.stdout, 'phase');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+
+  it('plan_checker (flat) and workflow.plan_check (nested) agree across layers on both paths', () => {
+    const home = buildGlobalDefaults({ plan_checker: false });
+    const saved = process.env.DONNY_HOME;
+    process.env.DONNY_HOME = home;
+    try {
+      withConfigFixture({ workflow: { plan_check: true } }, (root) => {
+        assert.equal(CORE.loadConfig(root).plan_checker, true);
+        const r = runTools(root, ['config-get', 'workflow.plan_check', '--raw'], { DONNY_HOME: home });
+        assert.equal(r.stdout, 'true');
+      });
+    } finally {
+      process.env.DONNY_HOME = saved;
+      cleanupFixture(home);
+    }
+  });
+
+  it('config-get --source reports the project layer for an aliased key', () => {
+    const home = buildGlobalDefaults({ branching_strategy: 'phase' });
+    try {
+      withConfigFixture({ branching_strategy: 'none' }, (root) => {
+        const r = runTools(root, ['config-get', 'git.branching_strategy', '--raw', '--source'], { DONNY_HOME: home });
+        assert.equal(r.stdout, 'none\tproject');
+      });
+    } finally {
+      cleanupFixture(home);
+    }
+  });
+});
