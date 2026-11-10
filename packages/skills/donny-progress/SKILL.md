@@ -6,7 +6,7 @@ allowed-tools:
   - Bash
   - Grep
   - Glob
-  - SlashCommand
+  - Skill
 ---
 
 <objective>

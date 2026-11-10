@@ -728,8 +728,10 @@ Check must_haves against actual codebase. Create VERIFICATION.md at ${QUICK_DIR}
 
 Read verification status:
 ```bash
-grep "^verdict:" "${QUICK_DIR}/${quick_id}-VERIFICATION.md" | cut -d: -f2 | tr -d ' '
+node "$HOME/.claude/donny/bin/donny-tools.cjs" verify phase-verified "${QUICK_DIR}" --pick verdict 2>/dev/null || echo ""
 ```
+
+The command takes any directory that holds a `*-VERIFICATION.md`, so the quick-task directory works; it prints `passed`, `gaps_found`, or `human_needed` (empty if the file is missing).
 
 Store as `$VERIFICATION_STATUS`.
 
