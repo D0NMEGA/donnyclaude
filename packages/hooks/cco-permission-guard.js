@@ -130,6 +130,24 @@ function matchBrace(s, open) {
   return -1;
 }
 
+// Record a variable. `strong` marks a value v3 would also have known (a plain assignment built
+// from literals, ~, $HOME, $PWD and other strong variables). Builtins that set a variable to
+// something unknowable may replace a weak value, never a strong one: what v3 saw, v4 still sees.
+function setVar(env, name, value, strong) {
+  env.vars.set(name, value);
+  if (!env.strong) env.strong = new Set();
+  if (strong && typeof value === "string") env.strong.add(name);
+  else env.strong.delete(name);
+}
+function v3Knows(word, env) {
+  if (/[\u0002\u0003\u0004]/.test(word) || /\$\{[A-Za-z_][A-Za-z0-9_]*[^}A-Za-z0-9_]/.test(word)) return false;
+  const refs = word.match(/\$\{?[A-Za-z_][A-Za-z0-9_]*/g) || [];
+  return refs.every((r) => {
+    const n = r.replace(/^\$\{?/, "");
+    return n === "HOME" || n === "PWD" || !!(env.strong && env.strong.has(n));
+  });
+}
+
 // Value of a variable at this point: a string, "" when nothing in this command or in the
 // environment sets it (the shell expands it to nothing), or null when its value is unknowable.
 function lookupVar(name, env) {
@@ -281,7 +299,10 @@ function expandWord(word, env) {
           if (missing) {
             env.unset = null;
             v = expandWord(unquoteArg(arg, inDq), env);
-            if (kind === "=") env.vars.set(name, v == null ? undefined : v.split(G).join(""));
+            if (kind === "=") {
+              if (env.ro && env.ro.has(name)) return null; // assigning to a readonly variable fails
+              setVar(env, name, v == null ? undefined : v.split(G).join(""), false);
+            }
           }
         } else if (kind === "+") {
           v = missing ? "" : expandWord(unquoteArg(arg, inDq), env);
@@ -424,8 +445,12 @@ function lex(src) {
     pushWord();
     redirNext = false;
     hereNext = false;
+    // an empty command is dropped, but the separator before it is kept for the next one:
+    // in `a | (b)` the command `b` is led by "|"
+    const lead = current.words.length ? null : current.lead || current.sep;
     if (current.words.length) cmds.push(current);
     current = newCmd(sep);
+    if (lead) current.lead = lead;
   };
   // A command substitution runs first and its output lands inside the word being built, so the
   // outer command is parked, the inner commands are lexed, and a placeholder joins the word.
@@ -459,6 +484,7 @@ function lex(src) {
       else if (src[j] === ")" && --depth === 0) {
         if (src[j - 1] === ")") {
           cmds.push({
+            arith: true,
             words: ["let", src.slice(open + 2, j - 1)],
             quoted: [false, true],
             sep: ";",
@@ -582,7 +608,10 @@ function lex(src) {
       continue;
     }
     if (ch === "(") {
+      // `name=(` with nothing between: an array assignment, not a subshell after `name=`
+      const array = has && /^[A-Za-z_][A-Za-z0-9_]*\+?=$/.test(cur);
       pushWord();
+      if (array) current.arrayOpen = true;
       if (src[i + 1] === "(" && current.words.every((w) => SKIP_WORDS.has(w))) noteArith(i);
       // `name()` or `function name()`: a definition; its body runs later, with other variables
       if (current.words.length && current.words.length <= 2 && /^\s*\)/.test(src.slice(i + 1, i + 8))) {
@@ -607,6 +636,7 @@ function lex(src) {
         endCmd("||");
       } else {
         if (src[i + 1] === "&") i++;
+        current.piped = true; // feeds a pipe: it runs in a subshell of its own
         endCmd("|");
       }
       continue;
@@ -618,7 +648,10 @@ function lex(src) {
       } else if (src[i + 1] === ">") {
         // `&>file`: a redirection, handled by the next iteration's ">" branch
         pushWord();
-      } else endCmd("&");
+      } else {
+        current.bg = true; // a background job: a subshell of its own
+        endCmd("&");
+      }
       continue;
     }
     if (ch === "<" && src[i + 1] === "<" && src[i + 2] === "<") {
@@ -680,13 +713,17 @@ function lex(src) {
 const IS_ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)(\+?)=/;
 function recordAssignment(word, env) {
   const m = IS_ASSIGNMENT.exec(word);
-  const v = expandWord(word.slice(m[0].length), env);
+  if (env.ro && env.ro.has(m[1])) return; // assigning to a readonly variable fails
+  const rhs = word.slice(m[0].length);
+  const v = expandWord(rhs, env);
   const val = v == null ? undefined : v.split(G).join("");
+  const strong = v3Knows(rhs, env);
   if (m[2]) {
     const prev = env.vars.has(m[1]) ? env.vars.get(m[1]) : "";
     const old = prev === GONE ? "" : prev;
-    env.vars.set(m[1], val == null || old == null ? undefined : old + val);
-  } else env.vars.set(m[1], val);
+    const was = !env.vars.has(m[1]) || !!(env.strong && env.strong.has(m[1]));
+    setVar(env, m[1], val == null || old == null ? undefined : old + val, strong && was);
+  } else setVar(env, m[1], val, strong);
 }
 
 // `env -S` splits its string itself: blanks separate words, quotes and backslashes group, and
@@ -833,6 +870,7 @@ function assignedNames(cmd, pargs) {
     if (ident(pargs[0])) out.push(pargs[0]);
   } else if (cmd === "printf") {
     if (pargs[0] === "-v" && ident(pargs[1])) out.push(pargs[1]);
+    else if (/^-v./.test(pargs[0] || "") && ident(pargs[0].slice(2))) out.push(pargs[0].slice(2));
   } else {
     // option letters that take a value; `read -a NAME` names an array to fill
     const takes = cmd === "read" ? "adinNptu" : cmd === "getopts" ? "" : "dnOsuCc";
@@ -854,12 +892,16 @@ function assignedNames(cmd, pargs) {
   return out;
 }
 
-// The variables an arithmetic expression assigns: `x=1`, `x+=2`, `x++`, `--x`.
+// The variables an arithmetic expression assigns: `x=1`, `x+=2`, `x++`, `--x`. `value` is the
+// number when the assignment is a plain `x=<decimal>`, else null (not worked out).
 function arithTargets(expr) {
   const out = [];
   const re =
-    /(?:\+\+|--)\s*([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)\s*(?:\+\+|--|(?:[-+*\/%&|^]|<<|>>)?=(?!=))/g;
-  for (let m = re.exec(expr); m; m = re.exec(expr)) out.push(m[1] || m[2]);
+    /(?:\+\+|--)\s*([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)\s*(\+\+|--|(?:[-+*\/%&|^]|<<|>>)?=(?!=))\s*(-?(?:0|[1-9]\d*)(?![\w.#]))?/g;
+  for (let m = re.exec(expr); m; m = re.exec(expr)) {
+    const plainSet = m[2] && m[3] === "=" && m[4] != null && /^\s*([,)]|$)/.test(expr.slice(re.lastIndex));
+    out.push({ name: m[1] || m[2], value: plainSet ? m[4] : null });
+  }
   return out;
 }
 
@@ -873,8 +915,40 @@ function analyzeCmds(cmds, env, depth) {
   let fnPending = false; // the previous command was `name()`
   let fnDepth = 0; // brace depth inside the function body being read
   let fnEnds = false; // that body closed on the previous command
+  let undo = null; // state to put back after a command that ran in a subshell of its own
+  // A builtin that sets a variable to something we cannot know makes an unknown variable
+  // unknowable. It never discards a value the command assigned: v3 kept that value, and a
+  // `read` that fails or only tests for input (`read -t 0`) leaves it in place.
+  const forget = (name) => {
+    if (env.ro && env.ro.has(name)) return;
+    if (env.strong && env.strong.has(name) && typeof env.vars.get(name) === "string") return;
+    setVar(env, name, undefined, false);
+  };
+  // the state a subshell cannot change for its parent
+  const snap = () => ({
+    cwd: env.cwd,
+    vars: new Map(env.vars),
+    loose: env.loose,
+    nounset: env.nounset,
+    cdUnset: env.cdUnset,
+    ro: new Set(env.ro || []),
+    strong: new Set(env.strong || []),
+  });
+  const restore = (o) => {
+    env.cwd = o.cwd;
+    env.vars = o.vars;
+    env.loose = o.loose;
+    env.nounset = o.nounset;
+    env.cdUnset = o.cdUnset;
+    env.ro = o.ro;
+    env.strong = o.strong;
+  };
   for (let ci = 0; ci < cmds.length; ci++) {
     const c = cmds[ci];
+    if (undo) {
+      restore(undo);
+      undo = null;
+    }
     if (fnEnds) {
       env.inFn = false;
       fnEnds = false;
@@ -883,26 +957,28 @@ function analyzeCmds(cmds, env, depth) {
     let keep = 0;
     while (keep < open.length && keep < c.scopes.length && open[keep].id === c.scopes[keep]) keep++;
     if (keep < open.length) {
-      const o = open[keep];
-      env.cwd = o.cwd;
-      env.vars = o.vars;
-      env.loose = o.loose;
-      env.nounset = o.nounset;
-      env.cdUnset = o.cdUnset;
+      restore(open[keep]);
       open.length = keep;
     }
-    for (let s = keep; s < c.scopes.length; s++) {
-      open.push({
-        id: c.scopes[s],
-        cwd: env.cwd,
-        vars: new Map(env.vars),
-        loose: env.loose,
-        nounset: env.nounset,
-        cdUnset: env.cdUnset,
-      });
-    }
+    for (let s = keep; s < c.scopes.length; s++) open.push({ id: c.scopes[s], ...snap() });
+    // A command that feeds a pipe or runs in the background has a subshell of its own, and so
+    // does the last command of a pipeline except in zsh and ksh: what it does to the cwd and
+    // to variables is put back after it.
+    const apart = !!c.piped || !!c.bg || (c.sep === "|" && !env.lastpipe);
+    if (apart) undo = snap();
 
-    const lists = c.words.map((w) => braceExpand(w));
+    // an assignment word (`dir={a,b}`) is not brace-expanded, before the command word or as an
+    // argument of export, local, declare, typeset and readonly
+    let lead = true;
+    let decl = false;
+    const lists = c.words.map((w) => {
+      if (IS_ASSIGNMENT.test(w) && (lead || decl)) return [w];
+      if (lead && !SKIP_WORDS.has(plain(w))) {
+        lead = false;
+        decl = /^(export|local|declare|typeset|readonly)$/.test(plain(w));
+      }
+      return braceExpand(w);
+    });
     c.quoted = lists.flatMap((l, k) => l.map(() => !!(c.quoted && c.quoted[k])));
     c.words = lists.flat();
     // A function body runs later, if at all, with the caller's variables. It is read in line, as
@@ -914,14 +990,15 @@ function analyzeCmds(cmds, env, depth) {
     const closes = c.words.filter((w) => w === "}").length;
     if (!env.inFn && opens && (fnPending || plain(c.words[0]) === "function")) {
       env.inFn = true;
+      env.sawFn = true;
       fnDepth = 0;
     }
     fnPending = !!c.fn;
     const r = (c.r = resolveCommand(c.words, env));
     const lastWord = c.words[c.words.length - 1];
     const arr = lastWord ? IS_ASSIGNMENT.exec(lastWord) : null;
-    if (arr && arr[0].length === lastWord.length && cmds[ci + 1] && cmds[ci + 1].sep === "(") {
-      env.vars.set(arr[1], undefined); // NAME=( ... ): an array, not modelled
+    if (c.arrayOpen && arr && arr[0].length === lastWord.length) {
+      setVar(env, arr[1], undefined, false); // NAME=( ... ): an array, not modelled
     }
     if (env.inFn) {
       fnDepth += opens - closes;
@@ -932,33 +1009,45 @@ function analyzeCmds(cmds, env, depth) {
     if (!r) continue;
     const args = r.args;
     const pargs = args.map(plain);
-    const pipe = []; // the commands piped into this one, skipping substitutions nested in them
-    for (let j = ci - 1, link = c; j >= 0 && link.sep === "|"; j--) {
-      if (cmds[j].scopes.length > c.scopes.length) continue;
-      if (cmds[j].scopes.length < c.scopes.length) break;
-      pipe.unshift(cmds[j]);
-      link = cmds[j];
-    }
+    // The commands piped into this one, skipping substitutions nested in them. Built only when
+    // asked for (a shell reading stdin, `xargs rm`), so a long pipeline stays linear.
+    let pipeMemo = null;
+    const pipeOf = () => {
+      if (pipeMemo) return pipeMemo;
+      pipeMemo = [];
+      for (let j = ci - 1, link = c; j >= 0 && link.sep === "|"; j--) {
+        if (cmds[j].scopes.length > c.scopes.length) continue;
+        if (cmds[j].scopes.length < c.scopes.length) break;
+        pipeMemo.push(cmds[j]);
+        link = cmds[j];
+      }
+      return pipeMemo.reverse();
+    };
     // the state a new shell starts with; `nounset` is true when it is started with -u
-    const sub = (cwd, loose, nounset) => ({
+    // `lastpipe`: the last command of a pipeline runs in the shell itself (zsh, ksh)
+    const sub = (cwd, loose, nounset, lastpipe) => ({
       cwd,
       vars: new Map(env.vars),
       loose: loose || env.loose || !!env.inFn,
       nounset: !!nounset,
+      lastpipe: !!lastpipe,
+      ro: new Set(env.ro || []),
+      strong: new Set(env.strong || []),
     });
-    const inner = (text, cwd, loose, nounset) => analyze(text, sub(cwd, loose, nounset), depth + 1);
+    const inner = (text, cwd, loose, nounset, lastpipe) =>
+      analyze(text, sub(cwd, loose, nounset, lastpipe), depth + 1);
     // Text a shell reading stdin on this command would run: heredocs, here-strings, piped echo.
     const fed = () => {
       const texts = [...c.heredocs];
-      for (const p of pipe) {
+      for (const p of pipeOf()) {
         texts.push(...p.heredocs);
         if (p.r && (p.r.name === "echo" || p.r.name === "printf")) texts.push(p.r.args.map(plain).join(" "));
       }
       return texts;
     };
-    const anyHit = (texts, cwd, loose, nounset) => {
+    const anyHit = (texts, cwd, loose, nounset, lastpipe) => {
       for (const t of texts) {
-        const hit = t ? inner(t, cwd, loose, nounset) : null;
+        const hit = t ? inner(t, cwd, loose, nounset, lastpipe) : null;
         if (hit) return hit;
       }
       return null;
@@ -987,7 +1076,11 @@ function analyzeCmds(cmds, env, depth) {
     } else if (r.name === "popd") {
       env.cwd = null;
     } else if (r.name === "let") {
-      if (top) for (const name of arithTargets(pargs.join(" "))) env.vars.set(name, undefined);
+      for (const t of top ? arithTargets(pargs.join(" ")) : []) {
+        // v3 saw the assignment inside `((x=2))`, not the one in `let x=2`
+        if (t.value != null && !(env.ro && env.ro.has(t.name))) setVar(env, t.name, t.value, !!c.arith);
+        else forget(t.name);
+      }
     } else if (r.name === "set") {
       // `set -u`: an unset variable stops the shell instead of expanding to nothing
       for (let k = 0; top && k < pargs.length && pargs[k] !== "--"; k++) {
@@ -997,21 +1090,29 @@ function analyzeCmds(cmds, env, depth) {
       }
     } else if (r.name === "unset") {
       if (top && !pargs.some((p) => /^-[a-z]*f/.test(p))) {
-        for (const p of pargs) if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) env.vars.set(p, GONE);
+        for (const p of pargs) {
+          // `unset` of a readonly variable fails and the value stays
+          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(p) && !(env.ro && env.ro.has(p))) setVar(env, p, GONE, false);
+        }
       }
     } else if (["export", "local", "declare", "readonly", "typeset"].includes(r.name)) {
+      const ro = r.name === "readonly" || pargs.some((p) => /^-[A-Za-z]*r/.test(p));
       for (const w of args) {
-        if (IS_ASSIGNMENT.test(w)) recordAssignment(w, env);
+        const m = IS_ASSIGNMENT.exec(w);
+        if (m) recordAssignment(w, env);
         else if (top && /[$\u0002\u0003]/.test(plain(w))) env.loose = true; // names computed at run time
+        const name = m ? m[1] : plain(w);
+        // a readonly variable keeps its value: later assignments and `unset` fail
+        if (ro && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) (env.ro = env.ro || new Set()).add(name);
       }
     } else if (r.name === "for" && pargs[1] === "in") {
       // remember the most dangerous candidate so `for d in ~ x; do rm -rf "$d"` is seen
       const cands = args.slice(2).map((w) => resolveOperand(w, env)).filter(Boolean);
       const hit = cands.find((t) => isProtectedPath(t.path)) || cands[0];
-      env.vars.set(pargs[0], hit ? hit.path : undefined);
+      setVar(env, pargs[0], hit ? hit.path : undefined, true);
     } else if (["for", "select", "read", "mapfile", "readarray", "getopts", "printf"].includes(r.name)) {
       // these set variables to values we cannot know; only their destinations are forgotten
-      if (top) for (const name of assignedNames(r.name, pargs)) env.vars.set(name, undefined);
+      if (top) for (const name of assignedNames(r.name, pargs)) forget(name);
     } else if (SHELLS.has(r.name)) {
       let f = 0;
       let cmdString = null;
@@ -1031,25 +1132,30 @@ function analyzeCmds(cmds, env, depth) {
         f++;
       }
       // with no script operand the shell reads its commands from stdin
+      const own = /^(zsh|ksh)$/.test(r.name);
       const hit =
         cmdString != null
-          ? inner(plain(cmdString), env.cwd, false, strict)
+          ? inner(plain(cmdString), env.cwd, false, strict, own)
           : f >= args.length
-            ? anyHit(fed(), env.cwd, false, strict)
+            ? anyHit(fed(), env.cwd, false, strict, own)
             : null;
       if (hit) return hit;
     } else if (r.name === "eval") {
       // eval expands its arguments once and runs the result in this shell. The text is judged
-      // on a copy of the state, as in v3: what it changes here is not tracked, so afterwards an
-      // unknown variable is unknowable, not unset.
+      // on a copy of the state. When all of it is known and it runs in this shell (not as a
+      // pipeline element or in the background), its cd and its assignments are kept. Otherwise
+      // what it changed is unknown, so afterwards an unknown variable is unknowable, not unset.
       const parts = args.map((w) => expandWord(w, env));
       const text = parts.map((p, k) => (p == null ? pargs[k] : p.split(G).join(""))).join(" ");
-      const hit = inner(text, env.cwd, false, env.nounset);
+      const box = sub(env.cwd, false, env.nounset, env.lastpipe);
+      const hit = analyze(text, box, depth + 1);
       if (hit) return hit;
-      if (top) env.loose = true;
+      // a function defined in the text is read in line, which is only a guess: not kept
+      if (top && !apart && !box.loose && !box.sawFn && parts.every((p) => p != null)) restore(box);
+      else if (top) env.loose = true;
     } else if (r.name === "." || r.name === "source") {
       if (/^\/dev\/(stdin|fd\/0)$/.test(pargs[0] || "")) {
-        const hit = anyHit(fed(), env.cwd, false, env.nounset);
+        const hit = anyHit(fed(), env.cwd, false, env.nounset, env.lastpipe);
         if (hit) return hit;
       }
       if (top) env.loose = true; // a sourced file may set any variable
@@ -1098,7 +1204,7 @@ function analyzeCmds(cmds, env, depth) {
           if (r.isSudo) return LABEL_SUDO;
         }
       }
-      if (r.viaXargs && rec && !sourceIsSafe(pipe, env)) return LABEL_XARGS;
+      if (r.viaXargs && rec && !sourceIsSafe(pipeOf(), env)) return LABEL_XARGS;
     } else if (r.name === "chmod") {
       const flags = pargs.filter((x) => x.startsWith("-"));
       const ops = args.filter((w) => !plain(w).startsWith("-"));
@@ -1150,6 +1256,11 @@ function analyzeCmds(cmds, env, depth) {
     // command's own operands were judged, so expansion within one command stays left to right.
     for (const w of c.words) if (/\$\{[A-Za-z_][A-Za-z0-9_]*:?=/.test(w)) expandWord(w, env);
   }
+  // A subshell or a function definition still open when the list ends is over now: the state
+  // handed back (to an eval that keeps it) is the state outside them.
+  if (undo) restore(undo);
+  if (open.length) restore(open[0]);
+  env.inFn = false;
   return null;
 }
 
@@ -1209,7 +1320,9 @@ function detect(cmd, cwd, loose) {
     if (start.length > 1) start = start.replace(/\/+$/, "");
   }
   try {
-    return analyze(text, { cwd: start, vars: new Map(), loose }, 0);
+    // Claude Code runs the command with the user's shell
+    const lastpipe = /(^|\/)(zsh|ksh)[^/]*$/.test(process.env.SHELL || "");
+    return analyze(text, { cwd: start, vars: new Map(), loose, lastpipe }, 0);
   } catch (e) {
     return legacySegments(norm);
   }
