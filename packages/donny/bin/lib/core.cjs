@@ -243,7 +243,7 @@ function loadConfig(cwd) {
     subagent_timeout: 300000, // 5 min default; increase for large codebases or slower models (ms)
   };
 
-  const { loadGlobalDefaults, mergeConfigLayers } = require('./config.cjs');
+  const { loadGlobalDefaults, mergeConfigLayers, normalizeConfigLayer } = require('./config.cjs');
 
   let projectParsed = null;
   try {
@@ -340,7 +340,9 @@ function loadConfig(cwd) {
     return defaults;
   }
 
-  const resolved = mergeConfigLayers({}, globalLayer, projectParsed || {});
+  // Normalize flat/nested aliases inside each layer before merging, so a flat key in the
+  // global layer cannot shadow a nested key in the project layer (the project layer wins).
+  const resolved = mergeConfigLayers({}, normalizeConfigLayer(globalLayer), normalizeConfigLayer(projectParsed || {}));
 
   const get = (key, nested) => {
     if (resolved[key] !== undefined) return resolved[key];
