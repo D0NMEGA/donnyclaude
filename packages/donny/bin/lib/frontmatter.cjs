@@ -8,16 +8,35 @@ const { safeReadFile, normalizeMd, output, error } = require('./core.cjs');
 
 // ─── Parsing engine ───────────────────────────────────────────────────────────
 
+// One `---` fenced block at the very start of `text`. The closing fence must be a whole
+// line, so `--- PASS: TestX` or `----` inside the block does not end it.
+const LEADING_BLOCK = /^\s*---\r?\n([\s\S]+?)\r?\n---[ \t]*(?=\r?\n|$)/;
+const YAML_KEY_LINE = /^[a-zA-Z0-9_-]+:/;
+
+// Frontmatter is the block that opens the file, never a later `---` pair: a body using
+// `---` as a section rule, or a fenced example in a template, used to replace the real
+// frontmatter because every pair in the file was matched and the last one taken.
+// Consecutive blocks stacked at the start are a known corruption from a CRLF mismatch in
+// an older state sync; there the LAST stacked block is the most recent, so it wins. A
+// following block counts as stacked only when its first line is a YAML key, so a `---`
+// rule straight after the frontmatter is not mistaken for one.
+function leadingFrontmatterYaml(content) {
+  let match = String(content).match(LEADING_BLOCK);
+  if (!match) return null;
+  let yaml = match[1];
+  let rest = String(content).slice(match[0].length);
+  while ((match = rest.match(LEADING_BLOCK)) && YAML_KEY_LINE.test(match[1])) {
+    yaml = match[1];
+    rest = rest.slice(match[0].length);
+  }
+  return yaml;
+}
+
 function extractFrontmatter(content) {
   const frontmatter = {};
-  // Find ALL frontmatter blocks at the start of the file.
-  // If multiple blocks exist (corruption from CRLF mismatch), use the LAST one
-  // since it represents the most recent state sync.
-  const allBlocks = [...content.matchAll(/(?:^|\n)\s*---\r?\n([\s\S]+?)\r?\n---/g)];
-  const match = allBlocks.length > 0 ? allBlocks[allBlocks.length - 1] : null;
-  if (!match) return frontmatter;
+  const yaml = leadingFrontmatterYaml(content);
+  if (yaml === null) return frontmatter;
 
-  const yaml = match[1];
   const lines = yaml.split(/\r?\n/);
 
   // Stack to track nested objects: [{obj, key, indent}]
@@ -85,6 +104,59 @@ function extractFrontmatter(content) {
   }
 
   return frontmatter;
+}
+
+// --- Verification verdict ---
+
+const VERDICTS = new Set(['passed', 'gaps_found', 'human_needed']);
+
+// A frontmatter value as a trimmed string; a blank key parses to {} and a list to an
+// array, and neither carries a usable scalar.
+function scalarField(v) {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+// Map a status-only (pre-verdict) VERIFICATION.md onto a verdict. PARTIAL is deliberately
+// not mapped: no reader ever treated it as gaps_found (coverage read it like human_needed
+// or missing), so it stays 'unknown' and unverified.
+function verdictFromLegacyStatus(status) {
+  if (/^pass(ed)?$/i.test(status)) return 'passed';
+  if (/^fail(ed)?$/i.test(status)) return 'gaps_found';
+  if (/^gaps_found$/i.test(status)) return 'gaps_found';
+  if (/^human_needed$/i.test(status)) return 'human_needed';
+  return 'unknown';
+}
+
+/**
+ * The one rule for reading a VERIFICATION.md verdict. Every gate (ship, records,
+ * milestone coverage, progress, UAT audit, state drift) goes through this instead of
+ * matching a raw `status` or `verdict` string on its own.
+ *
+ * donny-verifier writes `status: PASS|FAIL|PARTIAL` and `verdict: passed|gaps_found|
+ * human_needed`. A non-blank `verdict` key wins (any value outside those three, or a
+ * non-scalar, is 'unknown'); a legacy file with only `status` is mapped by
+ * verdictFromLegacyStatus.
+ *
+ * `verified` is true only when the verdict is `passed` and the status does not contradict
+ * it: status absent, or pass/passed in any letter case. FAIL, PARTIAL, a blank `status:`
+ * key or any other value keeps the phase unverified. human_needed is never verified.
+ *
+ * @param {object|null} fm parsed frontmatter
+ * @returns {{verdict: 'passed'|'gaps_found'|'human_needed'|'unknown', verified: boolean}}
+ */
+function verificationVerdict(fm) {
+  const f = fm && typeof fm === 'object' ? fm : {};
+  const status = scalarField(f.status);
+  let verdict;
+  // A blank `verdict:` key carries nothing, so it falls back to status like an absent one.
+  if (!isEmptyValue(f.verdict)) {
+    const v = scalarField(f.verdict).toLowerCase();
+    verdict = VERDICTS.has(v) ? v : 'unknown';
+  } else {
+    verdict = verdictFromLegacyStatus(status);
+  }
+  const statusAgrees = f.status === undefined || /^pass(ed)?$/i.test(status);
+  return { verdict, verified: verdict === 'passed' && statusAgrees };
 }
 
 function reconstructFrontmatter(obj) {
@@ -276,7 +348,9 @@ const FRONTMATTER_SCHEMAS = {
   // depends on, so it is enforced here rather than by a skippable shell check.
   plan: { required: ['phase', 'plan', 'type', 'wave', 'depends_on', 'files_modified', 'autonomous', 'requirements', 'must_haves'], nonEmpty: ['requirements'] },
   summary: { required: ['phase', 'plan', 'subsystem', 'tags', 'duration', 'completed'] },
-  verification: { required: ['phase', 'verified', 'status', 'score'] },
+  // status is the verifier's PASS|FAIL|PARTIAL and verdict its passed|gaps_found|
+  // human_needed; verificationVerdict reads the two together.
+  verification: { required: ['phase', 'verified', 'status', 'verdict', 'score'] },
   // A UI-SPEC drives frontend implementation; a malformed or near-empty one must not
   // pass silently. Identity/lifecycle fields are nonEmpty; shadcn_initialized/preset are
   // required-only (their parsed values false/"none" are legitimately non-empty).
@@ -364,6 +438,7 @@ function cmdFrontmatterValidate(cwd, filePath, schemaName, raw) {
 
 module.exports = {
   extractFrontmatter,
+  verificationVerdict,
   reconstructFrontmatter,
   spliceFrontmatter,
   parseMustHavesBlock,

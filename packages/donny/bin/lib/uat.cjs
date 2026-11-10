@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { output, error, getMilestonePhaseFilter, planningDir, toPosixPath } = require('./core.cjs');
-const { extractFrontmatter } = require('./frontmatter.cjs');
+const { extractFrontmatter, verificationVerdict } = require('./frontmatter.cjs');
 const { requireSafePath, sanitizeForDisplay } = require('./security.cjs');
 
 function cmdAuditUat(cwd, raw) {
@@ -53,9 +53,11 @@ function cmdAuditUat(cwd, raw) {
     // Process VERIFICATION files
     for (const file of files.filter(f => f.includes('-VERIFICATION') && f.endsWith('.md'))) {
       const content = fs.readFileSync(path.join(phaseDir, file), 'utf-8');
-      const status = extractFrontmatter(content).status || 'unknown';
-      if (status === 'human_needed' || status === 'gaps_found') {
-        const items = parseVerificationItems(content, status);
+      const fm = extractFrontmatter(content);
+      const status = fm.status || 'unknown';
+      const { verdict } = verificationVerdict(fm);
+      if (verdict === 'human_needed' || verdict === 'gaps_found') {
+        const items = parseVerificationItems(content, verdict);
         if (items.length > 0) {
           results.push({
             phase: phaseNum,
@@ -64,6 +66,7 @@ function cmdAuditUat(cwd, raw) {
             file_path: toPosixPath(path.relative(cwd, path.join(phaseDir, file))),
             type: 'verification',
             status,
+            verdict,
             items,
           });
         }
@@ -208,9 +211,9 @@ function parseUatItems(content) {
   return items;
 }
 
-function parseVerificationItems(content, status) {
+function parseVerificationItems(content, verdict) {
   const items = [];
-  if (status === 'human_needed') {
+  if (verdict === 'human_needed') {
     // Extract from human_verification section — look for numbered items or table rows
     const hvSection = content.match(/##\s*Human Verification.*?\n([\s\S]*?)(?=\n##\s|\n---\s|$)/i);
     if (hvSection) {
@@ -220,8 +223,8 @@ function parseVerificationItems(content, status) {
         const tableMatch = line.match(/\|\s*(\d+)\s*\|\s*([^|]+)/);
         // Match bullet items: - description
         const bulletMatch = line.match(/^[-*]\s+(.+)/);
-        // Match numbered items: 1. description
-        const numberedMatch = line.match(/^(\d+)\.\s+(.+)/);
+        // Match numbered items: 1. description, or donny-verifier's `### 1. Title` heading
+        const numberedMatch = line.match(/^(?:#{3,6}\s+)?(\d+)\.\s+(.+)/);
 
         if (tableMatch) {
           items.push({

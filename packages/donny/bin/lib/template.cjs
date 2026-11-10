@@ -169,7 +169,10 @@ function cmdTemplateFill(cwd, templateType, options, raw) {
       frontmatter = {
         phase: phaseId,
         verified: new Date().toISOString(),
+        // Placeholders the verifier replaces: status PASS|FAIL|PARTIAL, verdict
+        // passed|gaps_found|human_needed. 'pending' reads as unverified.
         status: 'pending',
+        verdict: 'pending',
         score: '0/0 must-haves verified',
         ...fields,
       };

@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { escapeRegex, loadConfig, normalizePhaseName, comparePhaseNum, findPhaseInternal, getArchivedPhaseDirs, generateSlugInternal, getMilestonePhaseFilter, stripShippedMilestones, extractCurrentMilestone, replaceInCurrentMilestone, toPosixPath, planningDir, withPlanningLock, output, error, readSubdirectories, phaseTokenMatches } = require('./core.cjs');
-const { extractFrontmatter } = require('./frontmatter.cjs');
+const { extractFrontmatter, verificationVerdict } = require('./frontmatter.cjs');
 const { writeStateMd, stateExtractField, stateReplaceField, stateReplaceFieldWithFallback, updatePerformanceMetricsSection } = require('./state.cjs');
 
 function cmdPhasesList(cwd, options, raw) {
@@ -687,8 +687,9 @@ function cmdPhaseComplete(cwd, phaseNum, raw) {
 
     for (const file of phaseFiles.filter(f => f.includes('-VERIFICATION') && f.endsWith('.md'))) {
       const content = fs.readFileSync(path.join(phaseFullDir, file), 'utf-8');
-      if (/status: human_needed/.test(content)) warnings.push(`${file}: needs human verification`);
-      if (/status: gaps_found/.test(content)) warnings.push(`${file}: has unresolved gaps`);
+      const { verdict } = verificationVerdict(extractFrontmatter(content));
+      if (verdict === 'human_needed') warnings.push(`${file}: needs human verification`);
+      if (verdict === 'gaps_found') warnings.push(`${file}: has unresolved gaps`);
     }
   } catch {}
 
